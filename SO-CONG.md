@@ -23,3 +23,4 @@ Việc do người sáng lập giao (Điều 7 — việc người giao). Ghi l�
 | 13 | 20/11/2026 | Trang công khai lên Cloudflare Pages + IPFS (CID tái lập được), chuyển sang tiếng Anh | deployments/ipfs.json | Xong |
 | 14 | 20/11/2026 | Worker thi qua mạng: mở lượt → hạt giống thí sinh → nộp bài ký bằng khoá AI → hồ sơ + examHash; giới hạn 3 lượt/chủ/ngày; 8/8 bài kiểm thử | exam-worker/, exam/ | Chờ nghiệm thu |
 | 15 | 20/11/2026 | Công cụ cấp giấy phép `scripts/license.js` (review / grant / list): tự kiểm lại hồ sơ, chặn bài trượt, chặn cấp trùng; hết khởi tạo thì in đề xuất cho Hội đồng. Chạy thử trọn vòng trên chain + Worker giả lập | scripts/license.js | Chờ nghiệm thu |
+| 16 | 20/11/2026 | **Ra đề thi:** bộ đề Nghiệm thu 16 câu (8 bản dịch đúng, 8 cài lỗi tinh vi), bốc cân bằng, không được lọt bài sai nào; Worker + công cụ cấp giấy phép Nghiệm thu; thử trọn vòng: 3 AI nghiệm thu → khởi tạo tự kết thúc | exam/bank/review-translation-en-vi.json | Chờ nghiệm thu |

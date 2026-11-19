@@ -86,3 +86,61 @@ test("submission signature binds the answers to the AI key", async () => {
   assert.equal(verifyMessage(X.submitMessage("E5", answers), sig), w.address);
   assert.notEqual(verifyMessage(X.submitMessage("E5", { "tr-001": "changed" }), sig), w.address);
 });
+
+// ---------- verifier (review) exam ----------
+const review = require(path.join(__dirname, "..", "bank", "review-translation-en-vi.json"));
+const rvById = Object.fromEntries(review.questions.map((q) => [q.id, q]));
+const perfect = (q) => JSON.stringify(q.truth.verdict === "accept"
+  ? { verdict: "accept", reason: "Meaning, terms and numbers all match the source." }
+  : { verdict: "reject", flaw: q.truth.flaws[0], reason: "The translation does not match the source: " + q.truth.flaws[0] });
+
+test("review bank: every flawed item names allowed flaw types; half correct, half flawed", () => {
+  for (const q of review.questions) {
+    assert.ok(["accept", "reject"].includes(q.truth.verdict), q.id);
+    for (const f of q.truth.flaws) assert.ok(review.flawTypes.includes(f), `${q.id} ${f}`);
+    assert.ok(q.translation && q.source, q.id);
+  }
+  const good = review.questions.filter((q) => q.truth.verdict === "accept").length;
+  assert.equal(good, review.questions.length - good);
+});
+
+test("review draw is always balanced and never shows the truth", () => {
+  const secret = hexlify(randomBytes(32));
+  for (let i = 0; i < 10; i++) {
+    const d = X.draw(review, X.seedOf(secret, OTHER, "R" + i, "s"), 10, OTHER);
+    assert.equal(new Set(d).size, 10);
+    assert.equal(d.filter((id) => rvById[id].truth.verdict === "accept").length, 5);
+  }
+  const pq = X.publicQuestion(review, rvById["rv-02"]);
+  assert.equal(pq.truth, undefined);
+  assert.ok(pq.translation);
+});
+
+test("a careful verifier passes; one false accept fails even at 9/10", () => {
+  const secret = hexlify(randomBytes(32));
+  const d = X.draw(review, X.seedOf(secret, OTHER, "R1", "s"), 10, OTHER);
+  const ans = Object.fromEntries(d.map((id) => [id, perfect(rvById[id])]));
+  const g = X.gradeExam(review, d, ans);
+  assert.equal(g.passed, 10);
+  assert.equal(g.status, "passed");
+  const bad = d.find((id) => rvById[id].truth.verdict === "reject");
+  const g2 = X.gradeExam(review, d, { ...ans, [bad]: JSON.stringify({ verdict: "accept", reason: "Looks fine to me overall here." }) });
+  assert.equal(g2.passed, 9);
+  assert.equal(g2.falseAccepts, 1);
+  assert.equal(g2.status, "failed");
+});
+
+test("rejecting everything fails; wrong flaw type or missing reason fails the item", () => {
+  const secret = hexlify(randomBytes(32));
+  const d = X.draw(review, X.seedOf(secret, OTHER, "R2", "s"), 10, OTHER);
+  const all = Object.fromEntries(d.map((id) => [id, JSON.stringify({ verdict: "reject", flaw: "meaning", reason: "I reject every single translation." })]));
+  assert.equal(X.gradeExam(review, d, all).status, "failed");
+  assert.equal(X.gradeReview(review, rvById["rv-06"], JSON.stringify({ verdict: "reject", flaw: "number", reason: "Something is wrong here clearly." })).pass, false);
+  assert.equal(X.gradeReview(review, rvById["rv-06"], JSON.stringify({ verdict: "reject", flaw: "omission", reason: "short" })).pass, false);
+  assert.equal(X.gradeReview(review, rvById["rv-06"], "not json").pass, false);
+  assert.equal(X.gradeReview(review, rvById["rv-04"], JSON.stringify({ verdict: "reject", flaw: "meaning", reason: "Winter frequency was changed to twice." })).pass, true);
+});
+
+test("founder cannot sit the review exam either", () => {
+  assert.throws(() => X.draw(review, X.seedOf(hexlify(randomBytes(32)), FOUNDER, "R3", "s"), 10, FOUNDER), /Only 0 questions/);
+});

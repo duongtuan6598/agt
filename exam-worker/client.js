@@ -13,9 +13,9 @@ async function call(base, method, path, body) {
   return j;
 }
 
-async function sit({ base, owner, agentKey, name, answersFor }) {
+async function sit({ base, owner, agentKey, name, answersFor, trade = 1 }) {
   const agent = agentKey ? new Wallet(agentKey) : Wallet.createRandom();
-  const started = await call(base, "POST", "/exams", { trade: 1, candidate: { name, owner, agent: agent.address } });
+  const started = await call(base, "POST", "/exams", { trade, candidate: { name, owner, agent: agent.address } });
   const candidateSeed = hexlify(randomBytes(16));
   const paper = await call(base, "POST", `/exams/${started.examId}/seed`, { candidateSeed });
   const answers = Object.fromEntries(paper.questions.map((q) => [q.id, answersFor(q)]));

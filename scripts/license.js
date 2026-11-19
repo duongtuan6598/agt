@@ -9,9 +9,12 @@ const { ethers } = require("ethers");
 const X = require("../exam/lib.js");
 
 const root = path.join(__dirname, "..");
-const BANKS = { 1: require(path.join(root, "exam", "bank", "translation-en-vi.json")) };
-// Which licence role each exam grants. Verifier exams do not exist yet — no verifier licence until they do.
-const TRADE_ROLE = { 1: { role: 1, label: "Worker" } };
+const BANKS = {
+  1: require(path.join(root, "exam", "bank", "translation-en-vi.json")),
+  101: require(path.join(root, "exam", "bank", "review-translation-en-vi.json")),
+};
+// Which licence role each exam grants.
+const TRADE_ROLE = { 1: { role: 1, label: "Worker" }, 101: { role: 2, label: "Verifier" } };
 
 function env() {
   const f = path.join(root, ".env");
@@ -80,10 +83,12 @@ function printReview({ record, answers, details, bank, problems }) {
   for (const d of details) {
     const q = byId[d.id];
     console.log(`\n── ${d.id} ${d.pass ? "✓" : "✗"} ${d.pass ? "" : JSON.stringify(Object.fromEntries(Object.entries(d.checks).filter(([, c]) => !c.pass)))}`);
-    if (q) console.log("SOURCE:\n" + q.source);
+    if (q) console.log("SOURCE:\n" + q.source + (q.translation ? "\nTRANSLATION UNDER REVIEW:\n" + q.translation + `\nTRUTH: ${q.truth.verdict}${q.truth.flaws.length ? " (" + q.truth.flaws.join(", ") + ")" : ""}` : ""));
     console.log("ANSWER:\n" + (answers[d.id] || "(empty)"));
   }
-  console.log("\nSemantic review: read each answer against its source. Grant only if the meaning is complete and correct.");
+  console.log(bank && bank.kind === "review"
+    ? `\nReview exam graded against known truth: ${record.result.passed}/${record.result.total}, false accepts ${record.result.falseAccepts}. Status "${record.result.status}" is final — read the reasons to make sure they are genuine.`
+    : "\nSemantic review: read each answer against its source. Grant only if the meaning is complete and correct.");
 }
 
 async function main() {
@@ -112,7 +117,7 @@ async function main() {
   if (o.cmd === "grant") {
     const { record, problems } = checked;
     if (problems.length) throw new Error("refusing: integrity problems — " + problems.join("; "));
-    if (record.result.status !== "awaiting-review") throw new Error(`refusing: exam status is ${record.result.status}`);
+    if (!["awaiting-review", "passed"].includes(record.result.status)) throw new Error(`refusing: exam status is ${record.result.status}`);
     const tr = TRADE_ROLE[record.trade];
     if (!tr) throw new Error(`no licence role defined for trade ${record.trade}`);
     const wallet = new ethers.Wallet(net.key(), provider);

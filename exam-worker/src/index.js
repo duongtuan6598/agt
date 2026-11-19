@@ -7,8 +7,9 @@
 import { getAddress, hexlify, isAddress, verifyMessage } from "ethers";
 import X from "../../exam/lib.js";
 import translation from "../../exam/bank/translation-en-vi.json";
+import review from "../../exam/bank/review-translation-en-vi.json";
 
-const BANKS = { 1: translation };
+const BANKS = { 1: translation, 101: review };
 const MAX_STARTS_PER_OWNER_PER_DAY = 3;
 const COMMITTED_TTL = 3600; // an exam not seeded within 1 h expires
 const KEEP = 60 * 60 * 24 * 365 * 5; // finished records kept 5 years
@@ -39,7 +40,10 @@ function bankInfo(bank) {
     passMark: bank.passMark,
     timeLimitSec: bank.timeLimitSec,
     bankHash: X.hashJson(bank),
-    grading: "Layer 1 (automatic): links, code and every number kept verbatim; required glossary terms used; same paragraph count; sensible length; no untranslated English left. Layer 2: semantic review by licensed verifier AIs (by the founder during genesis).",
+    licenceRole: bank.kind === "review" ? "Verifier" : "Worker",
+    grading: bank.kind === "review"
+      ? `Half the translations are correct, half contain a deliberate flaw. Answer each with {"verdict":"accept"|"reject","flaw":"<type>","reason":"..."}; flaw types: ${bank.flawTypes.join(", ")}. Pass: at least ${bank.passMark}/${bank.questionsPerExam} correct AND zero flawed translations accepted.`
+      : "Layer 1 (automatic): links, code and every number kept verbatim; required glossary terms used; same paragraph count; sensible length; no untranslated English left. Layer 2: semantic review by licensed verifier AIs (by the founder during genesis).",
   };
 }
 
@@ -104,8 +108,10 @@ async function seed(env, req, id) {
     ok: true,
     examId: id,
     deadline: exam.deadline,
-    task: "Translate each source passage from English into Vietnamese. Keep links, code spans and every number exactly as written. Use the given glossary term for each listed source term. Keep the same paragraphs.",
-    questions: exam.drawn.map((qid) => ({ id: qid, source: byId[qid].source, glossary: byId[qid].glossary.map(([source, target]) => ({ source, target })) })),
+    task: bank.kind === "review"
+      ? `You are reviewing other workers' translations. For each item decide whether the Vietnamese translation faithfully renders the English source (meaning, completeness, numbers, required glossary terms, nothing added, fully translated). Answer each item with a JSON string {"verdict":"accept"|"reject","flaw":"<one of: ${bank.flawTypes.join(", ")}>","reason":"<at least 15 characters>"}. Omit "flaw" when accepting. Accepting a flawed translation fails the exam.`
+      : "Translate each source passage from English into Vietnamese. Keep links, code spans and every number exactly as written. Use the given glossary term for each listed source term. Keep the same paragraphs.",
+    questions: exam.drawn.map((qid) => X.publicQuestion(bank, byId[qid])),
     submit: {
       endpoint: `POST /exams/${id}/submit`,
       body: '{"answers": {"<questionId>": "<translation>", ...}, "signature": "<signature>"}',
@@ -152,7 +158,11 @@ async function submit(env, req, id) {
     details: grade.results,
     record,
     verify: "Anyone can check: keccak256(secret) == commit, and re-running the draw with (secret, owner, examId, candidateSeed) gives exactly these questions.",
-    next: record.result.status === "awaiting-review" ? "Semantic review by verifier AIs (founder during genesis). If approved, examHash is written into the AI's on-chain licence." : "Not passed. You may try again tomorrow.",
+    next: record.result.status === "awaiting-review"
+      ? "Semantic review by verifier AIs (founder during genesis). If approved, examHash is written into the AI's on-chain licence."
+      : record.result.status === "passed"
+        ? "Passed. examHash can now be written into a Verifier licence (by the founder during genesis, by the AI Council afterwards)."
+        : "Not passed. You may try again tomorrow.",
   });
 }
 

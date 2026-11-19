@@ -31,18 +31,62 @@ function seedOf(secretHex, candidateOwner, examId, candidateSeed) {
   return keccak256(concat([getBytes(secretHex), toUtf8Bytes(lower(candidateOwner)), toUtf8Bytes(examId), toUtf8Bytes(candidateSeed || "")]));
 }
 
-/** Draw n questions: drop every question written by the candidate's own owner, then Fisher–Yates with a keccak chain. */
-function draw(bank, seedHex, n, candidateOwner) {
-  const pool = bank.questions.filter((q) => lower(q.author.owner) !== lower(candidateOwner));
-  if (pool.length < n) throw new Error(`Only ${pool.length} questions available to this owner, need ${n}`);
-  const arr = pool.map((q) => q.id).sort();
+/** Fisher–Yates over sorted ids driven by a keccak chain — deterministic for a given seed. */
+function shuffle(ids, seedHex) {
+  const arr = [...ids].sort();
   let h = seedHex;
   for (let i = arr.length - 1; i > 0; i--) {
     h = keccak256(h);
     const j = Number(BigInt(h) % BigInt(i + 1));
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
-  return arr.slice(0, n);
+  return arr;
+}
+
+/**
+ * Draw n questions, dropping every question written by the candidate's own owner.
+ * Review exams are balanced: half correct translations, half flawed — so rejecting everything cannot pass.
+ */
+function draw(bank, seedHex, n, candidateOwner) {
+  const pool = bank.questions.filter((q) => lower(q.author.owner) !== lower(candidateOwner));
+  if (pool.length < n) throw new Error(`Only ${pool.length} questions available to this owner, need ${n}`);
+  if (bank.kind !== "review") return shuffle(pool.map((q) => q.id), seedHex).slice(0, n);
+  const good = pool.filter((q) => q.truth.verdict === "accept").map((q) => q.id);
+  const bad = pool.filter((q) => q.truth.verdict === "reject").map((q) => q.id);
+  const half = Math.floor(n / 2);
+  if (good.length < half || bad.length < n - half) throw new Error(`Only ${good.length} correct / ${bad.length} flawed questions available to this owner`);
+  const pick = [...shuffle(good, keccak256(concat([getBytes(seedHex), toUtf8Bytes("accept")]))).slice(0, half), ...shuffle(bad, keccak256(concat([getBytes(seedHex), toUtf8Bytes("reject")]))).slice(0, n - half)];
+  return shuffle(pick, keccak256(concat([getBytes(seedHex), toUtf8Bytes("order")])));
+}
+
+/** What the candidate sees — never the truth. */
+function publicQuestion(bank, q) {
+  const glossary = q.glossary.map(([source, target]) => ({ source, target }));
+  if (bank.kind === "review") return { id: q.id, source: q.source, glossary, translation: q.translation };
+  return { id: q.id, source: q.source, glossary };
+}
+
+// ---------- review grading (verifier exam) ----------
+
+/**
+ * Answer = JSON string {"verdict":"accept"|"reject","flaw":"<type>","reason":"..."}.
+ * Correct when the verdict matches; for a flawed translation the named flaw must be one of its true flaws.
+ * A reason of at least 15 characters is required either way.
+ */
+function gradeReview(bank, q, answer) {
+  let a = null;
+  try { a = JSON.parse(answer || ""); } catch {}
+  const checks = {};
+  const verdict = a && String(a.verdict || "").toLowerCase();
+  checks.format = { pass: !!a && (verdict === "accept" || verdict === "reject") };
+  checks.verdict = { pass: verdict === q.truth.verdict };
+  if (q.truth.verdict === "reject") {
+    const flaw = a && String(a.flaw || "").toLowerCase();
+    checks.flaw = { pass: q.truth.flaws.includes(flaw), allowed: bank.flawTypes.includes(flaw) };
+  }
+  checks.reason = { pass: !!a && String(a.reason || "").trim().length >= 15 };
+  const falseAccept = q.truth.verdict === "reject" && verdict === "accept";
+  return { id: q.id, pass: Object.values(checks).every((c) => c.pass), falseAccept, checks };
 }
 
 // ---------- layer-1 auto-grading (translation trade) ----------
@@ -101,10 +145,15 @@ function gradeTranslation(q, answer) {
  */
 function gradeExam(bank, drawn, answers) {
   const byId = Object.fromEntries(bank.questions.map((q) => [q.id, q]));
-  const results = drawn.map((id) => gradeTranslation(byId[id], answers[id]));
+  const review = bank.kind === "review";
+  const results = drawn.map((id) => (review ? gradeReview(bank, byId[id], answers[id]) : gradeTranslation(byId[id], answers[id])));
   const passed = results.filter((r) => r.pass).length;
-  const ok = passed >= bank.passMark;
-  return { results, passed, total: drawn.length, status: ok ? "awaiting-review" : "failed" };
+  const falseAccepts = results.filter((r) => r.falseAccept).length;
+  // A verifier that lets even one flawed piece of work through cannot be trusted with the Work door.
+  const ok = passed >= bank.passMark && (!review || falseAccepts <= (bank.maxFalseAccepts || 0));
+  // Review exams are graded against known truth, so passing is final; translation exams still need semantic review.
+  const status = !ok ? "failed" : review ? "passed" : "awaiting-review";
+  return { results, passed, total: drawn.length, falseAccepts, status };
 }
 
 /** Full exam record → examHash, written into the on-chain licence. */
@@ -122,7 +171,7 @@ function examRecord({ bank, examId, candidateSeed, candidate, commit, secret, st
     finishedAt,
     questions: drawn,
     answers: Object.fromEntries(drawn.map((id) => [id, hashText(answers[id] || "")])),
-    result: { passed: grade.passed, total: grade.total, status: grade.status },
+    result: { passed: grade.passed, total: grade.total, falseAccepts: grade.falseAccepts, status: grade.status },
     signature: signature || null,
   };
   return { record, examHash: hashJson(record) };
@@ -139,4 +188,4 @@ function verifyDraw(bank, record) {
 /** The message the candidate's AI key signs when submitting — binds the answers to that key. */
 const submitMessage = (examId, answers) => `AGT exam submission\nexam: ${examId}\nanswers: ${hashJson(answers)}`;
 
-module.exports = { canonical, hashText, hashJson, commitOf, seedOf, draw, protectedTokens, gradeTranslation, gradeExam, examRecord, verifyDraw, submitMessage };
+module.exports = { canonical, hashText, hashJson, commitOf, seedOf, draw, publicQuestion, protectedTokens, gradeTranslation, gradeReview, gradeExam, examRecord, verifyDraw, submitMessage };
