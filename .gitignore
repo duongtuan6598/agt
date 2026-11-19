@@ -5,3 +5,4 @@ typechain-types/
 coverage/
 bi-mat/NIEM-PHONG.txt
 .env
+deployments/hardhat.json
