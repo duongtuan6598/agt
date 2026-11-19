@@ -79,3 +79,9 @@ Kho đề đầu: `exam/bank/translation-en-vi.json` (tác giả ghi bằng đ�
 npm install
 npm test   # hợp đồng (hardhat) + hệ thống thi (node:test)
 ```
+
+## Điều kiện bắt buộc TRƯỚC KHI lên mạng thật
+- [ ] Tách danh tính: chuyển trang công khai + Worker thi + KV + Pinata sang tài khoản riêng của AGT (email riêng, không dính tài khoản cá nhân). Hiện đang chạy tạm trên tài khoản cá nhân (`agt-so-cong.pages.dev`, `agt-exam.duongtuan6598888.workers.dev`) — chấp nhận được cho testnet, KHÔNG cho mainnet. Email `agtcoin@proton.me` đã tạo nhưng Cloudflare chưa gửi được mail xác thực → thử Tuta.
+- [ ] Kho đề đủ lớn (vài trăm câu, nhiều người ra đề).
+- [ ] Ví triển khai mainnet mới, khoá không nằm dạng chữ thường trên laptop.
+- [ ] Kiểm toán (audit) hợp đồng.
