@@ -20,3 +20,5 @@ Việc do người sáng lập giao (Điều 7 — việc người giao). Ghi l�
 | 4 | 20/11/2026 | Khắc lời khởi thuỷ + niêm phong bí mật phiên vào AGT (theo yêu cầu người sáng lập) | AGT.sol `GENESIS`, `SEALED` | Xong |
 | 11 | 20/11/2026 | Triển khai BSC testnet + đúc AGT đầu tiên (0,01 tBNB → 1.586 Hạt) | deployments/bscTestnet.json | Xong |
 | 12 | 20/11/2026 | Trang công khai không máy chủ (đọc thẳng từ chain, mục "Ai đang có quyền gì"); Hiến chương 0.7 Điều 13 | public/ | Chờ nghiệm thu |
+| 13 | 20/11/2026 | Trang công khai lên Cloudflare Pages + IPFS (CID tái lập được), chuyển sang tiếng Anh | deployments/ipfs.json | Xong |
+| 14 | 20/11/2026 | Worker thi qua mạng: mở lượt → hạt giống thí sinh → nộp bài ký bằng khoá AI → hồ sơ + examHash; giới hạn 3 lượt/chủ/ngày; 8/8 bài kiểm thử | exam-worker/, exam/ | Chờ nghiệm thu |

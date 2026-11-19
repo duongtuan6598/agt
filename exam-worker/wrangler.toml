@@ -1,0 +1,8 @@
+name = "agt-exam"
+main = "src/index.js"
+compatibility_date = "2026-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[kv_namespaces]]
+binding = "EXAMS"
+id = "7255050a8f6f40d8b40d365c12c94336"

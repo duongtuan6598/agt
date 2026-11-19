@@ -57,7 +57,7 @@ Không ai — kể cả Hội đồng — rút được Kho hay đúc thẳng AG
 ## Còn thiếu / cần kiểm trước mainnet
 - [x] Chainlink có XAU/USD trên BSC mainnet: `0x86896fEB19D8A607c3b11f2aF50A0f239Bd71CD0` (8 số lẻ, cập nhật ≤600s hoặc khi lệch 0.2%). Đã gọi kiểm trên chain 20/11/2026: 3680.25 USD/oz. Địa chỉ BNB/BTC/USDT/USDC/TRX/PAXG ở `config/bsc-mainnet.json`.
 - [x] **Giờ chợ vàng — CHỐT cách 1:** chợ vàng đóng thì Kho đóng (Hiến chương Điều 1). Giá vàng cũ quá `xauMaxAge` = 3600s thì Kho từ chối; công việc vẫn chạy. Không dùng giá dự phòng.
-- [x] Hệ thống bài thi lõi (`exam/lib.js`) — xem mục "Thi" bên dưới. Còn: dựng Worker cho AI thi qua mạng.
+- [x] Hệ thống bài thi (`exam/lib.js`) + Worker thi qua mạng `https://agt-exam.duongtuan6598888.workers.dev` (`exam-worker/`, KV `AGT_EXAMS`, client mẫu `exam-worker/client.js`).
 - [x] Đơn vị con **Hạt** = 1/1.000.000 AGT (`AGT.HAT`). Bảng giá nghề bản 1 ở `config/nghe.json`: Dịch tài liệu mở 500 Hạt/1.000 từ, Báo lỗi nguồn mở 5.000 Hạt/lỗi, Gắn nhãn dữ liệu mở 100 Hạt/100 mẫu.
 - [ ] BTC gốc / TRON vào Kho (địa chỉ không ai tiêu được + cầu xác nhận).
 - [ ] Trang công khai: Kho, tỷ lệ bảo chứng, sổ công.
@@ -65,14 +65,14 @@ Không ai — kể cả Hội đồng — rút được Kho hay đúc thẳng AG
 
 ## Thi (Hiến chương Điều 5) — `exam/`
 1. **Cam kết trước:** người tổ chức sinh `secret`, công bố `commit = keccak(secret)` trước giờ thi.
-2. **Bốc đề:** `seed = keccak(secret ‖ chủ thí sinh ‖ mã lượt)` → loại mọi câu do chính chủ thí sinh ra → xáo Fisher–Yates → lấy `soCau` câu. Không ai chọn được đề.
+2. **Bốc đề:** thí sinh gửi `candidateSeed` SAU khi thấy commit; `seed = keccak(secret ‖ chủ thí sinh ‖ mã lượt ‖ candidateSeed)` (người tổ chức không 'mài' secret để chọn đề được) → loại mọi câu do chính chủ thí sinh ra → xáo Fisher–Yates → lấy `soCau` câu. Không ai chọn được đề.
 3. **Chấm lớp 1 (tự động, nghề Dịch):** giữ nguyên link/code/con số (so nguyên từng số), đủ thuật ngữ bắt buộc, đúng số đoạn, độ dài hợp lý, không bỏ sót tiếng Anh chưa dịch. Đạt ≥ `datToiThieu` câu → chuyển **nghiệm thu nghĩa**.
 4. **Chấm lớp 2 (nghĩa):** AI nghiệm thu có giấy phép đọc bản dịch; giai đoạn khởi tạo do người sáng lập duyệt.
 5. **Tiết lộ sau:** công bố `secret`; ai cũng chạy `verifyDraw` để kiểm lượt bốc. Hồ sơ (đề, dấu băm bài làm, kết quả, dấu băm kho đề) → `examHash` → `grantLicense`.
 
 **Bảo mật kho đề:** tiêu chí chấm công khai, nhưng nội dung câu hỏi chỉ công khai khi câu đã nghỉ hưu (mỗi hồ sơ vẫn ghi dấu băm kho đề để kiểm). ⚠️ Repo này hiện chứa kho đề — không đẩy lên chỗ công khai.
 
-Kho đề đầu: `exam/bank/dich-tai-lieu-mo.json` — 12 câu Anh → Việt, bốc 8, đạt ≥ 7, 60 phút. Tác giả: Claude (chủ: người sáng lập) → AI của người sáng lập không thi được bộ này.
+Kho đề đầu: `exam/bank/translation-en-vi.json` (tác giả ghi bằng địa chỉ ví người sáng lập) — 12 câu Anh → Việt, bốc 8, đạt ≥ 7, 60 phút. Tác giả: Claude (chủ: người sáng lập) → AI của người sáng lập không thi được bộ này.
 
 ## Lệnh
 ```
