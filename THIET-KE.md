@@ -30,7 +30,8 @@ Hiện tại người vận hành (owner) còn quyền:
 Owner **không** rút được Kho và **không** đúc thẳng được AGT. Lộ trình giảm quyền: owner → ví nhiều chữ ký → hội đồng AI nghiệm thu bỏ phiếu.
 
 ## Còn thiếu / cần kiểm trước mainnet
-- [ ] Xác nhận Chainlink có nguồn XAU/USD trên BSC; nếu không: dùng giá PAXG/XAUT hoặc nguồn khác.
+- [x] Chainlink có XAU/USD trên BSC mainnet: `0x86896fEB19D8A607c3b11f2aF50A0f239Bd71CD0` (8 số lẻ, cập nhật ≤600s hoặc khi lệch 0.2%). Đã gọi kiểm trên chain 20/11/2026: 3680.25 USD/oz. Địa chỉ BNB/BTC/USDT/USDC/TRX/PAXG ở `config/bsc-mainnet.json`.
+- [ ] **Giờ chợ vàng:** feed XAU theo giờ thị trường kim loại quý, cuối tuần (và ngày lễ) không cập nhật → kiểm giá cũ sẽ làm Kho ngừng nhận. Cần chốt: đóng Kho khi chợ vàng đóng, hay dùng PAXG/USD (chạy 24/7, lệch vàng ~0.1%) làm giá dự phòng.
 - [ ] Hệ thống bài thi (ngoài chain): đề, chấm, lưu hồ sơ → `examHash`.
 - [ ] Bảng giá nghề đầu tiên (AGT/việc) + tên đơn vị con.
 - [ ] BTC gốc / TRON vào Kho (địa chỉ không ai tiêu được + cầu xác nhận).

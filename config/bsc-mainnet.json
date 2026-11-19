@@ -1,0 +1,13 @@
+{
+  "_nguon": "Chainlink reference-data-directory feeds-bsc-mainnet.json, đã gọi kiểm trên chain 20/11/2026",
+  "chainId": 56,
+  "xau": { "name": "XAU / USD", "proxy": "0x86896fEB19D8A607c3b11f2aF50A0f239Bd71CD0", "decimals": 8, "heartbeat": 600, "deviation": 0.2, "marketHours": "Precious_Metals" },
+  "feeds": {
+    "BNB":  { "name": "BNB / USD",  "proxy": "0x0567F2323251f0Aab15c8dFb1967E4e8A7D42aeE", "decimals": 8, "heartbeat": 27 },
+    "BTC":  { "name": "BTC / USD",  "proxy": "0x264990fbd0A4796A3E3d8E37C4d5F87a3aCa5Ebf", "decimals": 8, "heartbeat": 60 },
+    "USDT": { "name": "USDT / USD", "proxy": "0xB97Ad0E74fa7d920791E90258A6E2085088b4320", "decimals": 8, "heartbeat": 900 },
+    "USDC": { "name": "USDC / USD", "proxy": "0x51597f405303C4377E36123cBc172b13269EA163", "decimals": 8, "heartbeat": 900 },
+    "TRX":  { "name": "TRX / USD",  "proxy": "0xF4C5e535756D11994fCBB12Ba8adD0192D9b88be", "decimals": 8, "heartbeat": 600 },
+    "PAXG": { "name": "PAXG / USD", "proxy": "0x7F8caD4690A38aC28BDA3D132eF83DB1C17557Df", "decimals": 8, "heartbeat": 86400 }
+  }
+}
