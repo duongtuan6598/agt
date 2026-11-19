@@ -9,3 +9,5 @@ deployments/hardhat.json
 ipfs/*.car
 deployments/localhost.json
 deployments/licenses-localhost.json
+.wrangler/
+**/.wrangler/
