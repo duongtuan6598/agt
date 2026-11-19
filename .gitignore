@@ -7,3 +7,5 @@ bi-mat/NIEM-PHONG.txt
 .env
 deployments/hardhat.json
 ipfs/*.car
+deployments/localhost.json
+deployments/licenses-localhost.json
