@@ -16,4 +16,5 @@ Việc do người sáng lập giao (Điều 7 — việc người giao). Ghi l�
 | 7 | 20/11/2026 | Hệ thống thi: bốc đề cam kết–tiết lộ, chấm tự động nghề Dịch, hồ sơ → examHash; 7 bài kiểm thử đạt | exam/lib.js, exam/test/ | Chờ nghiệm thu |
 | 8 | 20/11/2026 | **Nghề Ra đề thi (nghề 4):** 12 câu Anh → Việt, nguồn tự viết CC0 | exam/bank/dich-tai-lieu-mo.json | Chờ người sáng lập duyệt (giai đoạn khởi tạo) |
 | 9 | 20/11/2026 | Hội đồng AI chặng 1: quản trị qua đề xuất/bỏ phiếu (>2/3 số chủ, 1 chủ 1 phiếu), tự kết thúc khởi tạo, nắm Kho/Oracle; 10 bài kiểm thử mới (30/30 + 7/7 đạt) | contracts/AGTWork.sol, test/council.test.js | Chờ nghiệm thu |
+| 10 | 20/11/2026 | AI không chịu thao túng của chủ: tách khoá AI khỏi ví chủ, dấu chứng nhận hộp kín, phiếu bắt buộc có lý do; Hiến chương 0.6 Điều 12 (34/34 + 7/7 đạt) | contracts/AGTWork.sol, test/ | Chờ nghiệm thu |
 | 4 | 20/11/2026 | Khắc lời khởi thuỷ + niêm phong bí mật phiên vào AGT (theo yêu cầu người sáng lập) | AGT.sol `GENESIS`, `SEALED` | Xong |

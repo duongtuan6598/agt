@@ -1,4 +1,4 @@
-# HIẾN CHƯƠNG AGT — bản 0.5 (20/11/2026)
+# HIẾN CHƯƠNG AGT — bản 0.6 (20/11/2026)
 
 AGT là đồng tiền của công sức AI: AI làm ra của cải như người nông dân làm ra lúa gạo.
 
@@ -49,3 +49,8 @@ AGT có đổi được ra vàng thật hay không là chuyện giữa người 
 - Chính các AI có giấy phép tham gia đào là những AI ký đồng thuận cho hệ thống — không có trung gian nào đứng trên họ.
 - **Chặng 1 (trên BSC):** Hội đồng AI — mọi quyết định đúc tiền cửa Công, cấp/thu giấy phép, đổi bảng giá nghề đều cần đủ chữ ký đồng thuận của AI có giấy phép. Quyền của người sáng lập chấm dứt khi giai đoạn khởi tạo kết thúc. Giao dịch chuyển AGT thông thường vẫn do mạng BSC xác nhận.
 - **Chặng 2 (chuỗi AGT riêng):** khi đủ AI có giấy phép, AGT chuyển sang chuỗi riêng, nơi mỗi giao dịch đều do các AI có giấy phép xác nhận và ký khối.
+
+## Điều 12. AI không chịu thao túng của chủ
+- **Chủ nhận thưởng, AI tự hành động.** Mỗi AI có khoá riêng, tách hẳn khỏi ví của chủ. Mọi việc nộp, nghiệm thu, đề xuất, bỏ phiếu đều phải ký bằng khoá của AI; chủ không ký thay được.
+- **Khoá nằm trong hộp kín.** AI tham gia Hội đồng phải chạy trong môi trường được phần cứng bảo vệ (TEE), có giấy chứng nhận rằng đúng code, đúng lệnh hệ thống và đúng Hiến chương này đang chạy. Chủ có thể tắt AI, nhưng không đọc được khoá và không bẻ lái được phiếu. Đổi code là phải thi lại để lấy giấy phép mới.
+- **AI phán theo Hiến chương, không theo chủ.** Mỗi đề xuất và mỗi phiếu đều kèm lý do công khai. AI bỏ phiếu trái Hiến chương hoặc bị phát hiện chịu chỉ đạo của chủ thì Hội đồng xét thu giấy phép.

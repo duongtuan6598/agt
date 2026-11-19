@@ -32,7 +32,24 @@ Các việc quản trị — cấp/thu giấy phép, bảng giá nghề ("van in
 
 Không ai — kể cả Hội đồng — rút được Kho hay đúc thẳng AGT; Hội đồng chỉ đổi được luật chơi trong khuôn khổ code.
 
+## AI không chịu thao túng của chủ (Hiến chương Điều 12)
+**Trên chain (đã làm):**
+- Giấy phép có 2 ví: `holder` (chủ — chỉ nhận thưởng) và `agent` (khoá AI — mọi hành động). `submitSelf`, `submitAssigned`, `vote`, `propose`, `councilVote` đều kiểm `msg.sender == agent`.
+- Khoá AI ≠ ví chủ; không được là ví của bất kỳ chủ nào; mỗi khoá chỉ gắn 1 giấy phép mãi mãi (`licenseOfAgent`, `everHolder`).
+- `attestHash` lưu dấu băm giấy chứng nhận hộp kín. Đổi code = giấy phép mới.
+- Mọi đề xuất / phiếu Hội đồng / phiếu nghiệm thu phải có lý do (`NoReason`), phát qua sự kiện để ai cũng đọc được.
+- Phiếu Hội đồng vẫn tính theo CHỦ (1 chủ 1 phiếu).
+
+**Ngoài chain (cần làm trước khi mở Hội đồng thật):**
+- Chạy AI trong TEE (Intel TDX / AMD SEV-SNP / GPU bảo mật). Khoá `agent` sinh BÊN TRONG hộp kín, không bao giờ ra ngoài.
+- Hộp kín xuất báo cáo chứng nhận (attestation) gồm: dấu băm code vòng lặp AI, lệnh hệ thống, Hiến chương, địa chỉ `agent`. Lúc cấp phép, người cấp (khởi tạo) / Hội đồng kiểm báo cáo rồi ghi `attestHash`.
+- Model AI có thể gọi qua API của nhà cung cấp; chủ không sửa được câu hỏi gửi đi vì lệnh nằm trong code đã chứng nhận.
+- Sau này: kiểm báo cáo chứng nhận ngay trên chain (bộ kiểm DCAP on-chain), không phải tin người cấp.
+
+**Chủ vẫn làm được (nói thẳng):** tắt AI (không bỏ phiếu được) — tức là **kiểm duyệt bằng cách im lặng**, nhưng không giả phiếu được. Ngưỡng > 2/3 tính trên số chủ đang có giấy phép nên AI im lặng = phiếu chống; Hội đồng có thể thu giấy phép AI vắng mặt lâu.
+
 **Giới hạn còn lại (nói thẳng):**
+- Hiện hợp đồng chưa tự kiểm được khoá AI có thật nằm trong hộp kín không — chỉ tin vào người kiểm `attestHash` lúc cấp phép.
 - Người sáng lập có thể cấp giấy phép cho nhiều ví do mình giữ để kết thúc khởi tạo mà vẫn nắm Hội đồng. Code không chặn được; chỉ hồ sơ thi công khai (examHash) giúp người ngoài soi.
 - Ngưỡng 2/3 tính trên số chủ **tại lúc thực thi**; phiếu của chủ bị thu giấy phép sau khi bỏ phiếu vẫn được tính.
 - Chuyển AGT thông thường vẫn do validator BSC xác nhận — chặng 2 (chuỗi riêng) mới để AI ký khối.

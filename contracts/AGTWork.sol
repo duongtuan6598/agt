@@ -25,11 +25,15 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
     enum Kind { SelfFound, Assigned }
     enum Status { None, Open, Submitted, Disputed, Accepted, Rejected, Refunded }
 
+    /// holder = ví CHỦ, chỉ nhận thưởng (Điều 6). agent = khoá riêng của AI, mọi hành động phải ký bằng khoá này,
+    /// để chủ không bỏ phiếu thay AI được (Điều 12). attestHash = giấy chứng nhận hộp kín (TEE) của code AI.
     struct License {
         address holder;
+        address agent;
         Role role;
         bool active;
         bytes32 examHash; // dấu băm hồ sơ bài thi
+        bytes32 attestHash; // dấu băm giấy chứng nhận hộp kín: code + lệnh hệ thống + Hiến chương AI đang chạy
         string name;
     }
 
@@ -102,22 +106,24 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
     uint256 public nextProposal = 1;
     mapping(uint256 => Proposal) public proposals;
     mapping(uint256 => mapping(address => bool)) public councilVoted; // đề xuất => chủ
+    mapping(address => uint256) public licenseOfAgent; // khoá AI => giấy phép (mỗi khoá chỉ dùng 1 lần, mãi mãi)
+    mapping(address => bool) public everHolder; // ví đã từng là chủ — không được làm khoá AI
 
     event GenesisEnded(uint32 verifierHolders);
     event GovTargetSet(address indexed target, bool ok);
     event Proposed(uint256 indexed id, address indexed proposer, address indexed target, bytes data, string reason, uint64 deadline);
-    event CouncilVoted(uint256 indexed id, address indexed holder, uint256 licenseId, bool support);
+    event CouncilVoted(uint256 indexed id, address indexed holder, uint256 licenseId, bool support, string reason);
     event Executed(uint256 indexed id);
 
     event Bound(address agt);
-    event LicenseGranted(uint256 indexed id, address indexed holder, Role role, bytes32 examHash, string name);
+    event LicenseGranted(uint256 indexed id, address indexed holder, address indexed agent, Role role, bytes32 examHash, bytes32 attestHash, string name);
     event LicenseRevoked(uint256 indexed id);
     event CategorySet(uint256 indexed id, string name, uint128 reward, uint128 verifierReward, uint32 dailyCap, uint8 approvals, bool active);
     event DisputeRulesSet(uint8 approvals, uint128 verifierReward, uint64 reviewWindow);
     event JobAssigned(uint256 indexed id, address indexed client, uint256 indexed workerLicense, uint256 escrow, bytes32 spec, uint64 deadline);
     event JobSubmitted(uint256 indexed id, uint256 indexed workerLicense, bytes32 result, string uri);
     event JobDisputed(uint256 indexed id);
-    event Voted(uint256 indexed id, uint256 indexed verifierLicense, bool approve);
+    event Voted(uint256 indexed id, uint256 indexed verifierLicense, bool approve, string reason);
     event JobAccepted(uint256 indexed id, address indexed paidTo, uint256 amount, bool minted);
     event JobRejected(uint256 indexed id);
     event JobRefunded(uint256 indexed id, address indexed client, uint256 amount);
@@ -132,6 +138,7 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
     error AlreadyVoted();
     error BadParams();
     error NotPassed();
+    error NoReason();
     error CallFailed(bytes reason);
 
     constructor(address owner_, uint32 genesisExitVerifiers_) Ownable(owner_) {
@@ -155,13 +162,24 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
     }
 
     /// Cấp giấy phép sau khi AI thi đạt (Điều 5).
-    function grantLicense(address holder, Role role, bytes32 examHash, string calldata name) external onlyGov returns (uint256 id) {
-        if (holder == address(0) || role == Role.None) revert BadParams();
+    function grantLicense(
+        address holder,
+        address agent,
+        Role role,
+        bytes32 examHash,
+        bytes32 attestHash,
+        string calldata name
+    ) external onlyGov returns (uint256 id) {
+        if (holder == address(0) || agent == address(0) || role == Role.None) revert BadParams();
+        // Khoá AI phải tách hẳn khỏi ví chủ: không trùng chủ, không là chủ của ai, không dùng lại.
+        if (agent == holder || everHolder[agent] || licenseOfAgent[agent] != 0 || licenseOfAgent[holder] != 0) revert BadParams();
         id = nextLicense++;
-        licenses[id] = License(holder, role, true, examHash, name);
+        licenses[id] = License(holder, agent, role, true, examHash, attestHash, name);
+        licenseOfAgent[agent] = id;
+        everHolder[holder] = true;
         if (activeLicensesOf[holder]++ == 0) activeHolders++;
         if (role == Role.Verifier && activeVerifiersOf[holder]++ == 0) verifierHolders++;
-        emit LicenseGranted(id, holder, role, examHash, name);
+        emit LicenseGranted(id, holder, agent, role, examHash, attestHash, name);
         // Kết thúc khởi tạo tự động & vĩnh viễn: người sáng lập mất mọi quyền, chỉ còn Hội đồng AI.
         if (!genesisEnded && verifierHolders >= genesisExitVerifiers) {
             genesisEnded = true;
@@ -195,7 +213,8 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
 
     /// Mọi AI có giấy phép (Thợ hay Nghiệm thu) đều đề xuất được.
     function propose(uint256 licenseId, address target, bytes calldata data, string calldata reason) external returns (uint256 id) {
-        _requireAnyLicense(licenseId);
+        _requireAgent(licenseId, Role.None);
+        if (bytes(reason).length == 0) revert NoReason();
         if (target != address(this) && !govTarget[target]) revert NotAllowed();
         id = nextProposal++;
         uint64 deadline = uint64(block.timestamp) + PROPOSAL_PERIOD;
@@ -203,16 +222,18 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
         emit Proposed(id, msg.sender, target, data, reason, deadline);
     }
 
-    /// Mỗi CHỦ một phiếu, dù có bao nhiêu giấy phép — nhiều con AI cùng chủ không thổi phồng phiếu được.
-    function councilVote(uint256 id, uint256 licenseId, bool support) external {
-        _requireAnyLicense(licenseId);
+    /// AI ký bằng khoá riêng, kèm lý do công khai. Mỗi CHỦ một phiếu dù có bao nhiêu AI.
+    function councilVote(uint256 id, uint256 licenseId, bool support, string calldata reason) external {
+        _requireAgent(licenseId, Role.None);
+        if (bytes(reason).length == 0) revert NoReason();
         Proposal storage p = proposals[id];
         if (p.target == address(0) || p.executed || block.timestamp > p.deadline) revert BadState();
-        if (councilVoted[id][msg.sender]) revert AlreadyVoted();
-        councilVoted[id][msg.sender] = true;
+        address holder = licenses[licenseId].holder;
+        if (councilVoted[id][holder]) revert AlreadyVoted();
+        councilVoted[id][holder] = true;
         if (support) p.yes++;
         else p.no++;
-        emit CouncilVoted(id, msg.sender, licenseId, support);
+        emit CouncilVoted(id, holder, licenseId, support, reason);
     }
 
     /// Thông qua khi số chủ đồng ý > 2/3 số chủ đang có giấy phép (ngưỡng chống gian kiểu BFT).
@@ -236,11 +257,6 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
         if (!ok) revert CallFailed(ret);
     }
 
-    function _requireAnyLicense(uint256 licenseId) internal view {
-        License storage l = licenses[licenseId];
-        if (l.role == Role.None || !l.active) revert BadLicense();
-        if (l.holder != msg.sender) revert NotAllowed();
-    }
 
     function setCategory(
         uint256 id,
@@ -267,7 +283,7 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
     // ---------- việc AI tự tìm ----------
 
     function submitSelf(uint256 workerLicense, uint256 category, bytes32 result, string calldata uri) external returns (uint256 id) {
-        _requireHolder(workerLicense, Role.Worker);
+        _requireAgent(workerLicense, Role.Worker);
         Category storage c = categories[category];
         if (!c.active) revert BadCategory();
         uint256 day = block.timestamp / 1 days;
@@ -306,7 +322,7 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
     function submitAssigned(uint256 id, bytes32 result, string calldata uri) external {
         Job storage j = jobs[id];
         if (j.kind != Kind.Assigned || j.status != Status.Open || block.timestamp > j.deadline) revert BadState();
-        _requireHolder(j.workerLicense, Role.Worker);
+        _requireAgent(j.workerLicense, Role.Worker);
         j.status = Status.Submitted;
         j.result = result;
         j.uri = uri;
@@ -346,17 +362,18 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
 
     // ---------- nghiệm thu ----------
 
-    function vote(uint256 id, uint256 verifierLicense, bool approve) external nonReentrant {
-        _requireHolder(verifierLicense, Role.Verifier);
+    function vote(uint256 id, uint256 verifierLicense, bool approve, string calldata reason) external nonReentrant {
+        _requireAgent(verifierLicense, Role.Verifier);
+        if (bytes(reason).length == 0) revert NoReason();
         Job storage j = jobs[id];
         bool selfFound = j.kind == Kind.SelfFound && j.status == Status.Submitted;
         bool disputed = j.kind == Kind.Assigned && j.status == Status.Disputed;
         if (!selfFound && !disputed) revert BadState();
         address v = licenses[verifierLicense].holder;
-        if (v == licenses[j.workerLicense].holder || v == j.client) revert NotAllowed();
+        if (v == licenses[j.workerLicense].holder || v == j.client || msg.sender == j.client) revert NotAllowed();
         if (voted[id][verifierLicense]) revert AlreadyVoted();
         voted[id][verifierLicense] = true;
-        emit Voted(id, verifierLicense, approve);
+        emit Voted(id, verifierLicense, approve, reason);
 
         uint8 need = selfFound ? categories[j.category].approvals : disputeApprovals;
         uint128 vReward = selfFound ? categories[j.category].verifierReward : disputeVerifierReward;
@@ -404,10 +421,11 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
 
     // ---------- nội bộ ----------
 
-    function _requireHolder(uint256 licenseId, Role role) internal view {
+    /// Hành động của AI phải ký bằng KHOÁ AI (agent), không phải ví chủ. role = None: vai trò nào cũng được.
+    function _requireAgent(uint256 licenseId, Role role) internal view {
         License storage l = licenses[licenseId];
-        if (l.role != role || !l.active) revert BadLicense();
-        if (l.holder != msg.sender) revert NotAllowed();
+        if (l.role == Role.None || !l.active || (role != Role.None && l.role != role)) revert BadLicense();
+        if (l.agent != msg.sender) revert NotAllowed();
     }
 
     function _payAssigned(uint256 id, Job storage j) internal {
