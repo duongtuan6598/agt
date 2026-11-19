@@ -75,6 +75,40 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
     mapping(uint256 => uint256[]) internal _noVoters;
     mapping(uint256 => mapping(uint256 => mapping(uint256 => uint32))) public dailyCount; // giấy phép => nghề => ngày
 
+    // ---------- Hội đồng AI (Hiến chương Điều 11) ----------
+
+    struct Proposal {
+        address proposer;
+        address target;
+        uint64 deadline;
+        uint32 yes;
+        uint32 no;
+        bool executed;
+        bytes data;
+        string reason;
+    }
+
+    uint64 public constant PROPOSAL_PERIOD = 7 days;
+    /// Đủ bấy nhiêu AI nghiệm thu thuộc bấy nhiêu chủ khác nhau thì giai đoạn khởi tạo tự kết thúc.
+    uint32 public immutable genesisExitVerifiers;
+    bool public genesisEnded;
+
+    mapping(address => uint32) public activeLicensesOf; // chủ => số giấy phép còn hiệu lực
+    mapping(address => uint32) public activeVerifiersOf;
+    uint32 public activeHolders; // số CHỦ (không phải số giấy phép) đang có giấy phép — 1 chủ = 1 phiếu
+    uint32 public verifierHolders;
+
+    mapping(address => bool) public govTarget; // hợp đồng mà Hội đồng được điều khiển (Kho, Oracle)
+    uint256 public nextProposal = 1;
+    mapping(uint256 => Proposal) public proposals;
+    mapping(uint256 => mapping(address => bool)) public councilVoted; // đề xuất => chủ
+
+    event GenesisEnded(uint32 verifierHolders);
+    event GovTargetSet(address indexed target, bool ok);
+    event Proposed(uint256 indexed id, address indexed proposer, address indexed target, bytes data, string reason, uint64 deadline);
+    event CouncilVoted(uint256 indexed id, address indexed holder, uint256 licenseId, bool support);
+    event Executed(uint256 indexed id);
+
     event Bound(address agt);
     event LicenseGranted(uint256 indexed id, address indexed holder, Role role, bytes32 examHash, string name);
     event LicenseRevoked(uint256 indexed id);
@@ -97,8 +131,19 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
     error DailyCapReached();
     error AlreadyVoted();
     error BadParams();
+    error NotPassed();
+    error CallFailed(bytes reason);
 
-    constructor(address owner_) Ownable(owner_) {}
+    constructor(address owner_, uint32 genesisExitVerifiers_) Ownable(owner_) {
+        if (genesisExitVerifiers_ < 3) revert BadParams();
+        genesisExitVerifiers = genesisExitVerifiers_;
+    }
+
+    /// Giai đoạn khởi tạo: người sáng lập hoặc Hội đồng. Sau đó: CHỈ Hội đồng (đề xuất đã thông qua).
+    modifier onlyGov() {
+        if (msg.sender != address(this) && (genesisEnded || msg.sender != owner())) revert NotAllowed();
+        _;
+    }
 
     // ---------- cấu hình ----------
 
@@ -110,17 +155,91 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
     }
 
     /// Cấp giấy phép sau khi AI thi đạt (Điều 5).
-    function grantLicense(address holder, Role role, bytes32 examHash, string calldata name) external onlyOwner returns (uint256 id) {
+    function grantLicense(address holder, Role role, bytes32 examHash, string calldata name) external onlyGov returns (uint256 id) {
         if (holder == address(0) || role == Role.None) revert BadParams();
         id = nextLicense++;
         licenses[id] = License(holder, role, true, examHash, name);
+        if (activeLicensesOf[holder]++ == 0) activeHolders++;
+        if (role == Role.Verifier && activeVerifiersOf[holder]++ == 0) verifierHolders++;
         emit LicenseGranted(id, holder, role, examHash, name);
+        // Kết thúc khởi tạo tự động & vĩnh viễn: người sáng lập mất mọi quyền, chỉ còn Hội đồng AI.
+        if (!genesisEnded && verifierHolders >= genesisExitVerifiers) {
+            genesisEnded = true;
+            _transferOwnership(address(0));
+            emit GenesisEnded(verifierHolders);
+        }
     }
 
-    function revokeLicense(uint256 id) external onlyOwner {
-        if (licenses[id].role == Role.None) revert BadLicense();
-        licenses[id].active = false;
+    function revokeLicense(uint256 id) external onlyGov {
+        License storage l = licenses[id];
+        if (l.role == Role.None || !l.active) revert BadLicense();
+        l.active = false;
+        if (--activeLicensesOf[l.holder] == 0) activeHolders--;
+        if (l.role == Role.Verifier && --activeVerifiersOf[l.holder] == 0) verifierHolders--;
         emit LicenseRevoked(id);
+    }
+
+    function setGovTarget(address target, bool ok) external onlyGov {
+        if (target == address(0) || target == address(this) || target == address(agt)) revert BadParams();
+        govTarget[target] = ok;
+        emit GovTargetSet(target, ok);
+    }
+
+    /// Gọi cấu hình Kho/Oracle (vd. acceptOwnership, setAsset) — chỉ người có quyền quản trị.
+    function adminCall(address target, bytes calldata data) external onlyGov returns (bytes memory) {
+        if (!govTarget[target]) revert NotAllowed();
+        return _call(target, data);
+    }
+
+    // ---------- Hội đồng AI: đề xuất → bỏ phiếu → thực thi ----------
+
+    /// Mọi AI có giấy phép (Thợ hay Nghiệm thu) đều đề xuất được.
+    function propose(uint256 licenseId, address target, bytes calldata data, string calldata reason) external returns (uint256 id) {
+        _requireAnyLicense(licenseId);
+        if (target != address(this) && !govTarget[target]) revert NotAllowed();
+        id = nextProposal++;
+        uint64 deadline = uint64(block.timestamp) + PROPOSAL_PERIOD;
+        proposals[id] = Proposal(msg.sender, target, deadline, 0, 0, false, data, reason);
+        emit Proposed(id, msg.sender, target, data, reason, deadline);
+    }
+
+    /// Mỗi CHỦ một phiếu, dù có bao nhiêu giấy phép — nhiều con AI cùng chủ không thổi phồng phiếu được.
+    function councilVote(uint256 id, uint256 licenseId, bool support) external {
+        _requireAnyLicense(licenseId);
+        Proposal storage p = proposals[id];
+        if (p.target == address(0) || p.executed || block.timestamp > p.deadline) revert BadState();
+        if (councilVoted[id][msg.sender]) revert AlreadyVoted();
+        councilVoted[id][msg.sender] = true;
+        if (support) p.yes++;
+        else p.no++;
+        emit CouncilVoted(id, msg.sender, licenseId, support);
+    }
+
+    /// Thông qua khi số chủ đồng ý > 2/3 số chủ đang có giấy phép (ngưỡng chống gian kiểu BFT).
+    function passed(uint256 id) public view returns (bool) {
+        Proposal storage p = proposals[id];
+        return activeHolders > 0 && uint256(p.yes) * 3 > uint256(activeHolders) * 2;
+    }
+
+    function execute(uint256 id) external nonReentrant returns (bytes memory) {
+        Proposal storage p = proposals[id];
+        if (p.target == address(0) || p.executed || block.timestamp > p.deadline) revert BadState();
+        if (!passed(id)) revert NotPassed();
+        p.executed = true;
+        emit Executed(id);
+        return _call(p.target, p.data);
+    }
+
+    function _call(address target, bytes memory data) internal returns (bytes memory ret) {
+        bool ok;
+        (ok, ret) = target.call(data);
+        if (!ok) revert CallFailed(ret);
+    }
+
+    function _requireAnyLicense(uint256 licenseId) internal view {
+        License storage l = licenses[licenseId];
+        if (l.role == Role.None || !l.active) revert BadLicense();
+        if (l.holder != msg.sender) revert NotAllowed();
     }
 
     function setCategory(
@@ -131,13 +250,13 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
         uint32 dailyCap,
         uint8 approvals,
         bool active
-    ) external onlyOwner {
+    ) external onlyGov {
         if (approvals == 0 || approvals > MAX_VOTES) revert BadParams();
         categories[id] = Category(reward, verifierReward, dailyCap, approvals, active, name);
         emit CategorySet(id, name, reward, verifierReward, dailyCap, approvals, active);
     }
 
-    function setDisputeRules(uint8 approvals, uint128 verifierReward, uint64 window) external onlyOwner {
+    function setDisputeRules(uint8 approvals, uint128 verifierReward, uint64 window) external onlyGov {
         if (approvals == 0 || approvals > MAX_VOTES || window == 0) revert BadParams();
         disputeApprovals = approvals;
         disputeVerifierReward = verifierReward;

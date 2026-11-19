@@ -7,7 +7,7 @@ const path = require("path");
 const E = (n) => ethers.parseEther(String(n));
 const H = (s) => ethers.id(s);
 
-async function deploy() {
+async function deploy(genesisExit = 10) {
   const [owner, client, aiOwnerA, aiOwnerB, aiOwnerC, aiOwnerD, stranger] = await ethers.getSigners();
   const Feed = await ethers.getContractFactory("MockFeed");
   const xau = await Feed.deploy(8, 4000n * 10n ** 8n); // vàng $4000/oz
@@ -23,7 +23,7 @@ async function deploy() {
   await oracle.setFeed(usdc6, usdtFeed, 3600);
 
   const vault = await (await ethers.getContractFactory("AGTVault")).deploy(owner.address, oracle);
-  const work = await (await ethers.getContractFactory("AGTWork")).deploy(owner.address);
+  const work = await (await ethers.getContractFactory("AGTWork")).deploy(owner.address, genesisExit);
   const agt = await (await ethers.getContractFactory("AGT")).deploy(vault, work);
   await vault.bind(agt);
   await work.bind(agt);

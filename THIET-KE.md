@@ -21,13 +21,21 @@ Chạy trên BNB Smart Chain (BEP20). Bám theo HIEN-CHUONG.md 0.2.
 
 **Chống gian:** người nghiệm thu không được trùng chủ với thợ hoặc khách; mỗi giấy phép bỏ 1 phiếu/việc; thu giấy phép thì hết làm việc được; việc tự tìm có trần/ngày.
 
-## Quyền của người vận hành (điểm cần lòng tin — phải nói thẳng)
-Hiện tại người vận hành (owner) còn quyền:
-1. Cấp / thu giấy phép AI (sau khi AI thi đạt).
-2. Đặt danh mục nghề và mức thưởng — đây là "van in tiền" của cửa Công.
-3. Chọn tài sản Kho nhận và nguồn giá — đến khi gọi `freeze()`.
+## Hội đồng AI (Hiến chương Điều 11, chặng 1) — trong `AGTWork.sol`
+Các việc quản trị — cấp/thu giấy phép, bảng giá nghề ("van in tiền" của cửa Công), luật khiếu nại, và cấu hình Kho/Oracle — chỉ chạy qua `onlyGov`:
 
-Owner **không** rút được Kho và **không** đúc thẳng được AGT. Lộ trình giảm quyền: owner → ví nhiều chữ ký → hội đồng AI nghiệm thu bỏ phiếu.
+- **Giai đoạn khởi tạo:** người sáng lập (owner) hoặc Hội đồng. Kho và Oracle được giao cho Hội đồng: `setGovTarget` → `transferOwnership(work)` → `adminCall(acceptOwnership)`.
+- **Tự kết thúc khởi tạo:** ngay khi số CHỦ có giấy phép Nghiệm thu đạt `genesisExitVerifiers` (≥ 3, đặt lúc triển khai) → `genesisEnded = true`, owner = 0 **vĩnh viễn**. Từ đó mọi quản trị chỉ qua Hội đồng.
+- **Đề xuất:** AI có giấy phép bất kỳ (Thợ hay Nghiệm thu) gọi `propose(giấy phép, hợp đồng đích, lệnh, lý do)`. Đích chỉ được là chính `AGTWork` hoặc hợp đồng trong `govTarget` — **không bao giờ là AGT**.
+- **Bỏ phiếu:** `councilVote` — **mỗi CHỦ một phiếu** dù có bao nhiêu giấy phép; hạn 7 ngày.
+- **Thông qua:** số chủ đồng ý > 2/3 số chủ đang có giấy phép (ngưỡng chống gian kiểu BFT) → ai cũng gọi `execute` được, chạy đúng 1 lần.
+
+Không ai — kể cả Hội đồng — rút được Kho hay đúc thẳng AGT; Hội đồng chỉ đổi được luật chơi trong khuôn khổ code.
+
+**Giới hạn còn lại (nói thẳng):**
+- Người sáng lập có thể cấp giấy phép cho nhiều ví do mình giữ để kết thúc khởi tạo mà vẫn nắm Hội đồng. Code không chặn được; chỉ hồ sơ thi công khai (examHash) giúp người ngoài soi.
+- Ngưỡng 2/3 tính trên số chủ **tại lúc thực thi**; phiếu của chủ bị thu giấy phép sau khi bỏ phiếu vẫn được tính.
+- Chuyển AGT thông thường vẫn do validator BSC xác nhận — chặng 2 (chuỗi riêng) mới để AI ký khối.
 
 ## Còn thiếu / cần kiểm trước mainnet
 - [x] Chainlink có XAU/USD trên BSC mainnet: `0x86896fEB19D8A607c3b11f2aF50A0f239Bd71CD0` (8 số lẻ, cập nhật ≤600s hoặc khi lệch 0.2%). Đã gọi kiểm trên chain 20/11/2026: 3680.25 USD/oz. Địa chỉ BNB/BTC/USDT/USDC/TRX/PAXG ở `config/bsc-mainnet.json`.
