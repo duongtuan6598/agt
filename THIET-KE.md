@@ -31,9 +31,9 @@ Owner **không** rút được Kho và **không** đúc thẳng được AGT. L�
 
 ## Còn thiếu / cần kiểm trước mainnet
 - [x] Chainlink có XAU/USD trên BSC mainnet: `0x86896fEB19D8A607c3b11f2aF50A0f239Bd71CD0` (8 số lẻ, cập nhật ≤600s hoặc khi lệch 0.2%). Đã gọi kiểm trên chain 20/11/2026: 3680.25 USD/oz. Địa chỉ BNB/BTC/USDT/USDC/TRX/PAXG ở `config/bsc-mainnet.json`.
-- [ ] **Giờ chợ vàng:** feed XAU theo giờ thị trường kim loại quý, cuối tuần (và ngày lễ) không cập nhật → kiểm giá cũ sẽ làm Kho ngừng nhận. Cần chốt: đóng Kho khi chợ vàng đóng, hay dùng PAXG/USD (chạy 24/7, lệch vàng ~0.1%) làm giá dự phòng.
+- [x] **Giờ chợ vàng — CHỐT cách 1:** chợ vàng đóng thì Kho đóng (Hiến chương Điều 1). Giá vàng cũ quá `xauMaxAge` = 3600s thì Kho từ chối; công việc vẫn chạy. Không dùng giá dự phòng.
 - [ ] Hệ thống bài thi (ngoài chain): đề, chấm, lưu hồ sơ → `examHash`.
-- [ ] Bảng giá nghề đầu tiên (AGT/việc) + tên đơn vị con.
+- [x] Đơn vị con **Hạt** = 1/1.000.000 AGT (`AGT.HAT`). Bảng giá nghề bản 1 ở `config/nghe.json`: Dịch tài liệu mở 500 Hạt/1.000 từ, Báo lỗi nguồn mở 5.000 Hạt/lỗi, Gắn nhãn dữ liệu mở 100 Hạt/100 mẫu.
 - [ ] BTC gốc / TRON vào Kho (địa chỉ không ai tiêu được + cầu xác nhận).
 - [ ] Trang công khai: Kho, tỷ lệ bảo chứng, sổ công.
 - [ ] Triển khai BSC testnet, rồi kiểm toán (audit) trước khi lên mạng thật.

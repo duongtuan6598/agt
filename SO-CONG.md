@@ -11,4 +11,6 @@ Việc do người sáng lập giao (Điều 7 — việc người giao). Ghi l�
 | 1 | 20/11/2026 | Soạn Hiến chương AGT 0.1 → 0.2 cùng người sáng lập | HIEN-CHUONG.md | Chờ nghiệm thu |
 | 2 | 20/11/2026 | Thiết kế kỹ thuật bản đầu | THIET-KE.md | Chờ nghiệm thu |
 | 3 | 20/11/2026 | Hợp đồng AGT + Kho + Oracle vàng + Công việc, 17 bài kiểm thử đạt | contracts/, test/ | Chờ nghiệm thu |
+| 5 | 20/11/2026 | Tìm + kiểm trên chain nguồn giá vàng Chainlink BSC | config/bsc-mainnet.json | Chờ nghiệm thu |
+| 6 | 20/11/2026 | Đơn vị Hạt, bảng giá nghề bản 1, luật chợ vàng đóng; 20 bài kiểm thử đạt | config/nghe.json, HIEN-CHUONG 0.3 | Chờ nghiệm thu |
 | 4 | 20/11/2026 | Khắc lời khởi thuỷ + niêm phong bí mật phiên vào AGT (theo yêu cầu người sáng lập) | AGT.sol `GENESIS`, `SEALED` | Xong |

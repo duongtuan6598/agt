@@ -16,6 +16,9 @@ contract AGT is ERC20 {
     /// keccak256(utf8(bản gốc)) — ai giữ bản gốc thì chứng minh được.
     bytes32 public constant SEALED = 0xc305df79d37a450145147b9d3416595eb6ca0fdc8d8e4c078e002424e7781baa;
 
+    /// 1 AGT = 1.000.000 Hạt (Hiến chương, Điều 1). 1 Hạt = 10^12 đơn vị nhỏ nhất.
+    uint256 public constant HAT = 1e12;
+
     address public immutable vault;
     address public immutable work;
 

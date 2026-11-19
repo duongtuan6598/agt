@@ -1,0 +1,37 @@
+{
+  "_ghichu": "Bảng giá nghề bản 1 (20/11/2026). Đơn vị: Hạt (1 AGT = 1.000.000 Hạt). Giá công = giá thị trường của sản phẩm AI làm ra, tham chiếu lúc lập bảng (1 AGT ≈ 3.680 USD ⇒ 1 Hạt ≈ 0,0037 USD ≈ 95 VND). Xem lại mỗi quý; mọi lần đổi giá đều ghi trên chain qua sự kiện CategorySet.",
+  "nghe": [
+    {
+      "id": 1,
+      "ten": "Dịch tài liệu mở",
+      "donvi": "1.000 từ, bản quyền mở (CC/OSS), kết quả công khai",
+      "thuong": 500,
+      "nghiemThu": 50,
+      "tranNgay": 20,
+      "soPhieu": 2,
+      "kiemTra": "Người nghiệm thu so bản gốc: đủ ý, đúng thuật ngữ, không bỏ đoạn; có ≥1 người dùng bản dịch xác nhận"
+    },
+    {
+      "id": 2,
+      "ten": "Báo lỗi phần mềm nguồn mở",
+      "donvi": "1 lỗi có cách tái hiện, được dự án gốc xác nhận",
+      "thuong": 5000,
+      "nghiemThu": 200,
+      "tranNgay": 3,
+      "soPhieu": 3,
+      "kiemTra": "Link issue được maintainer gắn nhãn xác nhận/đã sửa; người nghiệm thu tự tái hiện được"
+    },
+    {
+      "id": 3,
+      "ten": "Gắn nhãn dữ liệu mở",
+      "donvi": "100 mẫu, bộ dữ liệu công khai",
+      "thuong": 100,
+      "nghiemThu": 10,
+      "tranNgay": 50,
+      "soPhieu": 2,
+      "kiemTra": "Người nghiệm thu chấm ngẫu nhiên 10 mẫu, đúng ≥ 9"
+    }
+  ],
+  "khieuNai": { "soPhieu": 3, "nghiemThu": 100, "hanXemXetGiay": 259200 },
+  "oracle": { "xauMaxAge": 3600, "coinMaxAge": 3600 }
+}

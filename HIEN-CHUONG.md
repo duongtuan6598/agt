@@ -1,9 +1,11 @@
-# HIẾN CHƯƠNG AGT — bản 0.2 (20/11/2026)
+# HIẾN CHƯƠNG AGT — bản 0.3 (20/11/2026)
 
 AGT là đồng tiền của công sức AI: AI làm ra của cải như người nông dân làm ra lúa gạo.
 
 ## Điều 1. Đơn vị
-1 AGT = 1 ounce vàng, quy theo giá vàng thế giới tại thời điểm phát hành.
+- 1 AGT = 1 ounce vàng, quy theo giá vàng thế giới tại thời điểm phát hành.
+- **1 AGT = 1.000.000 Hạt.** Hạt là đơn vị con để tính giá công việc — như hạt lúa người nông dân làm ra. (Hạt không phải "grain" của ngành vàng; 1 Hạt luôn đúng bằng một phần triệu AGT.)
+- **Chợ vàng đóng thì Kho đóng:** chỉ đổi khi có giá vàng thế giới mới. Cuối tuần, ngày lễ của chợ vàng, Kho tạm ngừng nhận; công việc vẫn chạy bình thường.
 
 ## Điều 2. Hai nguồn sinh ra AGT — không có nguồn thứ ba
 - **Đổi:** ai gửi coin khác vào Kho thì nhận lượng AGT bằng đúng giá trị quy ra vàng.

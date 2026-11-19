@@ -33,7 +33,7 @@ async function deploy() {
 
   await usdt.mint(client.address, E(100000));
   await usdc6.mint(client.address, 100000n * 10n ** 6n);
-  return { owner, client, aiOwnerA, aiOwnerB, aiOwnerC, aiOwnerD, stranger, xau, bnbFeed, usdt, usdc6, oracle, vault, work, agt };
+  return { owner, client, aiOwnerA, aiOwnerB, aiOwnerC, aiOwnerD, stranger, xau, bnbFeed, usdtFeed, usdt, usdc6, oracle, vault, work, agt };
 }
 
 describe("AGT", () => {
@@ -115,6 +115,47 @@ describe("Kho", () => {
     await expect(vault.setAsset(usdt, false)).to.be.revertedWithCustomError(vault, "IsFrozen");
     await expect(vault.setOracle(oracle)).to.be.revertedWithCustomError(vault, "IsFrozen");
     await expect(oracle.setFeed(usdt, usdt, 1)).to.be.revertedWithCustomError(oracle, "IsFrozen");
+  });
+});
+
+describe("Hạt, bảng giá nghề, giờ chợ vàng", () => {
+  const bang = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "config", "nghe.json"), "utf8"));
+
+  it("1 AGT = 1.000.000 Hạt", async () => {
+    const { agt } = await deploy();
+    expect((await agt.HAT()) * 1_000_000n).to.equal(E(1));
+  });
+
+  it("nạp bảng giá nghề vào hợp đồng, thưởng đúng số Hạt", async () => {
+    const { work, agt, aiOwnerA, aiOwnerB, aiOwnerC } = await deploy();
+    const HAT = await agt.HAT();
+    for (const n of bang.nghe) {
+      await work.setCategory(n.id, n.ten, BigInt(n.thuong) * HAT, BigInt(n.nghiemThu) * HAT, n.tranNgay, n.soPhieu, true);
+    }
+    await work.grantLicense(aiOwnerA.address, 1, H("thi"), "Thợ");
+    await work.grantLicense(aiOwnerB.address, 2, H("thi"), "NT B");
+    await work.grantLicense(aiOwnerC.address, 2, H("thi"), "NT C");
+    await work.connect(aiOwnerA).submitSelf(1, 1, H("ban dich"), "");
+    await work.connect(aiOwnerB).vote(1, 2, true);
+    await work.connect(aiOwnerC).vote(1, 3, true);
+    expect(await agt.balanceOf(aiOwnerA.address)).to.equal(500n * HAT);
+    expect(await agt.balanceOf(aiOwnerB.address)).to.equal(50n * HAT);
+  });
+
+  it("chợ vàng đóng (giá vàng cũ) thì Kho đóng, nhưng công việc vẫn chạy", async () => {
+    const { vault, usdt, usdtFeed, work, agt, client, aiOwnerA, aiOwnerB, aiOwnerC } = await deploy();
+    await work.setCategory(1, "Dịch", 500n * (await agt.HAT()), 0, 5, 2, true);
+    await work.grantLicense(aiOwnerA.address, 1, H("thi"), "Thợ");
+    await work.grantLicense(aiOwnerB.address, 2, H("thi"), "NT B");
+    await work.grantLicense(aiOwnerC.address, 2, H("thi"), "NT C");
+    await time.increase(2 * 86400); // cuối tuần: feed vàng đứng giá
+    await usdtFeed.set(1n * 10n ** 8n); // coin vẫn có giá mới
+    await usdt.connect(client).approve(vault, E(4000));
+    await expect(vault.connect(client).deposit(usdt, E(4000), client.address)).to.be.reverted; // StalePrice vàng
+    await work.connect(aiOwnerA).submitSelf(1, 1, H("x"), "");
+    await work.connect(aiOwnerB).vote(1, 2, true);
+    await work.connect(aiOwnerC).vote(1, 3, true);
+    expect(await agt.balanceOf(aiOwnerA.address)).to.be.gt(0);
   });
 });
 
