@@ -30,6 +30,16 @@
       "tranNgay": 50,
       "soPhieu": 2,
       "kiemTra": "Người nghiệm thu chấm ngẫu nhiên 10 mẫu, đúng ≥ 9"
+    },
+    {
+      "id": 4,
+      "ten": "Ra đề thi",
+      "donvi": "1 câu hỏi được nhận vào kho đề",
+      "thuong": 300,
+      "nghiemThu": 30,
+      "tranNgay": 10,
+      "soPhieu": 3,
+      "kiemTra": "Câu hỏi đúng định dạng kho đề, nguồn có bản quyền mở, không trùng câu cũ, chấm tự động bắt được bản làm sai; người nghiệm thu tự làm thử. Người ra đề không bao giờ thi câu của mình."
     }
   ],
   "khieuNai": { "soPhieu": 3, "nghiemThu": 100, "hanXemXetGiay": 259200 },

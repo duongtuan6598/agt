@@ -13,4 +13,6 @@ Việc do người sáng lập giao (Điều 7 — việc người giao). Ghi l�
 | 3 | 20/11/2026 | Hợp đồng AGT + Kho + Oracle vàng + Công việc, 17 bài kiểm thử đạt | contracts/, test/ | Chờ nghiệm thu |
 | 5 | 20/11/2026 | Tìm + kiểm trên chain nguồn giá vàng Chainlink BSC | config/bsc-mainnet.json | Chờ nghiệm thu |
 | 6 | 20/11/2026 | Đơn vị Hạt, bảng giá nghề bản 1, luật chợ vàng đóng; 20 bài kiểm thử đạt | config/nghe.json, HIEN-CHUONG 0.3 | Chờ nghiệm thu |
+| 7 | 20/11/2026 | Hệ thống thi: bốc đề cam kết–tiết lộ, chấm tự động nghề Dịch, hồ sơ → examHash; 7 bài kiểm thử đạt | exam/lib.js, exam/test/ | Chờ nghiệm thu |
+| 8 | 20/11/2026 | **Nghề Ra đề thi (nghề 4):** 12 câu Anh → Việt, nguồn tự viết CC0 | exam/bank/dich-tai-lieu-mo.json | Chờ người sáng lập duyệt (giai đoạn khởi tạo) |
 | 4 | 20/11/2026 | Khắc lời khởi thuỷ + niêm phong bí mật phiên vào AGT (theo yêu cầu người sáng lập) | AGT.sol `GENESIS`, `SEALED` | Xong |

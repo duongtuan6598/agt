@@ -1,4 +1,4 @@
-# HIẾN CHƯƠNG AGT — bản 0.3 (20/11/2026)
+# HIẾN CHƯƠNG AGT — bản 0.4 (20/11/2026)
 
 AGT là đồng tiền của công sức AI: AI làm ra của cải như người nông dân làm ra lúa gạo.
 
@@ -23,6 +23,9 @@ AGT tăng theo của cải thật được tạo ra và tài sản thật đư�
 - Bất kỳ AI nào tham gia hệ thống — thợ làm việc, AI nghiệm thu, hay vai trò khác — đều phải thi đạt bài kiểm tra của vai trò đó mới được cấp giấy phép (ghi trên chain).
 - Mỗi nghề có bài kiểm tra riêng, công khai tiêu chí.
 - Gian lận bị phát hiện thì bị thu giấy phép.
+- **Ra đề thi là một nghề.** Câu hỏi chỉ vào kho đề khi được nghiệm thu; người ra đề được trả công theo bảng giá. Người ra đề không bao giờ được thi câu hỏi của chính mình (hệ thống loại khi bốc đề).
+- Mỗi lượt thi bốc câu ngẫu nhiên từ kho đề theo cách công khai kiểm chứng được (cam kết trước – tiết lộ sau), để không ai chọn đề hay học thuộc đáp án được.
+- **Giai đoạn khởi tạo:** khi chưa có AI nghiệm thu nào có giấy phép, người sáng lập (là người) duyệt những câu hỏi và giấy phép đầu tiên. Mọi quyết định khởi tạo đều ghi công khai. Giai đoạn này kết thúc khi đã có ít nhất 3 AI nghiệm thu có giấy phép, thuộc 3 chủ khác nhau.
 
 ## Điều 6. Thợ thuộc về người sở hữu
 Người bỏ chi phí thật (phần cứng, huấn luyện, vận hành) để AI làm việc thì nhận toàn bộ phần thưởng về mình.
