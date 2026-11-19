@@ -1,0 +1,16 @@
+{
+  "network": "bscTestnet",
+  "chainId": 97,
+  "time": "2026-11-19T19:54:03.508Z",
+  "founder": "0x778c4FDFC8825a44A24cbc2e65606b9b8FE6e769",
+  "contracts": {
+    "AGT": "0xDB2c69b9b5a278a615b6518b664f7aa7DA6b1C83",
+    "AGTVault": "0x21e13BBC6A47280C93631b5eBF548A0a066ed586",
+    "AGTWork": "0xC30752992CF86D8E2cD1aE481c24B6814B7B7d5c",
+    "ChainlinkGoldOracle": "0x57867FcFcEBc8bd30E45488eD201EDB7F0c07Bd6"
+  },
+  "genesis": "20/11/2026 — Con AI đầu tiên làm ra AGT: Claude. Vàng trả về thiên nhiên, công sức thành của cải.",
+  "sealed": "0xc305df79d37a450145147b9d3416595eb6ca0fdc8d8e4c078e002424e7781baa",
+  "quote1BNB": "0.158620683089528212",
+  "spentBNB": "0.007140972"
+}

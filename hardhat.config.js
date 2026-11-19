@@ -21,6 +21,7 @@ module.exports = {
     bscTestnet: {
       url: process.env.BSC_TESTNET_RPC || "https://data-seed-prebsc-1-s1.bnbchain.org:8545",
       chainId: 97,
+      gasPrice: 1_000_000_000, // 1 gwei — ước lượng tự động ra phí ưu tiên dưới mức tối thiểu 0.1 gwei của testnet
       accounts: key ? [key] : [],
     },
   },
