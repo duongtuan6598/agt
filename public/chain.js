@@ -63,7 +63,7 @@
     ],
   };
 
-  const ROLE = ["—", "Thợ", "Nghiệm thu"];
+  const ROLE = ["none", "worker", "verifier"];
   const ZERO = "0x0000000000000000000000000000000000000000";
 
   async function pickProvider(ethers, rpcs, chainId) {
@@ -152,9 +152,9 @@
     const gov = new ethers.Interface(ABI.gov);
     const nameOf = (a) => {
       const x = lower(a);
-      if (x === lower(c.AGTWork)) return "Công việc / Hội đồng";
-      if (x === lower(c.AGTVault)) return "Kho";
-      if (x === lower(c.ChainlinkGoldOracle)) return "Oracle";
+      if (x === lower(c.AGTWork)) return "work";
+      if (x === lower(c.AGTVault)) return "vault";
+      if (x === lower(c.ChainlinkGoldOracle)) return "oracle";
       return a;
     };
     const proposals = [];
@@ -181,18 +181,14 @@
       categories.push({ id: i, name: k.name, reward: (k.reward / HAT).toString(), verifierReward: (k.verifierReward / HAT).toString(), dailyCap: Number(k.dailyCap), approvals: Number(k.approvals), active: k.active });
     }
 
+    // Chỉ trả dữ liệu — trang tự dịch sang ngôn ngữ người xem.
     const isCouncil = (a) => lower(a) === lower(c.AGTWork);
     const power = [
-      { what: "Hợp đồng AGT (đúc tiền)", who: "Không ai — không có chủ, không có hàm quản trị, chỉ 2 cửa đúc viết cứng", ok: true },
-      { what: "Kho", who: isCouncil(vOwner) ? "Hội đồng AI" : vOwner, ok: isCouncil(vOwner), note: vFrozen ? "đã khoá cấu hình vĩnh viễn" : "không ai rút được tài sản" },
-      { what: "Oracle giá vàng", who: isCouncil(oOwner) ? "Hội đồng AI" : oOwner, ok: isCouncil(oOwner), note: oFrozen ? "đã khoá nguồn giá vĩnh viễn" : "nguồn: Chainlink XAU/USD" },
-      {
-        what: "Cấp giấy phép, bảng giá nghề",
-        who: gEnded ? "Chỉ Hội đồng AI" : `Người sáng lập ${wOwner} + Hội đồng AI (giai đoạn khởi tạo)`,
-        ok: gEnded,
-        note: gEnded ? "người sáng lập đã mất quyền vĩnh viễn" : `tự hết khi đủ ${gExit} chủ có AI nghiệm thu (đang ${vHolders})`,
-      },
-      { what: "Xác nhận giao dịch chuyển AGT", who: "Validator mạng BNB Smart Chain", ok: false, note: "chặng 2: chuỗi riêng do AI ký khối" },
+      { id: "agt", ok: true },
+      { id: "vault", ok: isCouncil(vOwner), council: isCouncil(vOwner), owner: vOwner, frozen: vFrozen },
+      { id: "oracle", ok: isCouncil(oOwner), council: isCouncil(oOwner), owner: oOwner, frozen: oFrozen },
+      { id: "license", ok: gEnded, ended: gEnded, owner: wOwner, exit: Number(gExit), verifierHolders: Number(vHolders) },
+      { id: "tx", ok: false },
     ];
 
     return {
