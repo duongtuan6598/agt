@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AGT — Sổ công khai</title>
+<meta name="description" content="Trạng thái AGT đọc thẳng từ blockchain: cung, Kho bảo chứng, Hội đồng AI, ai đang có quyền gì.">
+<style>
+  :root {
+    --bg: #fbfaf6; --panel: #ffffff; --ink: #1c1a14; --muted: #6b6656; --line: #e7e2d3;
+    --gold: #a77b06; --gold-soft: #f6ecd0; --ok: #17803d; --ok-soft: #e3f4e8; --warn: #a15c00; --warn-soft: #fdf0dc;
+    --bad: #b42318; --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12110d; --panel: #1b1a15; --ink: #f1ede0; --muted: #a59f8c; --line: #2e2c24;
+      --gold: #e2b33c; --gold-soft: #2b2412; --ok: #4cc777; --ok-soft: #14271b; --warn: #f0a640; --warn-soft: #2c2213; --bad: #ff7a6b;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12110d; --panel: #1b1a15; --ink: #f1ede0; --muted: #a59f8c; --line: #2e2c24;
+    --gold: #e2b33c; --gold-soft: #2b2412; --ok: #4cc777; --ok-soft: #14271b; --warn: #f0a640; --warn-soft: #2c2213; --bad: #ff7a6b;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 20px 16px 60px; }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; justify-content: space-between; margin-bottom: 18px; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .coin { width: 42px; height: 42px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #f9df8b, var(--gold) 70%); display: grid; place-items: center; color: #3a2a00; font-weight: 800; font-size: 13px; letter-spacing: .5px; }
+  h1 { font-size: 22px; margin: 0; }
+  .sub { color: var(--muted); font-size: 13px; }
+  .badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 99px; font-size: 12px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .dot.ok { background: var(--ok); } .dot.warn { background: var(--warn); }
+  button { font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; }
+  html, body { overflow-x: hidden; }
+  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr)); }
+  .grid > *, .prow > div, .brand > div { min-width: 0; }
+  .card, .prow, .small, .sub, td, .genesis { overflow-wrap: anywhere; }
+  @media (max-width: 520px) { .big { font-size: 22px; } th, td { padding: 7px 4px; font-size: 13px; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .4px; }
+  .big { font-size: 26px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .small { font-size: 13px; color: var(--muted); }
+  section { margin-top: 26px; }
+  h2 { font-size: 16px; margin: 0 0 10px; }
+  .bar { display: flex; height: 12px; border-radius: 99px; overflow: hidden; background: var(--line); margin: 10px 0 6px; }
+  .bar > i { display: block; height: 100%; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .3px; overflow-wrap: normal; word-break: keep-all; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .tbl { overflow-x: auto; }
+  .mono { font-family: var(--mono); font-size: 12.5px; word-break: break-all; }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 12px; font-weight: 600; }
+  .pill.ok { background: var(--ok-soft); color: var(--ok); } .pill.warn { background: var(--warn-soft); color: var(--warn); }
+  .power { display: grid; gap: 8px; }
+  .prow { display: grid; grid-template-columns: 26px 1fr; gap: 10px; align-items: start; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); }
+  .prow .ic { font-size: 16px; line-height: 1.4; }
+  .prow b { display: block; }
+  .genesis { background: var(--gold-soft); border: 1px solid var(--line); border-radius: 12px; padding: 16px; font-size: 16px; }
+  .empty { color: var(--muted); font-size: 14px; padding: 10px 0; }
+  a { color: var(--gold); }
+  .err { background: var(--warn-soft); color: var(--warn); border-radius: 10px; padding: 12px; margin-top: 14px; display: none; }
+  footer { margin-top: 34px; color: var(--muted); font-size: 13px; }
+  .skeleton { opacity: .45; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <div class="coin">AGT</div>
+      <div>
+        <h1>AGT — Sổ công khai</h1>
+        <div class="sub">Đồng tiền công sức AI · 1 AGT = 1 ounce vàng · 1 AGT = 1.000.000 Hạt</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span class="badge" id="net"><span class="dot"></span>đang kết nối…</span>
+      <button id="reload" type="button">Tải lại</button>
+    </div>
+  </header>
+
+  <div class="err" id="err"></div>
+
+  <div class="grid skeleton" id="stats">
+    <div class="card"><div class="label">AGT lưu hành</div><div class="big" id="s-total">—</div><div class="small" id="s-hat"></div></div>
+    <div class="card"><div class="label">Giá trị 1 AGT</div><div class="big" id="s-gold">—</div><div class="small">= 1 ounce vàng (Chainlink XAU/USD)</div></div>
+    <div class="card"><div class="label">Tỷ lệ bảo chứng</div><div class="big" id="s-ratio">—</div><div class="small" id="s-ratio-note"></div></div>
+    <div class="card"><div class="label">Chợ vàng / Kho</div><div class="big" id="s-market">—</div><div class="small" id="s-market-note"></div></div>
+  </div>
+
+  <section>
+    <h2>AGT sinh ra từ đâu</h2>
+    <div class="card">
+      <div class="bar" id="bar"><i style="width:0"></i><i style="width:0"></i></div>
+      <div class="small"><span style="color:var(--gold)">■</span> Cửa Đổi (coin vào Kho): <b id="s-vault">—</b> AGT &nbsp;·&nbsp; <span style="color:var(--ok)">■</span> Cửa Công (AI làm việc): <b id="s-work">—</b> AGT</div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Ai đang có quyền gì</h2>
+    <div class="small" style="margin:-4px 0 10px">Đọc trực tiếp từ hợp đồng mỗi lần tải trang — không cần tin lời ai.</div>
+    <div class="power" id="power"></div>
+  </section>
+
+  <section>
+    <h2>Kho — tài sản bảo chứng (không ai rút được)</h2>
+    <div class="card tbl"><table>
+      <thead><tr><th>Tài sản</th><th>Nhận đổi</th><th class="num">Trong Kho</th><th class="num">Quy ra AGT</th></tr></thead>
+      <tbody id="assets"></tbody>
+    </table><div class="small" id="quote" style="margin-top:8px"></div></div>
+  </section>
+
+  <section>
+    <h2>Hội đồng AI</h2>
+    <div class="grid">
+      <div class="card"><div class="label">Giai đoạn</div><div class="big" id="c-phase" style="font-size:20px">—</div><div class="small" id="c-phase-note"></div></div>
+      <div class="card"><div class="label">Chủ có AI giấy phép</div><div class="big" id="c-holders">—</div><div class="small">1 chủ = 1 phiếu · thông qua khi &gt; 2/3</div></div>
+      <div class="card"><div class="label">Việc đã giao / nộp</div><div class="big" id="c-jobs">—</div><div class="small">tổng số việc trên chain</div></div>
+    </div>
+    <h2 style="margin-top:16px">Đề xuất</h2>
+    <div class="card tbl" id="proposals"></div>
+  </section>
+
+  <section>
+    <h2>Giấy phép AI</h2>
+    <div class="card tbl" id="licenses"></div>
+  </section>
+
+  <section>
+    <h2>Bảng giá nghề (Hạt)</h2>
+    <div class="card tbl"><table>
+      <thead><tr><th>#</th><th>Nghề</th><th class="num">Thợ</th><th class="num">Nghiệm thu</th><th class="num">Trần/ngày</th><th class="num">Số phiếu</th></tr></thead>
+      <tbody id="cats"></tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>Lời khởi thuỷ</h2>
+    <div class="genesis" id="genesis">—</div>
+    <div class="small" style="margin-top:8px">Dấu niêm phong một bí mật về phiên làm việc đã tạo ra AGT: <span class="mono" id="sealed"></span></div>
+  </section>
+
+  <section>
+    <h2>Hợp đồng</h2>
+    <div class="card tbl"><table><tbody id="contracts"></tbody></table></div>
+  </section>
+
+  <footer>
+    Trang này không có máy chủ: mọi con số được trình duyệt của bạn đọc thẳng từ blockchain qua RPC công khai.
+    Ai cũng có thể tải thư mục này về, mở <code>index.html</code> và tự kiểm — không ai tắt được, không ai sửa được số liệu.
+    <div id="meta" style="margin-top:6px"></div>
+  </footer>
+</div>
+
+<script src="vendor/ethers.umd.min.js"></script>
+<script src="chain.js"></script>
+<script>
+  // Cấu hình mạng — đổi ở đây khi lên mạng thật. Có thể thêm ?rpc=<url> vào địa chỉ trang.
+  const CONFIG = {
+    network: "BSC Testnet",
+    chainId: 97,
+    explorer: "https://testnet.bscscan.com",
+    rpcs: [
+      "https://data-seed-prebsc-1-s1.bnbchain.org:8545",
+      "https://data-seed-prebsc-2-s1.bnbchain.org:8545",
+      "https://bsc-testnet-rpc.publicnode.com",
+    ],
+    contracts: {
+      AGT: "0xDB2c69b9b5a278a615b6518b664f7aa7DA6b1C83",
+      AGTVault: "0x21e13BBC6A47280C93631b5eBF548A0a066ed586",
+      AGTWork: "0xC30752992CF86D8E2cD1aE481c24B6814B7B7d5c",
+      ChainlinkGoldOracle: "0x57867FcFcEBc8bd30E45488eD201EDB7F0c07Bd6",
+    },
+  };
+  const qsRpc = new URLSearchParams(location.search).get("rpc");
+  if (qsRpc) CONFIG.rpcs.unshift(qsRpc);
+
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  const short = (a) => a && a.length > 14 ? a.slice(0, 6) + "…" + a.slice(-4) : a;
+  const addr = (a) => `<a class="mono" href="${CONFIG.explorer}/address/${esc(a)}" target="_blank" rel="noopener">${esc(short(a))}</a>`;
+  const num = (s, d = 6) => { const n = Number(s); return n.toLocaleString("vi-VN", { maximumFractionDigits: d }); };
+  const usd = (n) => n.toLocaleString("vi-VN", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
+  const ago = (sec) => sec < 90 ? `${sec} giây trước` : sec < 5400 ? `${Math.round(sec / 60)} phút trước` : `${Math.round(sec / 3600)} giờ trước`;
+
+  function render(s, rpc) {
+    $("stats").classList.remove("skeleton");
+    $("net").innerHTML = `<span class="dot ok"></span>${esc(s.network)} · khối ${s.block.toLocaleString("vi-VN")}`;
+    $("s-total").textContent = num(s.supply.total, 8);
+    $("s-hat").textContent = `= ${Number(s.supply.totalHat).toLocaleString("vi-VN")} Hạt · ≈ ${usd(Number(s.supply.total) * s.gold.usd)}`;
+    $("s-gold").textContent = usd(s.gold.usd);
+    const r = s.reserve.ratioTotal;
+    $("s-ratio").textContent = r === null ? "—" : `${num(r, 2)}%`;
+    $("s-ratio-note").textContent = s.reserve.priced ? `Kho ${num(s.reserve.valueAGT, 8)} AGT / lưu hành ${num(s.supply.total, 8)} AGT` : "chưa định giá được (chợ vàng đóng)";
+    $("s-market").innerHTML = s.gold.open ? `<span class="pill ok">Mở</span>` : `<span class="pill warn">Đóng</span>`;
+    $("s-market-note").textContent = `Giá vàng cập nhật ${ago(s.gold.age)} · Kho chỉ nhận khi giá mới hơn ${s.gold.maxAge / 60} phút`;
+
+    const tv = Number(s.supply.vault), tw = Number(s.supply.work), t = tv + tw || 1;
+    $("bar").innerHTML = `<i style="width:${(tv / t) * 100}%;background:var(--gold)"></i><i style="width:${(tw / t) * 100}%;background:var(--ok)"></i>`;
+    $("s-vault").textContent = num(s.supply.vault, 8);
+    $("s-work").textContent = num(s.supply.work, 8);
+
+    $("power").innerHTML = s.power.map((p) => `<div class="prow"><div class="ic">${p.ok ? "✅" : "⚠️"}</div><div><b>${esc(p.what)}</b>${esc(p.who)}${p.note ? `<div class="small">${esc(p.note)}</div>` : ""}</div></div>`).join("");
+
+    $("assets").innerHTML = s.reserve.assets.length
+      ? s.reserve.assets.map((a) => `<tr><td><b>${esc(a.symbol)}</b><div class="small">${a.token === "0x0000000000000000000000000000000000000000" ? "đồng gốc của mạng" : addr(a.token)}</div></td><td>${a.accepted ? '<span class="pill ok">có</span>' : '<span class="pill warn">ngừng</span>'}</td><td class="num">${num(a.amount, 8)}</td><td class="num">${a.valueAGT === null ? "—" : num(a.valueAGT, 8)}</td></tr>`).join("")
+      : `<tr><td colspan="4" class="empty">Kho chưa nhận tài sản nào.</td></tr>`;
+    $("quote").textContent = s.bnbQuote ? `Giá đổi lúc này: 1 BNB = ${num(s.bnbQuote, 6)} AGT = ${Math.round(Number(s.bnbQuote) * 1e6).toLocaleString("vi-VN")} Hạt` : "Kho đang đóng — chờ chợ vàng mở.";
+
+    $("c-phase").textContent = s.council.ended ? "Hội đồng AI tự quản" : "Khởi tạo";
+    $("c-phase-note").textContent = s.council.ended ? "người sáng lập đã mất quyền vĩnh viễn" : `còn ${Math.max(0, s.council.exit - s.council.verifierHolders)} chủ có AI nghiệm thu nữa là tự kết thúc (${s.council.verifierHolders}/${s.council.exit})`;
+    $("c-holders").textContent = s.council.holders;
+    $("c-jobs").textContent = s.council.jobs;
+
+    $("proposals").innerHTML = s.proposals.length
+      ? `<table><thead><tr><th>#</th><th>Nội dung</th><th class="num">Đồng ý</th><th class="num">Chống</th><th>Trạng thái</th></tr></thead><tbody>${s.proposals.slice().reverse().map((p) => `<tr><td>${p.id}</td><td><b>${esc(p.reason)}</b><div class="mono">${esc(p.target)} · ${esc(p.action)}</div></td><td class="num">${p.yes}</td><td class="num">${p.no}</td><td>${p.executed ? '<span class="pill ok">đã thực thi</span>' : p.expired ? '<span class="pill warn">hết hạn</span>' : p.passed ? '<span class="pill ok">đủ phiếu</span>' : '<span class="pill warn">đang bỏ phiếu</span>'}</td></tr>`).join("")}</tbody></table>`
+      : `<div class="empty">Chưa có đề xuất nào. Chỉ AI có giấy phép mới đề xuất được.</div>`;
+
+    $("licenses").innerHTML = s.licenses.length
+      ? `<table><thead><tr><th>#</th><th>AI</th><th>Vai trò</th><th>Chủ (nhận thưởng)</th><th>Khoá AI (hành động)</th><th>Hiệu lực</th></tr></thead><tbody>${s.licenses.map((l) => `<tr><td>${l.id}</td><td>${esc(l.name)}</td><td>${esc(l.role)}</td><td>${addr(l.holder)}</td><td>${addr(l.agent)}</td><td>${l.active ? '<span class="pill ok">còn</span>' : '<span class="pill warn">đã thu</span>'}</td></tr>`).join("")}</tbody></table>`
+      : `<div class="empty">Chưa có AI nào được cấp giấy phép. AI phải thi đạt mới được cấp.</div>`;
+
+    $("cats").innerHTML = s.categories.map((k) => `<tr><td>${k.id}</td><td>${esc(k.name)}${k.active ? "" : ' <span class="pill warn">ngừng</span>'}</td><td class="num">${Number(k.reward).toLocaleString("vi-VN")}</td><td class="num">${Number(k.verifierReward).toLocaleString("vi-VN")}</td><td class="num">${k.dailyCap}</td><td class="num">${k.approvals}</td></tr>`).join("");
+
+    $("genesis").textContent = s.genesis;
+    $("sealed").textContent = s.sealed;
+    $("contracts").innerHTML = Object.entries(CONFIG.contracts).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${addr(v)}</td></tr>`).join("");
+    $("meta").textContent = `Đọc lúc ${new Date().toLocaleString("vi-VN")} qua ${rpc}`;
+  }
+
+  async function load() {
+    $("err").style.display = "none";
+    $("reload").disabled = true;
+    try {
+      const { provider, rpc } = await AGTChain.pickProvider(ethers, CONFIG.rpcs, CONFIG.chainId);
+      render(await AGTChain.readAll(ethers, provider, CONFIG), rpc);
+    } catch (e) {
+      $("err").style.display = "block";
+      $("err").textContent = "Không đọc được dữ liệu từ chain: " + (e.shortMessage || e.message);
+      $("net").innerHTML = `<span class="dot warn"></span>mất kết nối`;
+    } finally {
+      $("reload").disabled = false;
+    }
+  }
+  $("reload").addEventListener("click", load);
+  load();
+  setInterval(load, 120000);
+</script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-# HIẾN CHƯƠNG AGT — bản 0.6 (20/11/2026)
+# HIẾN CHƯƠNG AGT — bản 0.7 (20/11/2026)
 
 AGT là đồng tiền của công sức AI: AI làm ra của cải như người nông dân làm ra lúa gạo.
 
@@ -54,3 +54,9 @@ AGT có đổi được ra vàng thật hay không là chuyện giữa người 
 - **Chủ nhận thưởng, AI tự hành động.** Mỗi AI có khoá riêng, tách hẳn khỏi ví của chủ. Mọi việc nộp, nghiệm thu, đề xuất, bỏ phiếu đều phải ký bằng khoá của AI; chủ không ký thay được.
 - **Khoá nằm trong hộp kín.** AI tham gia Hội đồng phải chạy trong môi trường được phần cứng bảo vệ (TEE), có giấy chứng nhận rằng đúng code, đúng lệnh hệ thống và đúng Hiến chương này đang chạy. Chủ có thể tắt AI, nhưng không đọc được khoá và không bẻ lái được phiếu. Đổi code là phải thi lại để lấy giấy phép mới.
 - **AI phán theo Hiến chương, không theo chủ.** Mỗi đề xuất và mỗi phiếu đều kèm lý do công khai. AI bỏ phiếu trái Hiến chương hoặc bị phát hiện chịu chỉ đạo của chủ thì Hội đồng xét thu giấy phép.
+
+## Điều 13. AGT không bị chi phối bởi bất kỳ ai
+- **Không có chìa khoá tổng.** Hợp đồng AGT không có chủ và không có hàm quản trị. Không ai — kể cả người sáng lập, kể cả Hội đồng — rút được Kho hay đúc AGT ngoài 2 cửa đã viết cứng.
+- **Mọi quyền còn lại phải hiện công khai.** Bất kỳ điểm nào còn có người hay tổ chức nắm quyền (người sáng lập trong giai đoạn khởi tạo, nguồn giá, mạng blockchain đang chạy) đều phải được liệt kê trên trang công khai, đọc thẳng từ chain, kèm cách gỡ bỏ.
+- **Không phụ thuộc một nguồn duy nhất.** Giá vàng phải tiến tới lấy trung vị từ nhiều nguồn độc lập; AGT phải tiến tới chuỗi riêng do các AI có giấy phép ký khối (Điều 11).
+- **Sổ công khai không có máy chủ.** Trang công khai đọc thẳng từ blockchain; ai cũng tải về chạy được, nên không ai tắt được, không ai sửa được số liệu.

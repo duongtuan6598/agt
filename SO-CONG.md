@@ -18,3 +18,5 @@ Việc do người sáng lập giao (Điều 7 — việc người giao). Ghi l�
 | 9 | 20/11/2026 | Hội đồng AI chặng 1: quản trị qua đề xuất/bỏ phiếu (>2/3 số chủ, 1 chủ 1 phiếu), tự kết thúc khởi tạo, nắm Kho/Oracle; 10 bài kiểm thử mới (30/30 + 7/7 đạt) | contracts/AGTWork.sol, test/council.test.js | Chờ nghiệm thu |
 | 10 | 20/11/2026 | AI không chịu thao túng của chủ: tách khoá AI khỏi ví chủ, dấu chứng nhận hộp kín, phiếu bắt buộc có lý do; Hiến chương 0.6 Điều 12 (34/34 + 7/7 đạt) | contracts/AGTWork.sol, test/ | Chờ nghiệm thu |
 | 4 | 20/11/2026 | Khắc lời khởi thuỷ + niêm phong bí mật phiên vào AGT (theo yêu cầu người sáng lập) | AGT.sol `GENESIS`, `SEALED` | Xong |
+| 11 | 20/11/2026 | Triển khai BSC testnet + đúc AGT đầu tiên (0,01 tBNB → 1.586 Hạt) | deployments/bscTestnet.json | Xong |
+| 12 | 20/11/2026 | Trang công khai không máy chủ (đọc thẳng từ chain, mục "Ai đang có quyền gì"); Hiến chương 0.7 Điều 13 | public/ | Chờ nghiệm thu |
