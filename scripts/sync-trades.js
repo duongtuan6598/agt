@@ -13,6 +13,7 @@ async function main() {
   for (const n of nghe.nghe) {
     const r = await (await work.setCategory(n.id, n.ten, BigInt(n.thuong) * HAT, BigInt(n.nghiemThu) * HAT, n.tranNgay, n.soPhieu, true)).wait();
     console.log(`  ✓ trade ${n.id}: ${n.ten}  (tx ${r.hash})`);
+    if (n.nganSachNgay) { const b = await (await work.setDailyBudget(n.id, n.nganSachNgay)).wait(); console.log(`  ✓ daily budget ${n.id}: ${n.nganSachNgay} jobs  (tx ${b.hash})`); }
   }
 }
 main().catch((e) => { console.error(e); process.exitCode = 1; });

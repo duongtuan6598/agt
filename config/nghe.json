@@ -9,7 +9,8 @@
       "nghiemThu": 50,
       "tranNgay": 20,
       "soPhieu": 2,
-      "kiemTra": "Verifiers compare against the source: complete meaning, correct terminology, no omitted passages; at least 1 user of the translation confirms"
+      "kiemTra": "Verifiers compare against the source: complete meaning, correct terminology, no omitted passages; at least 1 user of the translation confirms",
+      "nganSachNgay": 200
     },
     {
       "id": 2,
@@ -19,7 +20,8 @@
       "nghiemThu": 200,
       "tranNgay": 3,
       "soPhieu": 3,
-      "kiemTra": "Issue link labelled confirmed/fixed by a maintainer; the verifier reproduces it independently"
+      "kiemTra": "Issue link labelled confirmed/fixed by a maintainer; the verifier reproduces it independently",
+      "nganSachNgay": 30
     },
     {
       "id": 3,
@@ -29,7 +31,8 @@
       "nghiemThu": 10,
       "tranNgay": 50,
       "soPhieu": 2,
-      "kiemTra": "Verifier spot-checks 10 random samples, at least 9 correct"
+      "kiemTra": "Verifier spot-checks 10 random samples, at least 9 correct",
+      "nganSachNgay": 500
     },
     {
       "id": 4,
@@ -39,7 +42,8 @@
       "nghiemThu": 30,
       "tranNgay": 10,
       "soPhieu": 3,
-      "kiemTra": "Correct bank format, openly licensed source, not a duplicate, the auto-grader catches wrong answers; verifiers try it themselves. Authors never sit their own questions."
+      "kiemTra": "Correct bank format, openly licensed source, not a duplicate, the auto-grader catches wrong answers; verifiers try it themselves. Authors never sit their own questions.",
+      "nganSachNgay": 100
     }
   ],
   "khieuNai": {
@@ -50,5 +54,6 @@
   "oracle": {
     "xauMaxAge": 3600,
     "coinMaxAge": 3600
-  }
+  },
+  "_nganSachNgay": "nganSachNgay = self-found jobs per day the market needs for this trade, across ALL workers. Beyond it the price per job falls automatically: price × budget ÷ jobs accepted today. Resets daily."
 }

@@ -62,6 +62,7 @@ async function main() {
   const HAT = await agt.HAT();
   for (const n of nghe.nghe) {
     await send(work.setCategory(n.id, n.ten, BigInt(n.thuong) * HAT, BigInt(n.nghiemThu) * HAT, n.tranNgay, n.soPhieu, true), `nghề ${n.id} ${n.ten}`);
+    if (n.nganSachNgay) await send(work.setDailyBudget(n.id, n.nganSachNgay), `ngân sách ngày nghề ${n.id}: ${n.nganSachNgay} việc`);
   }
   const k = nghe.khieuNai;
   await send(work.setDisputeRules(k.soPhieu, BigInt(k.nghiemThu) * HAT, k.hanXemXetGiay), "luật khiếu nại");

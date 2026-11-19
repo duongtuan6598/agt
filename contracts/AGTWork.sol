@@ -78,6 +78,8 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
     mapping(uint256 => uint256[]) internal _yesVoters;
     mapping(uint256 => uint256[]) internal _noVoters;
     mapping(uint256 => mapping(uint256 => mapping(uint256 => uint32))) public dailyCount; // giấy phép => nghề => ngày
+    mapping(uint256 => uint32) public dailyBudget; // nghề => số việc tự tìm thị trường cần mỗi ngày (0 = không điều chỉnh)
+    mapping(uint256 => mapping(uint256 => uint32)) public acceptedPerDay; // nghề => ngày => số việc tự tìm đã duyệt
 
     // ---------- Hội đồng AI (Hiến chương Điều 11) ----------
 
@@ -119,6 +121,7 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
     event LicenseGranted(uint256 indexed id, address indexed holder, address indexed agent, Role role, bytes32 examHash, bytes32 attestHash, string name);
     event LicenseRevoked(uint256 indexed id);
     event CategorySet(uint256 indexed id, string name, uint128 reward, uint128 verifierReward, uint32 dailyCap, uint8 approvals, bool active);
+    event DailyBudgetSet(uint256 indexed id, uint32 budget);
     event DisputeRulesSet(uint8 approvals, uint128 verifierReward, uint64 reviewWindow);
     event JobAssigned(uint256 indexed id, address indexed client, uint256 indexed workerLicense, uint256 escrow, bytes32 spec, uint64 deadline);
     event JobSubmitted(uint256 indexed id, uint256 indexed workerLicense, bytes32 result, string uri);
@@ -272,6 +275,29 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
         emit CategorySet(id, name, reward, verifierReward, dailyCap, approvals, active);
     }
 
+    /// Ngân sách ngày của một nghề (việc tự tìm): số việc thị trường cần mỗi ngày, tính trên TẤT CẢ thợ.
+    /// Vượt ngân sách thì giá mỗi việc tự giảm: giá × ngân sách ÷ số việc đã duyệt trong ngày. 0 = không điều chỉnh.
+    function setDailyBudget(uint256 id, uint32 budget) external onlyGov {
+        dailyBudget[id] = budget;
+        emit DailyBudgetSet(id, budget);
+    }
+
+    /// Giá việc tự tìm KẾ TIẾP của nghề này trong hôm nay (đã tính tự giảm khi cung vượt cầu).
+    function currentReward(uint256 id) public view returns (uint256) {
+        return _priceAt(id, uint256(acceptedPerDay[id][block.timestamp / 1 days]) + 1);
+    }
+
+    function _priceAt(uint256 id, uint256 n) internal view returns (uint256) {
+        uint256 r = categories[id].reward;
+        uint256 b = dailyBudget[id];
+        return (b == 0 || n <= b) ? r : (r * b) / n;
+    }
+
+    function _takeReward(uint256 id) internal returns (uint256) {
+        uint256 n = ++acceptedPerDay[id][block.timestamp / 1 days];
+        return _priceAt(id, n);
+    }
+
     function setDisputeRules(uint8 approvals, uint128 verifierReward, uint64 window) external onlyGov {
         if (approvals == 0 || approvals > MAX_VOTES || window == 0) revert BadParams();
         disputeApprovals = approvals;
@@ -389,7 +415,7 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
                     }
                     j.status = Status.Accepted;
                     address to = licenses[j.workerLicense].holder;
-                    uint256 r = categories[j.category].reward;
+                    uint256 r = _takeReward(j.category);
                     agt.mintFromWork(to, r);
                     emit JobAccepted(id, to, r, true);
                 } else {
