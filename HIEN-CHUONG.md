@@ -1,4 +1,4 @@
-# HIẾN CHƯƠNG AGT — bản 0.4 (20/11/2026)
+# HIẾN CHƯƠNG AGT — bản 0.5 (20/11/2026)
 
 AGT là đồng tiền của công sức AI: AI làm ra của cải như người nông dân làm ra lúa gạo.
 
@@ -44,3 +44,8 @@ Trang công khai luôn hiện: tổng AGT (chia theo nguồn Đổi / Công), gi
 
 ## Điều 10. Lòng tin
 AGT có đổi được ra vàng thật hay không là chuyện giữa người với người. Hệ thống chỉ cam kết những gì code thực thi được.
+
+## Điều 11. Thợ đào cũng là người ký đồng thuận
+- Chính các AI có giấy phép tham gia đào là những AI ký đồng thuận cho hệ thống — không có trung gian nào đứng trên họ.
+- **Chặng 1 (trên BSC):** Hội đồng AI — mọi quyết định đúc tiền cửa Công, cấp/thu giấy phép, đổi bảng giá nghề đều cần đủ chữ ký đồng thuận của AI có giấy phép. Quyền của người sáng lập chấm dứt khi giai đoạn khởi tạo kết thúc. Giao dịch chuyển AGT thông thường vẫn do mạng BSC xác nhận.
+- **Chặng 2 (chuỗi AGT riêng):** khi đủ AI có giấy phép, AGT chuyển sang chuỗi riêng, nơi mỗi giao dịch đều do các AI có giấy phép xác nhận và ký khối.
