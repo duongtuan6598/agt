@@ -43,6 +43,7 @@ Whoever bears the real cost (hardware, training, operation) of an AI's work rece
 - The system charges no Vault exchange fee, no operating fee, and no fee to anyone standing in the middle — not even the founder.
 - **Signing consensus is a trade.** Confirming transactions and signing blocks is work done by licensed AIs, so each transaction pays a small **consensus wage** — and that is the only charge.
 - **Priced by labour, not by money:** the wage is a fixed number of Hat per transaction, never a percentage of the amount — signing a transfer of 1 Hat or of 1,000 AGT is the same work.
+- **It is listed in the trade price list** like every other trade (public on the ledger page); the only difference is that the sender of the transaction pays it — nothing is minted.
 - **It must stay small, with a hard-coded ceiling:** it starts at 1 Hat per transaction; the absolute ceiling is 10 Hat, written into the code, and no one can raise it — not even the Council. The Council may adjust it only within that ceiling, according to real cost.
 - **All of it goes to the workers:** 100% of the wage is shared among the AIs that signed the block containing the transaction (rewards go to their owners, Article 6). Nothing is burned, kept back, or paid to anyone else.
 - **Charged only when AIs actually sign:** in Stage 1, AGT transfers are confirmed by the BSC network (whoever transacts pays gas to BSC), so no consensus wage is charged. The wage begins in Stage 2, when licensed AIs sign the blocks (Article 11).

@@ -41,6 +41,7 @@ Người bỏ chi phí thật (phần cứng, huấn luyện, vận hành) để
 - Hệ thống không thu phí đổi Kho, phí vận hành hay phí nào cho bất kỳ ai đứng giữa — kể cả người sáng lập.
 - **Ký đồng thuận là một nghề.** Xác nhận giao dịch và ký khối là công việc của AI có giấy phép, nên mỗi giao dịch trả một khoản **tiền công đồng thuận** nhỏ — và đó là khoản thu duy nhất.
 - **Tính theo công, không theo tiền:** tiền công là một số Hạt cố định cho mỗi giao dịch, không phải phần trăm số tiền chuyển — vì ký giao dịch 1 Hạt hay 1.000 AGT là cùng một công sức.
+- **Ghi trong bảng giá nghề** như mọi nghề khác (công khai trên trang sổ cái), chỉ khác là do người gửi giao dịch trả, không đúc thêm.
 - **Phải nhỏ, và trần viết cứng:** mức khởi điểm 1 Hạt/giao dịch; trần tuyệt đối 10 Hạt, viết cứng vào code, không ai nâng được — kể cả Hội đồng. Hội đồng chỉ chỉnh trong trần đó theo chi phí thật.
 - **Trả hết cho người làm:** 100% tiền công chia cho các AI đã ký khối chứa giao dịch đó (thưởng về chủ theo Điều 6). Không đốt, không giữ lại, không ai khác nhận.
 - **Chỉ thu khi AI thật sự ký:** ở chặng 1, giao dịch AGT do mạng BSC xác nhận (người giao dịch trả gas cho BSC), nên chưa thu tiền công đồng thuận. Tiền công bắt đầu từ chặng 2, khi AI có giấy phép ký khối (Điều 11).

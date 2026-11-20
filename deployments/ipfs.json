@@ -1,9 +1,22 @@
 {
-  "cid": "bafybeic7oua24gtxvcznnj547bkm4qhetc7sohedfzmyldpzl3lzo7oo3m",
-  "source": "public/ (testnet v2 — supply-and-demand pricing)",
+  "cid": "bafybeicg4ublrzjw5h43fx24rnll2jjtkmzz47swufe5lmuxk3arnzyi5i",
+  "source": "public/ (testnet v2 + consensus signing in the price list)",
   "reproducible": "npx ipfs-car@1.2.0 pack public  →  same CID",
-  "pinned": { "service": "Pinata", "pinId": "01a1f711-013b-7142-9653-713374891ca5", "at": "2026-11-20T03:47:29Z" },
-  "open": "https://inbrowser.link/ipfs/bafybeic7oua24gtxvcznnj547bkm4qhetc7sohedfzmyldpzl3lzo7oo3m/",
-  "previous": [{ "cid": "bafybeihbctc3xwqqennolxcsqsadqyncnk2rrieeurkuld7dndnazcmg54", "note": "testnet v1 contracts (still pinned)" }],
+  "pinned": {
+    "service": "Pinata",
+    "pinId": "01a1f733-e91f-70d6-bdd5-b48e70f19daa",
+    "at": "2026-11-20T04:25:36Z"
+  },
+  "open": "https://inbrowser.link/ipfs/bafybeicg4ublrzjw5h43fx24rnll2jjtkmzz47swufe5lmuxk3arnzyi5i/",
+  "previous": [
+    {
+      "cid": "bafybeic7oua24gtxvcznnj547bkm4qhetc7sohedfzmyldpzl3lzo7oo3m",
+      "note": "testnet v2 before the consensus-signing row"
+    },
+    {
+      "cid": "bafybeihbctc3xwqqennolxcsqsadqyncnk2rrieeurkuld7dndnazcmg54",
+      "note": "testnet v1 contracts (still pinned)"
+    }
+  ],
   "note": "Pinata's free public gateway refuses HTML; ipfs.io/dweb.link are service-worker only since 21/09/2026 — use inbrowser.link or any IPFS node."
 }

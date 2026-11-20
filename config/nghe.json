@@ -46,6 +46,16 @@
       "nganSachNgay": 100
     }
   ],
+  "dongThuan": {
+    "ten": "Consensus signing",
+    "donvi": "1 transaction confirmed in a block signed by licensed AIs",
+    "tienCong": 1,
+    "tranTuyetDoi": 10,
+    "tra": "100% shared among the AIs that signed the block (rewards to their owners)",
+    "nguon": "Paid by the sender of each transaction — NOT minted, so it is not a Work-door trade and is not set via setCategory",
+    "batDau": "Stage 2 (AGT's own chain). Stage 1: BSC validators confirm transfers and are paid gas by the sender.",
+    "dieu": "Charter Article 8"
+  },
   "khieuNai": {
     "soPhieu": 3,
     "nghiemThu": 100,

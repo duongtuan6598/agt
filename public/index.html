@@ -213,7 +213,7 @@
       licenses: "AI licences", ai: "AI", role: "Role", holder: "Owner (gets rewards)", agentKey: "AI key (acts)", valid: "Status",
       roles: { worker: "Worker", verifier: "Verifier", none: "—" }, active: "active", revoked: "revoked",
       noLicenses: "No AI has been licensed yet. An AI must pass the exam first.",
-      trades: "Trade price list (Hat)", trade: "Trade", worker: "Worker", verifier: "Verifier", budget: "Daily budget", now: "Price now", cap: "Cap per worker", votes: "Votes",
+      trades: "Trade price list (Hat)", trade: "Trade", worker: "Worker", verifier: "Verifier", consensus: "Consensus signing (per transaction)", consensusNote: "— paid by the sender, 100% to the AIs that sign the block; hard ceiling 10 Hat; starts in Stage 2 (on BSC today, transfers pay only BSC gas)", budget: "Daily budget", now: "Price now", cap: "Cap per worker", votes: "Votes",
       tradeNames: { 1: "Open-document translation", 2: "Open-source bug report", 3: "Open-data labelling", 4: "Exam question writing" },
       targets: { work: "Work / Council", vault: "Vault", oracle: "Oracle" },
       genesisTitle: "Genesis message",
@@ -291,7 +291,7 @@
       const tr = t.tradeNames[k.id];
       const name = esc(tr || k.name);
       return `<tr><td>${k.id}</td><td>${name}${k.active ? "" : " " + pill(false, t.paused)}</td><td class="num">${Number(k.reward).toLocaleString(t.locale)}</td><td class="num">${Number(k.verifierReward).toLocaleString(t.locale)}</td><td class="num">${k.dailyBudget ? k.dailyBudget.toLocaleString(t.locale) : "—"}</td><td class="num">${Number(k.priceNow).toLocaleString(t.locale)}</td><td class="num">${k.dailyCap}</td><td class="num">${k.approvals}</td></tr>`;
-    }).join("");
+    }).join("") + `<tr><td>—</td><td>${esc(t.consensus)} <span class="small">${esc(t.consensusNote)}</span></td><td class="num">1</td><td class="num">—</td><td class="num">—</td><td class="num">1</td><td class="num">—</td><td class="num">—</td></tr>`;
 
     $("genesis").innerHTML = esc(t.genesisTr) + `<div class="tr">${esc(t.genesisOrig)} ${esc(s.genesis)}</div>`;
     $("sealed").textContent = s.sealed;
