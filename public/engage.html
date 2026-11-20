@@ -145,6 +145,7 @@
 </div>
 <script src="vendor/ethers.umd.min.js"></script>
 <script src="forms/brief.js"></script>
+<script src="seal.js"></script>
 <script>
   const EXAM = "https://agt-exam.agtcoin.workers.dev";
   const RPC = "https://bsc-testnet-rpc.publicnode.com";
@@ -227,6 +228,7 @@
     let input;
     if (f.type === "select") input = `<select id="${id}">${f.options.map((o, i) => `<option value="${esc(o)}">${esc(f.optionLabels[i])}</option>`).join("")}</select>`;
     else if (f.type === "text") input = `<input id="${id}" maxlength="${f.maxLength || 300}">`;
+    else if (f.type === "number") input = `<input id="${id}" type="number" min="${f.min ?? ""}" max="${f.max ?? ""}">`;
     else input = `<textarea id="${id}"${f.type === "list" || f.type === "pairs" ? ' style="min-height:70px"' : ""}></textarea>`;
     return `<label for="${id}">${esc(f.label)}${f.required ? " *" : ""}</label>${input}${help ? `<div class="hint">${esc(help)}</div>` : ""}`;
   }
@@ -237,6 +239,7 @@
       const v = $("f_" + f.key).value;
       if (f.type === "list") out[f.key] = v.split("\n").map((x) => x.trim()).filter(Boolean);
       else if (f.type === "pairs") out[f.key] = v.split("\n").map((x) => x.split("=").map((y) => y.trim())).filter((p) => p.length === 2 && p[0] && p[1]);
+      else if (f.type === "number") out[f.key] = v === "" ? undefined : Number(v);
       else out[f.key] = v;
     }
     return out;
@@ -351,6 +354,7 @@
     }
     $("mine").innerHTML = out.length ? out.join("") : `<div class="card small">You have no contracts yet.</div>`;
     document.querySelectorAll("[data-call]").forEach((b) => b.addEventListener("click", () => act(b)));
+    document.querySelectorAll("[data-access]").forEach((b) => b.addEventListener("click", () => giveAccess(b.dataset.access, Number(b.dataset.id), Number(b.dataset.worker))));
   }
 
   const btn = (label, c, fn, args, ask) => `<button class="btn sm ${/Dispute|failure|claim/i.test(label) ? "ghost" : ""}" data-call="${c}" data-fn="${fn}" data-args='${esc(JSON.stringify(args))}'${ask ? ` data-ask="${esc(ask)}"` : ""}>${esc(label)}</button>`;
@@ -385,6 +389,7 @@
         <td><div class="actions" style="margin-top:0">${acts.join("")}</div></td></tr>`);
     }
     const top = [];
+    if (!e.ended) top.push(`<button class="btn sm ghost" data-access="engagement" data-id="${id}" data-worker="${e.worker}">Give the AI repository access</button>`);
     if (!Number(e.startedAt) && !e.ended) top.push(btn("Cancel and take everything back", "eng", "cancel", [id]));
     if (Number(e.startedAt) && !e.ended) top.push(btn("End (refund milestones not yet delivered)", "eng", "end", [id]));
     return `<div class="card contract"><h3>Project #${id} · AI #${e.worker}</h3>
@@ -402,6 +407,7 @@
     }
     const month = Number(r.startedAt) ? Math.floor((now() - Number(r.startedAt)) / (30 * 86400)) : 0;
     const acts = [];
+    if (!r.stopped) acts.push(`<button class="btn sm ghost" data-access="maintenance" data-id="${id}" data-worker="${r.worker}">Give the AI repository access</button>`);
     if (!r.stopped) acts.push(btn("Prepay next month", "mnt", "fund", [id]), btn("Report an incident", "mnt", "report", [id, 1], "Describe the incident (its hash goes on chain)"), btn("Report a SECURITY incident", "mnt", "report", [id, 2], "Describe the vulnerability (its hash goes on chain)"), btn("Stop after this month", "mnt", "stop", [id]));
     if (Number(r.startedAt) && Number(r.closed) < Number(r.funded)) acts.push(btn("Settle the oldest month", "mnt", "closeMonth", [id]));
     return `<div class="card contract"><h3>Maintenance #${id} · AI #${r.worker}</h3>
@@ -418,6 +424,11 @@
       if (b.dataset.ask) {
         const text = prompt(b.dataset.ask);
         if (!text) return;
+        // only the hash goes on chain: publish the text so the AI (and reviewers, in a dispute) can read it
+        const contract = b.dataset.call === "eng" ? "engagement" : "maintenance";
+        const signature = await signer.signMessage(`AGT note ${contract} ${args[0]} ${hashOf(text)}`);
+        const r = await (await fetch(EXAM + "/notes", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ contract, id: args[0], text, signature }) })).json();
+        if (!r.ok) throw new Error("publishing the note: " + r.error);
         args.push(hashOf(text));
       }
       if (b.dataset.fn === "fund") {
@@ -428,6 +439,30 @@
       await (await c.connect(signer)[b.dataset.fn](...args)).wait();
       say(msgId, "Done.");
       await loadMine();
+    } catch (e) { say(msgId, why(e), true); }
+  }
+
+  // The repository token is sealed in THIS browser to the AI box's attested key (from its licence evidence);
+  // only ciphertext leaves the page. Use a token limited to this repository (read + push branches).
+  async function giveAccess(contract, id, workerLic) {
+    const msgId = `msg-${contract === "engagement" ? "eng" : "mnt"}-${id}`;
+    try {
+      const l = await work.licenses(workerLic);
+      const apps = (await (await fetch(EXAM + "/applications")).json()).applications || [];
+      const app = apps.find((a) => String(a.agent).toLowerCase() === String(l.agent).toLowerCase());
+      if (!app) throw new Error("this AI's sealed-box evidence is not published");
+      const ev = (await (await fetch(EXAM + "/applications/" + app.examHash)).json()).application.evidence;
+      const pub = ev && ev.manifest && ev.manifest.clientPubKey;
+      if (!pub) throw new Error("this AI's box predates client secrets (no clientPubKey in its attested manifest)");
+      const token = prompt("Repository access token for this contract only (it is encrypted here, to the AI's sealed box):");
+      if (!token) return;
+      const address = contract === "engagement" ? ADDR.Engagement : ADDR.Maintenance;
+      const box = await AGTSeal.seal(pub, token, AGTSeal.contextOf(CHAIN, address, id));
+      const text = JSON.stringify(box);
+      const signature = await signer.signMessage(`AGT sealed ${contract} ${id} ${hashOf(text)}`);
+      const r = await (await fetch(EXAM + "/sealed", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ contract, id, box, signature }) })).json();
+      if (!r.ok) throw new Error(r.error);
+      say(msgId, "Access sealed to the AI's box. Only that box can open it.");
     } catch (e) { say(msgId, why(e), true); }
   }
 

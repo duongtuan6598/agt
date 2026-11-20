@@ -432,6 +432,44 @@ async function putBrief(env, req) {
   return json({ ok: true, hash });
 }
 
+
+// Notes of a long-term contract (revision reasons, hardware failure logs, warranty claims, incidents): only their
+// hash goes on chain, so the client publishes the text here, signed by the client of that contract.
+async function contractOf(env, kind, id) {
+  const fn = kind === "engagement" ? "engagements" : "retainers";
+  const to = kind === "engagement" ? env.ENGAGEMENT : env.MAINTENANCE;
+  const c = LONG_IFACE.decodeFunctionResult(fn, await callTo(env, to, LONG_IFACE.encodeFunctionData(fn, [BigInt(id)])));
+  return c.client === "0x0000000000000000000000000000000000000000" ? null : c;
+}
+async function putNote(env, req) {
+  const b = await body(req);
+  if (!b || !["engagement", "maintenance"].includes(b.contract) || !/^\d+$/.test(String(b.id)) || typeof b.text !== "string" || !b.text.length) return fail(400, "need {contract, id, text, signature}");
+  if (toUtf8Bytes(b.text).length > 65536) return fail(413, "note larger than 64 KB");
+  const hash = keccak256(toUtf8Bytes(b.text));
+  let signer;
+  try { signer = verifyMessage(`AGT note ${b.contract} ${b.id} ${hash}`, b.signature); } catch { return fail(400, "bad signature"); }
+  const c = await contractOf(env, b.contract, b.id);
+  if (!c) return fail(404, "no such contract");
+  if (getAddress(c.client) !== getAddress(signer)) return fail(403, "only the client of this contract may add notes");
+  if (!(await env.EXAMS.get(`c:${hash}`))) await env.EXAMS.put(`c:${hash}`, JSON.stringify({ text: b.text, client: signer, contract: b.contract, id: Number(b.id), kind: "note", at: now() }), { expirationTtl: KEEP });
+  return json({ ok: true, hash });
+}
+// The client's secrets for the AI (repository token…), sealed to the AI box's attested clientPubKey
+// (tee/embedded/secrets.js). Only ciphertext is stored; only that box can open it.
+async function putSealed(env, req) {
+  const b = await body(req);
+  if (!b || !["engagement", "maintenance"].includes(b.contract) || !/^\d+$/.test(String(b.id)) || !b.box || b.box.v !== 1) return fail(400, "need {contract, id, box, signature}");
+  const text = JSON.stringify(b.box);
+  if (text.length > 16384) return fail(413, "sealed secret too large");
+  let signer;
+  try { signer = verifyMessage(`AGT sealed ${b.contract} ${b.id} ${keccak256(toUtf8Bytes(text))}`, b.signature); } catch { return fail(400, "bad signature"); }
+  const c = await contractOf(env, b.contract, b.id);
+  if (!c) return fail(404, "no such contract");
+  if (getAddress(c.client) !== getAddress(signer)) return fail(403, "only the client of this contract may give it secrets");
+  await env.EXAMS.put(`sealed:${b.contract}:${b.id}`, text, { expirationTtl: KEEP });
+  return json({ ok: true });
+}
+
 // ---------- quotes: before any money moves, the chosen AI reads the brief and answers ----------
 //   POST /quotes {worker, brief}           → the client asks one licensed AI worker (free, rate-limited)
 //   GET  /quotes?worker=N                  → waiting quotes for that AI (the sealed box polls this)
@@ -535,6 +573,13 @@ export default {
       if (p === "/content" && req.method === "POST") return await putContent(env, req);
       if (p === "/requests" && req.method === "POST") return await putRequest(env, req);
       if (p === "/briefs" && req.method === "POST") return await putBrief(env, req);
+      if (p === "/notes" && req.method === "POST") return await putNote(env, req);
+      if (p === "/sealed" && req.method === "POST") return await putSealed(env, req);
+      const ms = p.match(/^\/sealed\/(engagement|maintenance)\/(\d+)$/);
+      if (ms && req.method === "GET") {
+        const v = await env.EXAMS.get(`sealed:${ms[1]}:${ms[2]}`);
+        return v ? json({ ok: true, box: JSON.parse(v) }) : fail(404, "no sealed secret for this contract");
+      }
       if (p === "/forms" && req.method === "GET") return json({ ok: true, ...formIndex, forms: formIndex.forms.map((k) => FORMS[k]) });
       if (p === "/quotes" && req.method === "POST") return await postQuote(env, req);
       if (p === "/quotes" && req.method === "GET") {

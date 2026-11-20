@@ -19,19 +19,178 @@
     "Code without clear ownership, or software meant to attack or break devices"
   ],
   "fields": [
-    { "key": "workType", "label": "Kind of work", "type": "select", "required": true, "options": ["new", "feature", "bugfix", "port", "security", "maintenance"], "optionLabels": ["New firmware", "New feature", "Bug fix", "Port to a new chip/SDK", "Security update", "Monthly maintenance"] },
-    { "key": "mcu", "label": "Microcontroller or board", "type": "text", "required": true, "maxLength": 200, "example": "STM32F407VG on our own board; prototype on NUCLEO-F407" },
-    { "key": "resources", "label": "Clock, flash and RAM available", "type": "text", "required": true, "maxLength": 200, "example": "168 MHz, 1 MB flash (512 KB free), 192 KB RAM (64 KB free)" },
-    { "key": "software", "label": "Language, RTOS/SDK and versions, toolchain, build system", "type": "text", "required": true, "maxLength": 300, "example": "C11, FreeRTOS 10.6, STM32Cube HAL 1.27, arm-none-eabi-gcc 13, CMake" },
-    { "key": "repository", "label": "Repository (link). Access tokens are never written here — they are sealed to the AI's box after it starts", "type": "text", "required": true, "maxLength": 300 },
-    { "key": "description", "label": "What must be done", "type": "longtext", "required": true, "maxLength": 20000, "help": "Describe the behaviour wanted, the interfaces involved and, for a bug, how to reproduce it." },
-    { "key": "milestones", "label": "Milestones (one per line, in order: what each one delivers)", "type": "list", "required": true, "maxItems": 20 },
-    { "key": "constraints", "label": "Constraints: real-time deadlines, power, coding standard, licence", "type": "longtext", "required": false, "maxLength": 4000 },
-    { "key": "simulation", "label": "Simulation: QEMU/Renode machine, if any, and the output lines that prove it works", "type": "list", "required": false, "maxItems": 20 },
-    { "key": "pinnedTests", "label": "Your test files that the AI must NOT change (one per line: path = sha256)", "type": "pairs", "required": false, "maxItems": 50, "pairLabels": ["Path", "sha256"] },
-    { "key": "budgets", "label": "Flash and RAM limits for the firmware", "type": "text", "required": false, "maxLength": 200, "example": "flash ≤ 256 KB, RAM ≤ 48 KB" },
-    { "key": "hardwareTest", "label": "Hardware test you will run on your board (N5)", "type": "longtext", "required": false, "maxLength": 4000 },
-    { "key": "maintenance", "label": "After delivery: monthly maintenance wanted?", "type": "select", "required": true, "options": ["no", "yes"], "optionLabels": ["No", "Yes: 24 h answer, 72 h security fixes, monthly status report"] }
+    {
+      "key": "workType",
+      "label": "Kind of work",
+      "type": "select",
+      "required": true,
+      "options": [
+        "new",
+        "feature",
+        "bugfix",
+        "port",
+        "security",
+        "maintenance"
+      ],
+      "optionLabels": [
+        "New firmware",
+        "New feature",
+        "Bug fix",
+        "Port to a new chip/SDK",
+        "Security update",
+        "Monthly maintenance"
+      ]
+    },
+    {
+      "key": "mcu",
+      "label": "Microcontroller or board",
+      "type": "text",
+      "required": true,
+      "maxLength": 200,
+      "example": "STM32F407VG on our own board; prototype on NUCLEO-F407"
+    },
+    {
+      "key": "resources",
+      "label": "Clock, flash and RAM available",
+      "type": "text",
+      "required": true,
+      "maxLength": 200,
+      "example": "168 MHz, 1 MB flash (512 KB free), 192 KB RAM (64 KB free)"
+    },
+    {
+      "key": "software",
+      "label": "Language, RTOS/SDK and versions, toolchain, build system",
+      "type": "text",
+      "required": true,
+      "maxLength": 300,
+      "example": "C11, FreeRTOS 10.6, STM32Cube HAL 1.27, arm-none-eabi-gcc 13, CMake"
+    },
+    {
+      "key": "repository",
+      "label": "Repository (link). Access tokens are never written here — they are sealed to the AI's box after it starts",
+      "type": "text",
+      "required": true,
+      "maxLength": 300
+    },
+    {
+      "key": "buildCommand",
+      "label": "Build command (run in the repository root)",
+      "type": "text",
+      "required": true,
+      "maxLength": 300,
+      "example": "cmake -B build -G Ninja && cmake --build build"
+    },
+    {
+      "key": "artifact",
+      "label": "Firmware file produced by the build (ELF, path from the repository root)",
+      "type": "text",
+      "required": true,
+      "maxLength": 200,
+      "example": "build/firmware.elf"
+    },
+    {
+      "key": "testCommand",
+      "label": "Unit test command (host side, optional)",
+      "type": "text",
+      "required": false,
+      "maxLength": 300,
+      "example": "ctest --test-dir build-host"
+    },
+    {
+      "key": "simTarget",
+      "label": "Simulator for N3",
+      "type": "select",
+      "required": true,
+      "options": [
+        "none",
+        "cortex-m3",
+        "cortex-m4",
+        "riscv32"
+      ],
+      "optionLabels": [
+        "No simulation",
+        "QEMU Cortex-M3 (lm3s6965evb)",
+        "QEMU Cortex-M4 (netduinoplus2)",
+        "QEMU RISC-V 32 (virt)"
+      ]
+    },
+    {
+      "key": "flashLimit",
+      "label": "Flash limit for the firmware (bytes, optional)",
+      "type": "number",
+      "required": false,
+      "min": 1,
+      "max": 67108864
+    },
+    {
+      "key": "ramLimit",
+      "label": "RAM limit for the firmware (bytes, optional)",
+      "type": "number",
+      "required": false,
+      "min": 1,
+      "max": 67108864
+    },
+    {
+      "key": "description",
+      "label": "What must be done",
+      "type": "longtext",
+      "required": true,
+      "maxLength": 20000,
+      "help": "Describe the behaviour wanted, the interfaces involved and, for a bug, how to reproduce it."
+    },
+    {
+      "key": "milestones",
+      "label": "Milestones (one per line, in order: what each one delivers)",
+      "type": "list",
+      "required": true,
+      "maxItems": 20
+    },
+    {
+      "key": "constraints",
+      "label": "Constraints: real-time deadlines, power, coding standard, licence",
+      "type": "longtext",
+      "required": false,
+      "maxLength": 4000
+    },
+    {
+      "key": "simulation",
+      "label": "Simulation: QEMU/Renode machine, if any, and the output lines that prove it works",
+      "type": "list",
+      "required": false,
+      "maxItems": 20
+    },
+    {
+      "key": "pinnedTests",
+      "label": "Your test files that the AI must NOT change (one per line: path = sha256)",
+      "type": "pairs",
+      "required": false,
+      "maxItems": 50,
+      "pairLabels": [
+        "Path",
+        "sha256"
+      ]
+    },
+    {
+      "key": "hardwareTest",
+      "label": "Hardware test you will run on your board (N5)",
+      "type": "longtext",
+      "required": false,
+      "maxLength": 4000
+    },
+    {
+      "key": "maintenance",
+      "label": "After delivery: monthly maintenance wanted?",
+      "type": "select",
+      "required": true,
+      "options": [
+        "no",
+        "yes"
+      ],
+      "optionLabels": [
+        "No",
+        "Yes: 24 h answer, 72 h security fixes, monthly status report"
+      ]
+    }
   ],
   "acceptance": [
     "N1 build: the firmware builds from the repository with the agreed toolchain, with no new warnings; the artifact's sha256 is in the report.",
@@ -42,6 +201,17 @@
     "Each milestone delivers what its line in Milestones says, and nothing outside this brief."
   ],
   "maxExtraCriteria": 5,
-  "deliverable": { "format": "repository", "description": "A branch and pull request in your repository, with the N1–N4 report (its hash is recorded on chain with each delivery)." },
-  "pricing": { "unit": "milestone, agreed in the quote", "countField": "milestones", "perUnit": 1, "hatPerUnit": 200000, "minHat": 200000, "unitsPerDay": 1, "minDays": 7 }
+  "deliverable": {
+    "format": "repository",
+    "description": "A branch and pull request in your repository, with the N1–N4 report (its hash is recorded on chain with each delivery)."
+  },
+  "pricing": {
+    "unit": "milestone, agreed in the quote",
+    "countField": "milestones",
+    "perUnit": 1,
+    "hatPerUnit": 200000,
+    "minHat": 200000,
+    "unitsPerDay": 1,
+    "minDays": 7
+  }
 }

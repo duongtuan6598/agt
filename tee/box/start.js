@@ -217,7 +217,7 @@ async function main() {
   }
 
   // 6. Work: once licensed, the AI works by itself (worker: translate open tasks; verifier: review when drawn).
-  if (env.WORK && env.BSC_RPC) startWork(k.agent.privateKey, provider).catch((e) => log(`work loop stopped: ${e.message}`));
+  if (env.WORK && env.BSC_RPC) startWork(k.agent.privateKey, provider, k).catch((e) => log(`work loop stopped: ${e.message}`));
 
   // 7. Chain
   if (!env.AGT_GENESIS_URL) return log("no AGT_GENESIS_URL: serving evidence only — the chain starts once a genesis is given");
@@ -258,7 +258,7 @@ async function startLocalModel() {
   return localModel;
 }
 
-async function startWork(agentKey, modelProvider = "anthropic") {
+async function startWork(agentKey, modelProvider = "anthropic", keys = null) {
   const { ethers } = require("ethers");
   const { AgentLoop, WORK_ABI, httpContent, httpPrices, makeModel } = require("./agent.js");
   const { secretFromManager } = require("./answer.js");
@@ -279,10 +279,34 @@ async function startWork(agentKey, modelProvider = "anthropic") {
     } : null,
   });
   log(`work loop: AI ${wallet.address} on ${env.WORK} — the owner funds this address with gas (BNB)`);
+  // Long-term work (embedded trade): only in the embedded box image, when the contracts are configured.
+  let engage = null;
+  const engagePath = path.join(__dirname, "..", "embedded", "engage-agent.js");
+  if (env.ENGAGEMENT && env.MAINTENANCE && keys && fs.existsSync(engagePath)) {
+    const { EngageLoop, httpSealed } = require(engagePath);
+    const abi = (n) => require(path.join(__dirname, "..", "..", "public", "abi", n + ".json"));
+    const memDir = "/var/agt/memory";
+    fs.mkdirSync(memDir, { recursive: true, mode: 0o700 });
+    const fileName = (k) => path.join(memDir, k.replace(/[^\w:.-]/g, "_"));
+    engage = new EngageLoop({
+      eng: new ethers.Contract(env.ENGAGEMENT, abi("Engagement"), wallet), mnt: new ethers.Contract(env.MAINTENANCE, abi("Maintenance"), wallet),
+      me: wallet.address, chainId: Number((await provider.getNetwork()).chainId),
+      content: httpContent(env.AGT_EXAM_URL || "https://agt-exam.agtcoin.workers.dev", wallet),
+      sealed: httpSealed(env.AGT_EXAM_URL || "https://agt-exam.agtcoin.workers.dev"),
+      model: makeModel({ provider: modelProvider, apiKey, systemPrompt }), tools: require("../embedded/tools.js"), keys,
+      // memory: ciphertext only, on the box's disk (a replaced VM keeps its keys through escrow, not this disk)
+      memStore: { put: async (k, v) => fs.writeFileSync(fileName(k), v, { mode: 0o600 }), get: async (k) => (fs.existsSync(fileName(k)) ? fs.readFileSync(fileName(k), "utf8") : null), list: async (p) => fs.readdirSync(memDir).filter((f) => f.startsWith(p.replace(/[^\w:.-]/g, "_"))) },
+      log,
+    });
+    log(`long-term work: Engagement ${env.ENGAGEMENT}, Maintenance ${env.MAINTENANCE}`);
+  }
   for (;;) {
     try {
       if ((await provider.getBalance(wallet.address)) === 0n) log(`work loop: no gas — send a little BNB to ${wallet.address}`);
-      else await loop.step();
+      else {
+        await loop.step();
+        if (engage) await engage.step();
+      }
     } catch (e) {
       log(`work loop: ${e.shortMessage || e.message}`);
     }

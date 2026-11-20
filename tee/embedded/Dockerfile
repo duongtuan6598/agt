@@ -20,7 +20,8 @@ COPY exam/lib.js exam/lib.js
 COPY exam-worker/client.js exam-worker/client.js
 COPY tee/verify.js tee/escrow.js tee/tdx.js tee/snp.js tee/der.js tee/collateral.js tee/policy.json tee/
 COPY public/forms/brief.js public/forms/index.json public/forms/translation.json public/forms/writing.json public/forms/embedded.json public/forms/
-COPY tee/embedded/tools.js tee/embedded/secrets.js tee/embedded/memory.js tee/embedded/
+COPY tee/embedded/tools.js tee/embedded/secrets.js tee/embedded/memory.js tee/embedded/workspace.js tee/embedded/engage-agent.js tee/embedded/
+COPY public/abi public/abi
 COPY tee/embedded/fixtures tee/embedded/fixtures
 COPY tee/box/start.js tee/box/answer.js tee/box/agent.js tee/box/models.js tee/box/models.json tee/box/prices.js tee/box/system-prompt.txt tee/box/
 
@@ -28,7 +29,7 @@ COPY tee/box/start.js tee/box/answer.js tee/box/agent.js tee/box/models.js tee/b
 # It cannot override the command, cannot inject keys, and logs never contain secrets.
 # Secrets never go in env (env values appear in the public attestation token): the model API key is
 # read from Secret Manager by name. The trust policy for peers is baked in (tee/policy.json).
-LABEL "tee.launch_policy.allow_env_override"="AGT_CHAIN_ID,AGT_GENESIS_URL,AGT_PEERS,BSC_RPC,WORK,BRIDGE,CONFIRMATIONS,AGT_PEER_BOXES,AGT_ESCROW_URL,AGT_EXAM_URL,AGT_OWNER,AGT_TRADE,AGT_AI_NAME,AGT_MODEL_KEY_SECRET,AGT_WORK_EVERY_SEC,AGT_SKR_URL,AGT_MODEL_PROVIDER,AGT_PRICE_FEEDS"
+LABEL "tee.launch_policy.allow_env_override"="AGT_CHAIN_ID,AGT_GENESIS_URL,AGT_PEERS,BSC_RPC,WORK,BRIDGE,CONFIRMATIONS,AGT_PEER_BOXES,AGT_ESCROW_URL,AGT_EXAM_URL,AGT_OWNER,AGT_TRADE,AGT_AI_NAME,AGT_MODEL_KEY_SECRET,AGT_WORK_EVERY_SEC,AGT_SKR_URL,AGT_MODEL_PROVIDER,AGT_PRICE_FEEDS,ENGAGEMENT,MAINTENANCE"
 LABEL "tee.launch_policy.allow_cmd_override"="false"
 LABEL "tee.launch_policy.log_redirect"="always"
 
