@@ -286,7 +286,9 @@ async function startWork(agentKey, modelProvider = "anthropic", keys = null) {
   // The TEE sockets are still locked to root as defence in depth (tee/embedded/isolation.js).
   if (env.ENGAGEMENT && env.MAINTENANCE && keys && fs.existsSync(engagePath)) {
     require("../embedded/isolation.js").lockDown(log);
-    const { EngageLoop, httpSealed, fileState } = require(engagePath);
+    const { EngageLoop, httpSealed, httpRepro, fileState } = require(engagePath);
+    // §14–§15: builders are trusted only with an attested image on policy.builderImages (none approved yet)
+    const verifyBuilder = require("../builder/verify-builder.js").makeVerifyBuilder({ jwks: await T.fetchJwks(), policy: POLICY, log });
     const abi = (n) => require(path.join(__dirname, "..", "..", "public", "abi", n + ".json"));
     const memDir = "/var/agt/memory";
     fs.mkdirSync(memDir, { recursive: true, mode: 0o700 });
@@ -297,6 +299,7 @@ async function startWork(agentKey, modelProvider = "anthropic", keys = null) {
       content: httpContent(env.AGT_EXAM_URL || "https://agt-exam.agtcoin.workers.dev", wallet),
       sealed: httpSealed(env.AGT_EXAM_URL || "https://agt-exam.agtcoin.workers.dev"),
       model: makeModel({ provider: modelProvider, apiKey, systemPrompt }), keys, state: fileState("/var/agt/state"),
+      repro: httpRepro(env.AGT_EXAM_URL || "https://agt-exam.agtcoin.workers.dev", wallet), verifyBuilder,
       // memory: ciphertext only, on the box's disk (a replaced VM keeps its keys through escrow, not this disk)
       memStore: { put: async (k, v) => fs.writeFileSync(fileName(k), v, { mode: 0o600 }), get: async (k) => (fs.existsSync(fileName(k)) ? fs.readFileSync(fileName(k), "utf8") : null), list: async (p) => fs.readdirSync(memDir).filter((f) => f.startsWith(p.replace(/[^\w:.-]/g, "_"))) },
       log,

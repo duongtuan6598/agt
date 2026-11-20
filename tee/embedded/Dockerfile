@@ -22,6 +22,7 @@ COPY tee/verify.js tee/escrow.js tee/tdx.js tee/snp.js tee/der.js tee/collateral
 COPY public/forms/brief.js public/forms/index.json public/forms/translation.json public/forms/writing.json public/forms/embedded.json public/forms/
 COPY tee/embedded/tools.js tee/embedded/secrets.js tee/embedded/memory.js tee/embedded/workspace.js tee/embedded/engage-agent.js tee/embedded/isolation.js tee/embedded/forge.js tee/embedded/builder.js tee/embedded/
 COPY public/abi public/abi
+COPY tee/builder/verify-builder.js tee/builder/
 COPY tee/embedded/fixtures tee/embedded/fixtures
 COPY tee/box/start.js tee/box/answer.js tee/box/agent.js tee/box/models.js tee/box/models.json tee/box/prices.js tee/box/system-prompt.txt tee/box/
 

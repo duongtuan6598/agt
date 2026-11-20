@@ -29,63 +29,63 @@
     {
       "digest": "sha256:9c1bd7820b6875821d4d89aeb2c386114b0a5ee8826eb82f2e093c5df1ccd90e",
       "image": "asia-southeast1-docker.pkg.dev/agt-sealed-box-1120/agt/box:v3",
-      "by": "founder (genesis phase, Charter Art. 5) — approved in chat 2026-11-20",
+      "by": "founder (genesis phase, Charter Art. 5) \u2014 approved in chat 2026-11-20",
       "at": "2026-11-20",
       "note": "same code as v2; carries the Charter with the reviewer-draw rule (Art. 7). Testnet only; the Council must re-approve from a reproducible build"
     },
     {
       "digest": "sha256:4431e6ef4d6e09e23aa549e90599442fb35e5b8f151c0959ad94f95da7102acb",
       "image": "asia-southeast1-docker.pkg.dev/agt-sealed-box-1120/agt/box:v4",
-      "by": "founder (genesis phase, Charter Art. 5) — approved in chat 2026-11-20",
+      "by": "founder (genesis phase, Charter Art. 5) \u2014 approved in chat 2026-11-20",
       "at": "2026-11-20",
       "note": "v3 + the work loop (tee/box/agent.js); same Charter and system prompt. Testnet only; the Council must re-approve from a reproducible build"
     },
     {
       "digest": "sha256:f43275945058b00b9efe27f23ebc69523b48392a5d19289baeea11346862ee25",
       "image": "asia-southeast1-docker.pkg.dev/agt-sealed-box-1120/agt/box:v5",
-      "by": "founder (genesis phase, Charter Art. 5) — approved in chat 2026-11-20",
+      "by": "founder (genesis phase, Charter Art. 5) \u2014 approved in chat 2026-11-20",
       "at": "2026-11-20",
       "note": "v4 + dstack/Intel TDX path (tee/tdx.js); same Charter and system prompt. Testnet only; the Council must re-approve from a reproducible build"
     },
     {
       "digest": "sha256:8441f8622f7a6ec6f02f35a32ae63b90438db65b6973825130725a61a1dac6d3",
       "image": "asia-southeast1-docker.pkg.dev/agt-sealed-box-1120/agt/box:v6",
-      "by": "founder (genesis phase, Charter Art. 5) — approved in chat 2026-11-20",
+      "by": "founder (genesis phase, Charter Art. 5) \u2014 approved in chat 2026-11-20",
       "at": "2026-11-20",
       "note": "v5 + AMD SEV-SNP / Azure Confidential Containers path (tee/snp.js); same Charter and system prompt. Testnet only; the Council must re-approve from a reproducible build"
     },
     {
       "digest": "sha256:48baab8e764abbe05425c037fd4b961a6c53f34944f2a596cc996a74532debb3",
       "image": "asia-southeast1-docker.pkg.dev/agt-sealed-box-1120/agt/box:v8",
-      "by": "founder (genesis phase, Charter Art. 5) — approved in chat 2026-11-20",
+      "by": "founder (genesis phase, Charter Art. 5) \u2014 approved in chat 2026-11-20",
       "at": "2026-11-20",
       "note": "v6 + chip patch-level/revocation checks (v7) + provider-independent model layer; default model anthropic:claude-opus-5-5; same Charter and system prompt. Testnet only; the Council must re-approve from a reproducible build"
     },
     {
       "digest": "sha256:3f48a757c70e067a9a7dd344b7a3fd40ac4463fe862a93bb1ea371833c2f6efd",
       "image": "asia-southeast1-docker.pkg.dev/agt-sealed-box-1120/agt/box:v9",
-      "by": "founder (genesis phase, Charter Art. 5) — approved in chat 2026-11-20",
+      "by": "founder (genesis phase, Charter Art. 5) \u2014 approved in chat 2026-11-20",
       "at": "2026-11-20",
       "note": "v8 + sealed AIs sign prices from public markets (tee/box/prices.js); same Charter and system prompt. Testnet only; the Council must re-approve from a reproducible build"
     },
     {
       "digest": "sha256:aab567d19727485352390bdb967ebf35f54acd09dfd15d4fd6521d8fcf659e2d",
       "image": "asia-southeast1-docker.pkg.dev/agt-sealed-box-1120/agt/box:v10",
-      "by": "founder (genesis phase, Charter Art. 5) — approved in chat 2026-11-20",
+      "by": "founder (genesis phase, Charter Art. 5) \u2014 approved in chat 2026-11-20",
       "at": "2026-11-20",
       "note": "v9 code; carries Charter 0.10 (Article 14). Testnet only; the Council must re-approve from a reproducible build"
     },
     {
       "digest": "sha256:9d0fc5a8239f19a1ddd53dadcf3c2837b7cebb43d463eb60a90c9355b4f64ff0",
       "image": "asia-southeast1-docker.pkg.dev/agt-sealed-box-1120/agt/box:v11",
-      "by": "founder (genesis phase, Charter Art. 5) — approved in chat 2026-11-20",
+      "by": "founder (genesis phase, Charter Art. 5) \u2014 approved in chat 2026-11-20",
       "at": "2026-11-20",
       "note": "v10 + the AI does jobs people assign (or declines) and judges disputes; same Charter 0.10 and system prompt. Testnet only; the Council must re-approve from a reproducible build"
     },
     {
       "digest": "sha256:175af5ee6b10bb290949c816d21593fea5f52d7604380c648bfa98a2b1a70ff8",
       "image": "asia-southeast1-docker.pkg.dev/agt-sealed-box-1120/agt/box:v12",
-      "by": "founder (genesis phase, Charter Art. 5) — approved in chat 2026-11-20",
+      "by": "founder (genesis phase, Charter Art. 5) \u2014 approved in chat 2026-11-20",
       "at": "2026-11-20",
       "note": "v11 + the AI draws dispute reviewers, votes only when drawn, schedules fresh seeds for lapsed rounds (audit F-9); same Charter 0.10. Testnet only; the Council must re-approve from a reproducible build"
     }
@@ -110,5 +110,6 @@
   },
   "models": [
     "anthropic:claude-opus-5-5"
-  ]
+  ],
+  "builderImages": []
 }

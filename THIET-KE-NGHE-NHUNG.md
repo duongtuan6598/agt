@@ -260,3 +260,40 @@ Báo cáo CI do hộp công bố là **cách hộp đọc CI của khách**, ch�
 
 **Để sau:** nhiều máy build độc lập; giả lập CI rộng hơn; ranh giới phần cứng quanh mã build; các kiểm tra cần bí mật.
 
+---
+
+## 15. Quyết định chung Claude + Codex: khởi động và kiểm chứng máy build (21/11/2026)
+
+**Đề xuất của Codex** (nguyên văn ở `docs/decisions/2026-11-21-codex-builder-launcher.md`):
+- **Image builder riêng**, có danh sách duyệt riêng (`policy.builderImages`). "Chế độ" chỉ là cấu hình, không phải danh tính.
+- **Kiểm chứng máy build:**
+  - token Google hợp lệ, không debug, đúng phần cứng, secure boot;
+  - image nằm trong danh sách builder đã duyệt;
+  - **mã băm của toàn bộ manifest** (khoá, nonce, tranh chấp, commit, lệnh, image) nằm trong `eat_nonce`;
+  - image khai trong manifest phải đúng image đã được chứng thực;
+  - không tin trường nào chỉ do kết quả tự khai.
+- **Mạng:** QEMU không có card mạng bên trong máy build, kết hợp mạng riêng không có đường ra ngoài.
+- **Khởi động:** bên muốn có bằng chứng tự chạy bằng tài khoản đám mây của mình; mỗi việc một máy; giới hạn thời gian sống ở phía đám mây; tắt chạy thật mặc định.
+
+**Claude đồng ý** image riêng, cách kiểm chứng và việc tắt chạy thật mặc định. **Claude điều chỉnh phần mạng và góp một luật:**
+- **Kênh chuyển tiếp là bucket lưu trữ của bên chạy.**
+  - Máy ảo **không có IP ngoài**, chỉ tới được Google Storage (Private Google Access).
+  - Tài khoản dịch vụ chỉ có quyền trên **đúng một bucket** của việc đó.
+  - Script của bên chạy đưa dữ liệu qua lại giữa bucket và máy chủ thi.
+  
+  Như vậy mã build không ra được Internet mà không cần dựng máy chuyển tiếp.
+- **Luật:** mã build vẫn ghi được vào bucket của bên chạy, nên **chỉ hai bên tranh chấp (khách hoặc chủ AI thợ) được chạy máy build**, vì họ vốn đã có mã. Người phân xử không cần tự chạy: họ tin kết quả nhờ chứng thực.
+- QEMU trong máy build là lớp phòng thủ thêm, để bước sau.
+
+**Đã làm:**
+- `tee/builder/verify-builder.js`: kiểm chứng máy build.
+- `tee/builder/main.js`: tiến trình giám sát; vào ra qua bucket; token Confidential Space gắn mã băm manifest.
+- `tee/builder/Dockerfile`: image builder riêng, không chứa mã của hộp AI; khi khởi động chỉ được đặt tên bucket.
+- `tee/builder/launch-builder.sh`: **chỉ chạy khi `AGT_I_APPROVE_COST=yes`**. Tạo một máy ảo bảo mật không IP ngoài, sống tối đa 2 giờ rồi tự xoá; bucket và tài khoản dịch vụ bị xoá khi xong.
+- Hộp AI dùng bộ kiểm chứng thật. `policy.builderImages` đang **rỗng**, nên chưa tin máy build nào cho tới khi người duyệt.
+
+**Con người phải duyệt trước khi chạy thật:**
+- dự án đám mây, vùng, loại máy, chi phí ước tính và thời gian sống tối đa;
+- **mã băm image builder** đưa vào `policy.builderImages`;
+- đúng commit và đúng lệnh của việc cần dựng lại.
+

@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "hardhat test && node --test exam/test/exam.test.js exam/test/brief.test.js exam/test/embedded.test.js chain/test/chain.test.js chain/abci/test/app.test.js tee/test/verify.test.js tee/test/escrow.test.js tee/test/exam-box.test.js tee/test/tdx.test.js tee/test/snp.test.js tee/test/tcb.test.js tee/test/models.test.js tee/embedded/test/secrets-memory.test.js",
+    "test": "hardhat test && node --test exam/test/exam.test.js exam/test/brief.test.js exam/test/embedded.test.js chain/test/chain.test.js chain/abci/test/app.test.js tee/test/verify.test.js tee/test/escrow.test.js tee/test/exam-box.test.js tee/test/tdx.test.js tee/test/snp.test.js tee/test/tcb.test.js tee/test/models.test.js tee/embedded/test/secrets-memory.test.js tee/test/builder.test.js",
     "test:exam": "node --test exam/test/exam.test.js"
   },
   "keywords": [],
