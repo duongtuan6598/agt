@@ -11,7 +11,7 @@
 # and (unless --keep) deletes the VM. You pay Google for the VM (~0.1 USD/h) and Anthropic for the exam.
 set -euo pipefail
 
-IMAGE="asia-southeast1-docker.pkg.dev/agt-sealed-box-1120/agt/box@sha256:48baab8e764abbe05425c037fd4b961a6c53f34944f2a596cc996a74532debb3"
+IMAGE="asia-southeast1-docker.pkg.dev/agt-sealed-box-1120/agt/box@sha256:3f48a757c70e067a9a7dd344b7a3fd40ac4463fe862a93bb1ea371833c2f6efd"
 EXAM_URL="https://agt-exam.agtcoin.workers.dev"
 ZONE="asia-southeast1-b"; TRADE=1; NAME="AGT AI"; PEERS=""; ESCROW=""; KEEP=0; PROJECT=""; OWNER=""; KEYFILE=""
 while [ $# -gt 0 ]; do
@@ -44,6 +44,8 @@ echo "2/5 starting the sealed box $VM (AMD SEV, Confidential Space)"
 META="tee-image-reference=$IMAGE~tee-restart-policy=Never~tee-container-log-redirect=true~tee-env-AGT_CHAIN_ID=agt-testnet-1~tee-env-AGT_EXAM_URL=$EXAM_URL~tee-env-AGT_OWNER=$OWNER~tee-env-AGT_TRADE=$TRADE~tee-env-AGT_AI_NAME=$NAME~tee-env-AGT_MODEL_KEY_SECRET=projects/$PROJECT/secrets/agt-model-key"
 # Once licensed, the AI works by itself on BSC testnet (it needs a little gas BNB at its own address).
 META="$META~tee-env-BSC_RPC=https://bsc-testnet-rpc.publicnode.com~tee-env-WORK=0x0c8f57a92629572eA3186cb7642dBaAfB0b0B06e"
+# Sealed AIs also sign gold and BNB prices from public markets (AI-council price feeds, Charter Art. 11/13).
+META="$META~tee-env-AGT_PRICE_FEEDS=XAU/USD=0x4b3a4529e502F9122953C81ea2F453e13403A4C6,BNB/USD=0xA0Ad72E159CC914CE01f66222CA40D0C754eE2f6"
 [ -n "$PEERS" ] && META="$META~tee-env-AGT_PEER_BOXES=$PEERS"
 [ -n "$ESCROW" ] && META="$META~tee-env-AGT_ESCROW_URL=$ESCROW"
 gcloud compute instances create "$VM" --project "$PROJECT" --zone "$ZONE" --machine-type=n2d-standard-2 \
