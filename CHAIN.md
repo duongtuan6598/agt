@@ -11,6 +11,7 @@
 | `chain/devnet.js` | local | In-process demo of the rules (no networking) |
 | `chain/abci/app.js` | AGT chain | **CometBFT v0.38 ABCI 2.0 app (gRPC)** — the same rules, run by a real BFT engine; 4 tests |
 | `chain/abci/devnet.js` | local Docker | 4 CometBFT validators + 4 AGT apps; `up` / `demo` / `down` |
+| `chain/relayer.js` | anyone | Carries withdrawals to `AGTBridge.release()`; holds no privileged key |
 
 ## Who signs
 
@@ -88,6 +89,31 @@ Devnet result (5 nodes, `node chain/abci/devnet.js demo`, steps 7–9):
 - Licence #2 was revoked. Borealis was removed, leaving 4 validators.
 - A tx sent through Eos's node paid its 1 Hat as 0.25 to each of the 4 current signers.
 
+## Relayer
+
+```
+AGT_RPC=http://<any AGT node>:26657 BSC_RPC=<bsc rpc> BRIDGE=<AGTBridge> node chain/relayer.js status
+RELAYER_KEY=<any funded BSC key> … node chain/relayer.js release <n>     # usually the person withdrawing
+RELAYER_KEY=… node chain/relayer.js watch                                # relay everything as soon as ready
+```
+
+**What it does for each withdrawal:**
+1. It reads the package from `abci_query /release/<n>`.
+2. It **re-checks every signature against AGTWork on BSC as it stands right now**: the licence is active, the agent matches, and `attestHash ≠ 0`. It keeps one signature per owner and sorts them by owner.
+3. It waits until > 2/3 of `activeHolders` is reached.
+4. It dry-runs `release` (`staticCall`), then sends it.
+
+**Why it needs no trust:**
+- An AI that lost its licence after signing is dropped instead of making the BSC transaction revert.
+- The relayer holds no privileged key and earns nothing: it only pays BSC gas. Charter Article 8 allows no middleman fees.
+- The AGT always goes to the recipient the AIs signed.
+- If two relayers race, the second sees `AlreadyReleased` and moves on.
+
+**Tested end to end** on a local BSC (`test/relayer.test.js`): real contracts, plus the AGT app reading `Locked` events from the real bridge, plus the relayer.
+- With 2 of 4 owners it waits; at 3 of 4 a stranger relays and the user receives exactly the withdrawn AGT.
+- A second relayer finds it already released.
+- Forged and duplicate signatures are dropped before any gas is spent.
+
 ## Honest limits
 
 - **More than 2/3 of owners colluding** could release locked AGT to themselves. This is the security of every BFT system. The defence is many independent owners plus sealed boxes (Article 12). That is why stage 2 waits for enough owners (the Charter suggests ~21).
@@ -98,7 +124,7 @@ Devnet result (5 nodes, `node chain/abci/devnet.js demo`, steps 7–9):
 ## Before mainnet
 
 1. ~~Port to CometBFT~~ (done: `chain/abci`). Next: follow validator-set changes from BSC, state sync and snapshots, and a public testnet run by independent owners.
-2. Write a relayer that watches `Locked` events (with finality depth) and submits `release`. Anyone can run it, since it holds no privileged key.
+2. ~~Relayer~~ (done: `chain/relayer.js`).
 3. Do real TEE attestation for validator AIs. Today `attestHash` is only a hash that the exam/licence process records.
 4. Get an independent audit of `AGTBridge.sol` and the ABCI app.
 5. Meet every precondition in THIET-KE.md (separate identity, a large question bank, a new mainnet wallet, an audit).
