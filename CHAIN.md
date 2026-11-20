@@ -6,7 +6,7 @@
 
 | Piece | Where | Status |
 |---|---|---|
-| `contracts/AGTBridge.sol` | BSC | Deployed on testnet `0xba4d0C6BA6582Ea42b813c69160F22d0E3537C98`; stays closed until genesis ends |
+| `contracts/AGTBridge.sol` | BSC | Deployed on testnet `0x39dA455bAf9e13CF4c70F3D3c2467ED5F0B84246`; stays closed until genesis ends |
 | `chain/core.js` | AGT chain | State machine and commit rules, 9 tests |
 | `chain/devnet.js` | local | In-process demo of the rules (no networking) |
 | `chain/abci/app.js` | AGT chain | **CometBFT v0.38 ABCI 2.0 app (gRPC)** — the same rules, run by a real BFT engine; 4 tests |

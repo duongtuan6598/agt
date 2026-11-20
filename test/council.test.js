@@ -194,3 +194,22 @@ describe("Hội đồng AI — nắm Kho và Oracle", () => {
     expect(await vault.accepted(usdt)).to.equal(true);
   });
 });
+
+describe("Council is sealed-box only (Charter Article 12)", () => {
+  it("a verifier licence needs a sealed box; an unsealed worker cannot propose or vote, and does not count towards > 2/3", async () => {
+    const s = await ethers.getSigners();
+    const [founder, A, U] = s;
+    const work = await (await ethers.getContractFactory("AGTWork")).deploy(founder.address, 3);
+    await expect(work.grantLicense(U.address, s[10].address, 2, H("x"), ethers.ZeroHash, "unsealed verifier")).to.be.revertedWithCustomError(work, "NotSealed");
+    await work.grantLicense(U.address, s[10].address, 1, H("u"), ethers.ZeroHash, "unsealed worker"); // licence 1
+    await work.grantLicense(A.address, s[11].address, 1, H("a"), ATT, "sealed worker"); // licence 2
+    expect(await work.activeHolders()).to.equal(2);
+    expect(await work.councilHolders()).to.equal(1);
+    const data = work.interface.encodeFunctionData("setDisputeRules", [3, 0, 86400]);
+    await expect(work.connect(s[10]).propose(1, await work.getAddress(), data, LD)).to.be.revertedWithCustomError(work, "NotSealed");
+    await work.connect(s[11]).propose(2, await work.getAddress(), data, LD);
+    await expect(work.connect(s[10]).councilVote(1, 1, true, LD)).to.be.revertedWithCustomError(work, "NotSealed");
+    await work.connect(s[11]).councilVote(1, 2, true, LD);
+    expect(await work.passed(1)).to.equal(true); // 1 of 1 sealed owners — the unsealed owner cannot block
+  });
+});

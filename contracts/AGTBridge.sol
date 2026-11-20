@@ -10,7 +10,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 /// Những gì cầu nối đọc từ Hội đồng AI (AGTWork) — không đọc gì khác, không có chủ.
 interface IAGTWorkView {
     function genesisEnded() external view returns (bool);
-    function activeHolders() external view returns (uint32);
+    function councilHolders() external view returns (uint32);
     function licenseOfAgent(address agent) external view returns (uint256);
     function licenses(uint256 id)
         external
@@ -83,7 +83,7 @@ contract AGTBridge is ReentrancyGuard {
             if (agent != signer || !active || attestHash == bytes32(0) || holder <= last) revert BadSigner(i);
             last = holder;
         }
-        uint32 holders = work.activeHolders();
+        uint32 holders = work.councilHolders(); // owners with a sealed-box AI: the only ones who can sign
         if (sigs.length * 3 <= uint256(holders) * 2) revert NotEnoughSigners(sigs.length, holders);
         released[nonce] = true;
         totalLocked -= amount;

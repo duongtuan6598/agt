@@ -37,6 +37,7 @@
       "function genesisEnded() view returns (bool)",
       "function genesisExitVerifiers() view returns (uint32)",
       "function activeHolders() view returns (uint32)",
+      "function councilHolders() view returns (uint32)",
       "function verifierHolders() view returns (uint32)",
       "function nextLicense() view returns (uint256)",
       "function nextProposal() view returns (uint256)",
@@ -142,7 +143,7 @@
 
     // Hội đồng & giấy phép
     const [wOwner, gEnded, gExit, holders, vHolders, nextL, nextP, nextJ, vOwner, oOwner, vFrozen, oFrozen] = await Promise.all([
-      work.owner(), work.genesisEnded(), work.genesisExitVerifiers(), work.activeHolders(), work.verifierHolders(),
+      work.owner(), work.genesisEnded(), work.genesisExitVerifiers(), work.councilHolders().catch(() => work.activeHolders()), work.verifierHolders(),
       work.nextLicense(), work.nextProposal(), work.nextJob(), vault.owner(), oracle.owner(), vault.frozen(), oracle.frozen(),
     ]);
     const licenses = [];

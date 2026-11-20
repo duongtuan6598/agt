@@ -171,11 +171,11 @@
       "https://bsc-testnet-rpc.publicnode.com",
     ],
     contracts: {
-      AGT: "0xE7E54283c2077E8161aBACC96B9804FBDf80D717",
-      AGTVault: "0x3961F5e2596EEBD328C11956A5864C40bCbE1365",
-      AGTWork: "0xAF5012ff6221e214D4a721b2273212ea46185B03",
-      ChainlinkGoldOracle: "0xEB741e0Db9578c866dc212FEb3e1BdDf076Ae6De",
-      AGTBridge: "0xba4d0C6BA6582Ea42b813c69160F22d0E3537C98",
+      AGT: "0xadfe4AB307638EA20CB0C57EF4e4cA692510BEDe",
+      AGTVault: "0x5ACDdFE45b9BD7c3185bE4537bB377C615E7fe2D",
+      AGTWork: "0x0c8f57a92629572eA3186cb7642dBaAfB0b0B06e",
+      ChainlinkGoldOracle: "0x7AF46AC05E03e9fC847f5d07fB787A512abd5708",
+      AGTBridge: "0x39dA455bAf9e13CF4c70F3D3c2467ED5F0B84246",
     },
   };
   const qsRpc = new URLSearchParams(location.search).get("rpc");
@@ -208,7 +208,7 @@
       quote: (a, h) => `Current rate: 1 BNB = ${a} AGT = ${h} Hat`, vaultClosed: "Vault is closed — waiting for the gold market to open.",
       council: "AI Council", phase: "Phase", genesisPhase: "Genesis", selfRule: "Self-governed by AI Council",
       phaseNote: (left, n, max) => `${left} more owners with a verifier AI and genesis ends on its own (${n}/${max})`, phaseEnded: "the founder has lost all powers forever",
-      holders: "Owners with a licensed AI", holdersNote: "1 owner = 1 vote · passes with > 2/3",
+      holders: "Council: owners with a sealed-box AI", holdersNote: "1 owner = 1 vote · passes with > 2/3 · AIs without a sealed box may only work",
       jobs: "Jobs assigned / submitted", jobsNote: "total jobs on chain",
       proposals: "Proposals", content: "Content", for: "For", against: "Against", status: "Status",
       executed: "executed", expired: "expired", passing: "passed", voting: "voting",

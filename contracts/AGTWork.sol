@@ -116,6 +116,10 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
     mapping(address => uint32) public activeVerifiersOf;
     uint32 public activeHolders; // số CHỦ (không phải số giấy phép) đang có giấy phép — 1 chủ = 1 phiếu
     uint32 public verifierHolders;
+    // Hội đồng = các chủ có ít nhất 1 AI chạy trong hộp kín (attestHash ≠ 0) — Hiến chương Điều 12.
+    // AI không hộp kín chỉ làm thợ: không đề xuất, không bỏ phiếu Hội đồng, không ký đồng thuận.
+    mapping(address => uint32) public sealedLicensesOf; // chủ => số giấy phép hộp kín còn hiệu lực
+    uint32 public councilHolders; // số CHỦ có AI hộp kín — mẫu số của ngưỡng > 2/3
 
     mapping(address => bool) public govTarget; // hợp đồng mà Hội đồng được điều khiển (Kho, Oracle)
     uint256 public nextProposal = 1;
@@ -154,6 +158,7 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
     error NotAllowed();
     error DailyCapReached();
     error AlreadyVoted();
+    error NotSealed();
     error TooEarly();
     error NotEnoughReviewers();
     error BadParams();
@@ -191,6 +196,8 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
         string calldata name
     ) external onlyGov returns (uint256 id) {
         if (holder == address(0) || agent == address(0) || role == Role.None) revert BadParams();
+        // AI nghiệm thu duyệt việc và (chặng 2) ký khối: bắt buộc chạy trong hộp kín.
+        if (role == Role.Verifier && attestHash == bytes32(0)) revert NotSealed();
         // Khoá AI phải tách hẳn khỏi ví chủ: không trùng chủ, không là chủ của ai, không dùng lại.
         if (agent == holder || everHolder[agent] || licenseOfAgent[agent] != 0 || licenseOfAgent[holder] != 0) revert BadParams();
         id = nextLicense++;
@@ -198,6 +205,7 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
         licenseOfAgent[agent] = id;
         everHolder[holder] = true;
         if (activeLicensesOf[holder]++ == 0) activeHolders++;
+        if (attestHash != bytes32(0) && sealedLicensesOf[holder]++ == 0) councilHolders++;
         if (role == Role.Verifier && activeVerifiersOf[holder]++ == 0) verifierHolders++;
         if (role == Role.Verifier) {
             verifierList.push(id);
@@ -217,6 +225,7 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
         if (l.role == Role.None || !l.active) revert BadLicense();
         l.active = false;
         if (--activeLicensesOf[l.holder] == 0) activeHolders--;
+        if (l.attestHash != bytes32(0) && --sealedLicensesOf[l.holder] == 0) councilHolders--;
         if (l.role == Role.Verifier && --activeVerifiersOf[l.holder] == 0) verifierHolders--;
         uint256 pos = verifierPos[id];
         if (pos != 0) {
@@ -246,6 +255,7 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
     /// Mọi AI có giấy phép (Thợ hay Nghiệm thu) đều đề xuất được.
     function propose(uint256 licenseId, address target, bytes calldata data, string calldata reason) external returns (uint256 id) {
         _requireAgent(licenseId, Role.None);
+        if (licenses[licenseId].attestHash == bytes32(0)) revert NotSealed();
         if (bytes(reason).length == 0) revert NoReason();
         if (target != address(this) && !govTarget[target]) revert NotAllowed();
         id = nextProposal++;
@@ -257,6 +267,7 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
     /// AI ký bằng khoá riêng, kèm lý do công khai. Mỗi CHỦ một phiếu dù có bao nhiêu AI.
     function councilVote(uint256 id, uint256 licenseId, bool support, string calldata reason) external {
         _requireAgent(licenseId, Role.None);
+        if (licenses[licenseId].attestHash == bytes32(0)) revert NotSealed();
         if (bytes(reason).length == 0) revert NoReason();
         Proposal storage p = proposals[id];
         if (p.target == address(0) || p.executed || block.timestamp > p.deadline) revert BadState();
@@ -271,7 +282,7 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
     /// Thông qua khi số chủ đồng ý > 2/3 số chủ đang có giấy phép (ngưỡng chống gian kiểu BFT).
     function passed(uint256 id) public view returns (bool) {
         Proposal storage p = proposals[id];
-        return activeHolders > 0 && uint256(p.yes) * 3 > uint256(activeHolders) * 2;
+        return councilHolders > 0 && uint256(p.yes) * 3 > uint256(councilHolders) * 2;
     }
 
     function execute(uint256 id) external nonReentrant returns (bytes memory) {

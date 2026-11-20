@@ -9,4 +9,4 @@ id = "9c2e0a6be7744dbdb012393f17660cdd"
 
 [vars]
 BSC_RPC = "https://bsc-testnet-rpc.publicnode.com"
-WORK = "0xAF5012ff6221e214D4a721b2273212ea46185B03"
+WORK = "0x0c8f57a92629572eA3186cb7642dBaAfB0b0B06e"

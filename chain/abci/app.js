@@ -75,7 +75,7 @@ function makeBscView(env = process.env) {
     if (env.WORK) {
       const work = new ethers.Contract(env.WORK, [
         "function nextLicense() view returns (uint256)",
-        "function activeHolders() view returns (uint32)",
+        "function councilHolders() view returns (uint32)",
         "function licenses(uint256) view returns (address holder, address agent, uint8 role, bool active, bytes32 examHash, bytes32 attestHash, string name)",
       ], provider);
       const memo = new Map();
@@ -87,7 +87,7 @@ function makeBscView(env = process.env) {
           const l = await work.licenses(id, { blockTag });
           if (l.active && l.attestHash !== ethers.ZeroHash) validators.push({ id, agent: l.agent, holder: l.holder });
         }
-        const v = { holders: Number(await work.activeHolders({ blockTag })), validators };
+        const v = { holders: Number(await work.councilHolders({ blockTag })), validators };
         memo.set(blockTag, v);
         return v;
       };

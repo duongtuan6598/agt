@@ -17,7 +17,7 @@ const BRIDGE_ABI = [
   "error NotReady()", "error BadAmount()", "error AlreadyReleased()", "error BadSigner(uint256 index)", "error NotEnoughSigners(uint256 signers, uint32 holders)",
 ];
 const WORK_ABI = [
-  "function activeHolders() view returns (uint32)",
+  "function councilHolders() view returns (uint32)",
   "function licenseOfAgent(address) view returns (uint256)",
   "function licenses(uint256) view returns (address holder, address agent, uint8 role, bool active, bytes32 examHash, bytes32 attestHash, string name)",
 ];
@@ -53,7 +53,7 @@ async function checkOnBsc(bridge, work, pkg) {
     if (!l.active || l.agent !== agent || l.attestHash === ethers.ZeroHash) { dropped.push(`${agent}: licence not active / no sealed box`); continue; }
     if (!byHolder.has(l.holder)) byHolder.set(l.holder, sig);
   }
-  const holders = Number(await work.activeHolders());
+  const holders = Number(await work.councilHolders());
   const sigs = [...byHolder.entries()].sort((a, b) => (BigInt(a[0]) < BigInt(b[0]) ? -1 : 1)).map(([, s]) => s);
   return { sigs, dropped, holders, enough: holders > 0 && sigs.length * 3 > holders * 2 };
 }

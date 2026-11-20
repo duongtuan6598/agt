@@ -130,8 +130,8 @@ describe("Stage 2 bridge: BSC ⇄ AGT chain, signed only by licensed AIs", () =>
     const own = { A: d.A.address, B: d.B.address, D: d.D.address, E: d.E.address };
     const with_ = (names) => order(names.map((n) => ({ w: ag[n], holder: own[n] })));
 
-    // 3 of 5 owners (A, B, F, D, E): not enough.
-    let sigs = await signedRelease(d, with_(["A", "B", "D"]));
+    // F's AI has no sealed box, so the council is A, B, D, E: 2 of 4 owners is not enough.
+    let sigs = await signedRelease(d, with_(["A", "B"]));
     await expect(bridge.release(1, user.address, 10n ** 18n, sigs)).to.be.revertedWithCustomError(bridge, "NotEnoughSigners");
 
     // B's second AI does not make B count twice.
