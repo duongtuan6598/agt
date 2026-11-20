@@ -7,7 +7,8 @@
   "imageDigests": [
     "sha256:2b267087117ab323df6f18ddf3729b33df251633f42277f7c27389e484532c5d",
     "sha256:9c1bd7820b6875821d4d89aeb2c386114b0a5ee8826eb82f2e093c5df1ccd90e",
-    "sha256:4431e6ef4d6e09e23aa549e90599442fb35e5b8f151c0959ad94f95da7102acb"
+    "sha256:4431e6ef4d6e09e23aa549e90599442fb35e5b8f151c0959ad94f95da7102acb",
+    "sha256:f43275945058b00b9efe27f23ebc69523b48392a5d19289baeea11346862ee25"
   ],
   "charterHash": "current",
   "promptHashes": null,
@@ -32,6 +33,13 @@
       "by": "founder (genesis phase, Charter Art. 5) — approved in chat 2026-11-20",
       "at": "2026-11-20",
       "note": "v3 + the work loop (tee/box/agent.js); same Charter and system prompt. Testnet only; the Council must re-approve from a reproducible build"
+    },
+    {
+      "digest": "sha256:f43275945058b00b9efe27f23ebc69523b48392a5d19289baeea11346862ee25",
+      "image": "asia-southeast1-docker.pkg.dev/agt-sealed-box-1120/agt/box:v5",
+      "by": "founder (genesis phase, Charter Art. 5) — approved in chat 2026-11-20",
+      "at": "2026-11-20",
+      "note": "v4 + dstack/Intel TDX path (tee/tdx.js); same Charter and system prompt. Testnet only; the Council must re-approve from a reproducible build"
     }
   ],
   "dstack": {
