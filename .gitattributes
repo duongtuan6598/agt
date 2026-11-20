@@ -3,3 +3,7 @@
 tee/** text eol=lf
 exam/bank/*.json text eol=lf
 *.sh text eol=lf
+# Binary attestation test vectors must never be touched by line-ending conversion
+*.dat binary
+*.der binary
+*.cer binary
