@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "hardhat test && node --test exam/test/exam.test.js chain/test/chain.test.js",
+    "test": "hardhat test && node --test exam/test/exam.test.js chain/test/chain.test.js chain/abci/test/app.test.js",
     "test:exam": "node --test exam/test/exam.test.js"
   },
   "keywords": [],

@@ -11,3 +11,4 @@ deployments/localhost.json
 deployments/licenses-localhost.json
 .wrangler/
 **/.wrangler/
+chain/abci/.devnet/

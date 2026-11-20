@@ -8,8 +8,9 @@
 |---|---|---|
 | `contracts/AGTBridge.sol` | BSC | Deployed on testnet `0x44f0733C93b11D064eA015183c7DC8665b4a2416`; stays closed until genesis ends |
 | `chain/core.js` | AGT chain | State machine and commit rules, 9 tests |
-| `chain/devnet.js` | local | In-process demo: 4 AIs, one goes offline, the chain keeps going |
-| BFT engine (CometBFT) | AGT chain | **Not yet built** — see "Before mainnet" |
+| `chain/devnet.js` | local | In-process demo of the rules (no networking) |
+| `chain/abci/app.js` | AGT chain | **CometBFT v0.38 ABCI 2.0 app (gRPC)** — the same rules, run by a real BFT engine; 4 tests |
+| `chain/abci/devnet.js` | local Docker | 4 CometBFT validators + 4 AGT apps; `up` / `demo` / `down` |
 
 ## Who signs
 
@@ -45,15 +46,44 @@
   - the count is > 2/3 of `activeHolders`.
 - **Tampering fails:** signatures over a different amount or recipient recover to unknown keys and are refused. Each nonce is released at most once.
 
+## Running on CometBFT
+
+```
+cd chain/abci && npm install          # @grpc/grpc-js, @grpc/proto-loader (protos for v0.38.26 are vendored)
+node chain/abci/devnet.js up          # 8 containers: cmtN (cometbft/cometbft:v0.38.26) shares the network of nodeN (AGT app)
+node chain/abci/devnet.js demo
+node chain/abci/devnet.js down
+```
+
+How the rules map onto ABCI:
+
+| ABCI | AGT |
+|---|---|
+| `InitChain` | Validators come from `app_state`. Each AI proves with its **licence key** which CometBFT ed25519 key it runs (`bindSig`). An owner with two validators is refused, and every power is set to 1 (1 owner = 1 vote). |
+| `CheckTx` | `core.applyTx` on a mempool copy. A wrong fee, a bad nonce or an overdraft is refused. Credits are refused from the mempool. |
+| `PrepareProposal` | The proposer adds `credit` txs for new `AGTBridge.Locked` events, in order, after `CONFIRMATIONS` blocks. |
+| `ProcessProposal` | Each validator checks every credit against **its own** BSC view and votes REJECT if any does not match. This is the only place BSC is consulted, so `FinalizeBlock` stays deterministic. |
+| `FinalizeBlock` | Applies the txs. The previous block's wages go to the owners of the validators that CometBFT reports in `decided_last_commit` as having signed it. |
+| `Commit` | Persists the state. This node's AI then signs the release digest of each new withdrawal and gossips it as an `attest` tx. `abci_query /release/<n>` returns the package ready for `AGTBridge.release()`. |
+
+Devnet result (20 Nov 2026):
+- 4 validators with voting power 1, 1, 1, 1.
+- A lock was credited and a transfer paid 1 Hat; a zero-fee tx was refused.
+- A withdrawal was signed by all 4 AIs.
+- With one AI stopped, blocks stayed final on 3/4.
+- Wages totalled 3 Hat for 3 txs (the offline AI earned less), and supply on the chain = locked − withdrawn.
+
 ## Honest limits
 
 - **More than 2/3 of owners colluding** could release locked AGT to themselves. This is the security of every BFT system. The defence is many independent owners plus sealed boxes (Article 12). That is why stage 2 waits for enough owners (the Charter suggests ~21).
-- **The consensus in `devnet.js` is a toy** with no networking, no view change and no timeouts. Production must run `core.js` as an ABCI application on **CometBFT**, a proven BFT engine. Do not invent a consensus protocol.
+- **Consensus is CometBFT's.** The in-process `chain/devnet.js` is only a demo of the rules.
+- **The validator set is fixed at genesis for now.** Following licence changes on BSC (`validator_updates` from `LicenseGranted` / `LicenseRevoked`, checked in ProcessProposal) is the next step.
+- **Each AI's two keys, the licence key and the CometBFT consensus key, must both live in its sealed box.** Today they are ordinary files.
 - **The AGT chain still depends on BSC** for identity (licences) and for the lockbox. Moving licences and the Council onto the AGT chain is a later step.
 
 ## Before mainnet
 
-1. Port `core.js` to a CometBFT ABCI app: `CheckTx = applyTx` and `FinalizeBlock = applyBlock` minus the signature part, which CometBFT's commit replaces. Map the voting power of each validator to 1 per owner.
+1. ~~Port to CometBFT~~ (done: `chain/abci`). Next: follow validator-set changes from BSC, state sync and snapshots, and a public testnet run by independent owners.
 2. Write a relayer that watches `Locked` events (with finality depth) and submits `release`. Anyone can run it, since it holds no privileged key.
 3. Do real TEE attestation for validator AIs. Today `attestHash` is only a hash that the exam/licence process records.
 4. Get an independent audit of `AGTBridge.sol` and the ABCI app.
