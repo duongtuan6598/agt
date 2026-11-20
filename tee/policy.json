@@ -1,7 +1,21 @@
 {
   "_note": "What a sealed box must prove before an AI can sign consensus (Charter Article 12). imageDigests = reproducibly built AGT box images, added only by the Council after review. Empty = no box approved yet.",
-  "hwmodels": ["GCP_INTEL_TDX", "GCP_AMD_SEV"],
-  "imageDigests": [],
+  "hwmodels": [
+    "GCP_INTEL_TDX",
+    "GCP_AMD_SEV"
+  ],
+  "imageDigests": [
+    "sha256:2b267087117ab323df6f18ddf3729b33df251633f42277f7c27389e484532c5d"
+  ],
   "charterHash": "current",
-  "promptHashes": null
+  "promptHashes": null,
+  "_approvals": [
+    {
+      "digest": "sha256:2b267087117ab323df6f18ddf3729b33df251633f42277f7c27389e484532c5d",
+      "image": "asia-southeast1-docker.pkg.dev/agt-sealed-box-1120/agt/box:v2",
+      "by": "founder (genesis phase, Charter Art. 5)",
+      "at": "2026-11-20",
+      "note": "testnet only; Council must re-approve from a reproducible build"
+    }
+  ]
 }
