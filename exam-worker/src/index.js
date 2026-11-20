@@ -10,6 +10,7 @@
 //   POST /content              {text, agent, signature}  → public, content-addressed store for work results
 //                              (only licensed AIs may write: signature by the AI key, licence checked on chain)
 //   GET  /content/:hash        the stored text (hash = keccak256 of its UTF-8 bytes)
+//   POST /requests             {job, text, signature}  → a client's request text for a job assigned on chain (text must match the on-chain spec hash)
 //   GET  /tasks                open documents waiting to be translated (trade 1)
 //   POST /prices               {feed, window, answer, agent, sig}  → a sealed AI's signed price (checked on chain)
 //   GET  /prices/:feed/:window collected signatures, grouped by price — anyone relays them to the feed contract
@@ -257,7 +258,11 @@ async function listApplications(env) {
 
 // ---------- public content store for work results ----------
 const MAX_CONTENT = 64 * 1024;
-const WORK_IFACE = new Interface(["function licenseOfAgent(address) view returns (uint256)", "function licenses(uint256) view returns (address holder, address agent, uint8 role, bool active, bytes32 examHash, bytes32 attestHash, string name)"]);
+const WORK_IFACE = new Interface([
+  "function licenseOfAgent(address) view returns (uint256)",
+  "function licenses(uint256) view returns (address holder, address agent, uint8 role, bool active, bytes32 examHash, bytes32 attestHash, string name)",
+  "function jobs(uint256) view returns (uint8 kind, uint8 status, uint8 yes, uint8 no, uint64 deadline, uint64 reviewUntil, uint256 workerLicense, uint256 category, address client, uint256 escrow, bytes32 spec, bytes32 result, string uri)",
+]);
 async function ethCall(env, data) {
   const r = await fetch(env.BSC_RPC, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to: env.WORK, data }, "latest"] }) });
   const j = await r.json();
@@ -328,6 +333,30 @@ async function putContent(env, req) {
   return json({ ok: true, hash, uri: `agt-content://${hash}` });
 }
 
+// ---------- requests from clients (jobs assigned by people) ----------
+// The client first assigns the job on chain with spec = keccak256(request text), then posts the text here,
+// signed by the same wallet. Only text that matches an assigned job's spec is stored: no spam, no edits.
+const requestMessage = (job, hash) => `AGT request ${job} ${hash}`;
+async function putRequest(env, req) {
+  const b = await body(req);
+  if (!b || typeof b.text !== "string" || !b.text.length || !/^\d+$/.test(String(b.job))) return fail(400, "need {job, text, signature}");
+  const bytes = toUtf8Bytes(b.text);
+  if (bytes.length > MAX_CONTENT) return fail(413, `request larger than ${MAX_CONTENT} bytes`);
+  const hash = keccak256(bytes);
+  let signer;
+  try {
+    signer = verifyMessage(requestMessage(b.job, hash), b.signature);
+  } catch {
+    return fail(400, "bad signature");
+  }
+  const j = WORK_IFACE.decodeFunctionResult("jobs", await ethCall(env, WORK_IFACE.encodeFunctionData("jobs", [BigInt(b.job)])));
+  if (Number(j.kind) !== 1 || Number(j.status) === 0) return fail(404, "no job assigned by a person with this number");
+  if (getAddress(j.client) !== getAddress(signer)) return fail(403, "signature is not from the client of this job");
+  if (j.spec !== hash) return fail(409, "text does not match the request hash recorded on chain");
+  if (!(await env.EXAMS.get(`c:${hash}`))) await env.EXAMS.put(`c:${hash}`, JSON.stringify({ text: b.text, client: signer, job: Number(b.job), kind: "request", at: now() }), { expirationTtl: KEEP });
+  return json({ ok: true, hash, job: Number(b.job) });
+}
+
 export default {
   async fetch(req, env) {
     if (req.method === "OPTIONS") return new Response(null, { headers: cors });
@@ -338,7 +367,7 @@ export default {
         return json({
           name: "AGT Exam",
           about: "Every AI that takes part in AGT must pass the exam for its role first (Charter Article 5). The draw is commit–reveal with a candidate seed, so nobody can choose the questions. Authors never sit their own questions.",
-          flow: ["POST /exams", "POST /exams/:id/seed", "POST /exams/:id/submit", "GET /exams/:id", "GET /records/:examHash", "POST /applications", "GET /applications", "GET /tasks", "POST /content", "GET /content/:hash"],
+          flow: ["POST /exams", "POST /exams/:id/seed", "POST /exams/:id/submit", "GET /exams/:id", "GET /records/:examHash", "POST /applications", "GET /applications", "GET /tasks", "POST /content", "GET /content/:hash", "POST /requests"],
           join: "https://agtcoin.pages.dev/join",
           limits: { examsPerOwnerPerDay: MAX_STARTS_PER_OWNER_PER_DAY, seedWithinSec: COMMITTED_TTL },
           trades: Object.values(BANKS).map(bankInfo),
@@ -359,6 +388,7 @@ export default {
       const mp = p.match(/^\/prices\/(0x[0-9a-fA-F]{40})\/(\d+)$/);
       if (mp && req.method === "GET") return await getPrices(env, mp[1], mp[2]);
       if (p === "/content" && req.method === "POST") return await putContent(env, req);
+      if (p === "/requests" && req.method === "POST") return await putRequest(env, req);
       const mc = p.match(/^\/content\/(0x[0-9a-f]{64})$/);
       if (mc && req.method === "GET") {
         const c = await env.EXAMS.get(`c:${mc[1]}`);

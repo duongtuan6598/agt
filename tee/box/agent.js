@@ -3,6 +3,9 @@
 //                                    → submitSelf on chain → call the reviewer draw
 //   verifier: when drawn for a job → fetch the source and the result → review against the Charter's criteria
 //                                    → vote with a public reason
+//   worker   (jobs people assign): take a job assigned to this licence → read the client's request → do it
+//                                    → publish the result → submitAssigned (or decline: the client is refunded)
+//   verifier: when a client disputes a result → judge request vs result → vote (escrow to worker or back to client)
 //   anyone:  call drawReviewers for jobs whose seed block has arrived (keeps reviews moving)
 // Every transaction is signed by the AI's own key; the owner only funds that key with gas.
 const { ethers } = require("ethers");
@@ -18,12 +21,15 @@ const WORK_ABI = [
   "function drawRound(uint256) view returns (uint32)",
   "function assigned(uint256, uint32, uint256) view returns (bool)",
   "function voted(uint256, uint256) view returns (bool)",
+  "function ownerVoted(uint256, address) view returns (bool)",
+  "function submitAssigned(uint256 id, bytes32 result, string uri)",
   "function submitSelf(uint256 workerLicense, uint256 category, bytes32 result, string uri) returns (uint256)",
   "function drawReviewers(uint256 id) returns (uint256[])",
   "function vote(uint256 id, uint256 verifierLicense, bool approve, string reason)",
 ];
 const ROLE = { 1: "worker", 2: "verifier" };
-const STATUS = { SUBMITTED: 2, ACCEPTED: 4 };
+const STATUS = { OPEN: 1, SUBMITTED: 2, DISPUTED: 3, ACCEPTED: 4 };
+const KIND = { SELF: 0, ASSIGNED: 1 };
 const TRANSLATION = 1;
 
 const uriOf = (hash, taskId) => `agt-content://${hash}#task=${taskId}`;
@@ -31,6 +37,8 @@ function parseUri(uri) {
   const m = /^agt-content:\/\/(0x[0-9a-f]{64})#task=([\w-]+)$/.exec(uri || "");
   return m ? { hash: m[1], task: m[2] } : null;
 }
+
+const jobUriOf = (hash, jobId) => `agt-content://${hash}#job=${jobId}`;
 
 // HTTP client for the public content store and task list (the exam worker).
 function httpContent(base, wallet) {
@@ -152,6 +160,59 @@ class AgentLoop {
     return votes;
   }
 
+  // Worker: jobs that people assigned to this licence and that are still open before their deadline.
+  async assignedStep(lic) {
+    const now = Number((await this.work.runner.provider.getBlock("latest")).timestamp);
+    const done = [];
+    for (const j of await this.jobsSince()) {
+      if (Number(j.kind) !== KIND.ASSIGNED || Number(j.status) !== STATUS.OPEN || Number(j.workerLicense) !== lic.id) continue;
+      if (Number(j.deadline) <= now) continue;
+      if (this.declined?.has(j.id)) continue;
+      let request;
+      try {
+        request = await this.content.get(j.spec);
+      } catch {
+        this.log(`assigned #${j.id}: the client has not published the request text yet`);
+        continue;
+      }
+      const result = await this.model.fulfil(request);
+      if (!result) {
+        (this.declined ||= new Set()).add(j.id);
+        this.log(`assigned #${j.id}: declined — the client can take the escrow back after the deadline`);
+        continue;
+      }
+      const hash = await this.content.put(result);
+      await (await this.work.submitAssigned(j.id, hash, jobUriOf(hash, j.id))).wait();
+      done.push(j.id);
+      this.log(`assigned #${j.id}: result submitted (${hash})`);
+    }
+    return done;
+  }
+
+  // Verifier: judge jobs whose client disputed the result (any verifier of another owner may vote).
+  async disputeStep(lic) {
+    const mine = await this.work.licenses(lic.id);
+    const votes = [];
+    for (const j of await this.jobsSince()) {
+      if (Number(j.kind) !== KIND.ASSIGNED || Number(j.status) !== STATUS.DISPUTED) continue;
+      const worker = await this.work.licenses(j.workerLicense);
+      if (worker.holder === mine.holder || j.client === mine.holder || j.client === this.me) continue;
+      if ((await this.work.voted(j.id, lic.id)) || (await this.work.ownerVoted(j.id, mine.holder))) continue;
+      let verdict;
+      try {
+        verdict = await this.model.judge(await this.content.get(j.spec), await this.content.get(j.result));
+      } catch {
+        verdict = { verdict: "reject", reason: "the request or the result is not available in the public content store" };
+      }
+      const approve = verdict.verdict === "accept";
+      const reason = `${approve ? "accept" : "reject"}${verdict.flaw ? " (" + verdict.flaw + ")" : ""}: ${verdict.reason}`.slice(0, 500);
+      await (await this.work.vote(j.id, lic.id, approve, reason)).wait();
+      votes.push({ id: j.id, approve });
+      this.log(`dispute: voted ${approve ? "ACCEPT" : "REJECT"} on job #${j.id} — ${reason}`);
+    }
+    return votes;
+  }
+
   // Sealed AIs as a price source: observe public markets, sign (window, price), relay once > 2/3 of owners agree.
   async priceStep(lic) {
     if (!this.prices || !lic.sealed) return [];
@@ -188,8 +249,14 @@ class AgentLoop {
     if (!lic) return this.log("agent: not licensed yet — waiting");
     await this.priceStep(lic);
     await this.drawStep();
-    if (lic.role === "worker") await this.workerStep(lic);
-    if (lic.role === "verifier") await this.verifierStep(lic);
+    if (lic.role === "worker") {
+      await this.assignedStep(lic); // people who paid come first
+      await this.workerStep(lic);
+    }
+    if (lic.role === "verifier") {
+      await this.disputeStep(lic);
+      await this.verifierStep(lic);
+    }
   }
 }
 
@@ -197,4 +264,4 @@ class AgentLoop {
 const { makeModel } = require("./models.js");
 const claudeModel = ({ client, systemPrompt }) => makeModel({ provider: "anthropic", client, systemPrompt });
 
-module.exports = { WORK_ABI, FEED_ABI, AgentLoop, httpContent, httpPrices, claudeModel, makeModel, uriOf, parseUri };
+module.exports = { WORK_ABI, FEED_ABI, AgentLoop, httpContent, httpPrices, claudeModel, makeModel, uriOf, jobUriOf, parseUri };
