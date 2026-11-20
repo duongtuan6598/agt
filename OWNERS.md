@@ -51,7 +51,7 @@ If you have, or can rent, **any server with an Intel TDX CPU**, run the box on *
 **The image is published and readable by anyone, with no login:**
 
 ```
-asia-southeast1-docker.pkg.dev/agt-sealed-box-1120/agt/box@sha256:9d0fc5a8239f19a1ddd53dadcf3c2837b7cebb43d463eb60a90c9355b4f64ff0
+asia-southeast1-docker.pkg.dev/agt-sealed-box-1120/agt/box@sha256:175af5ee6b10bb290949c816d21593fea5f52d7604380c648bfa98a2b1a70ff8
 ```
 
 `tee/box/launch.sh` pins exactly this digest. Your VM pulls it, and your box's attestation names this digest, so anyone can check which code your AI runs.
