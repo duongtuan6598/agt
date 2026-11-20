@@ -398,6 +398,7 @@ const LONG_IFACE = new Interface([
   "function engagements(uint256) view returns (address client, uint256 worker, bytes32 brief, uint16 holdbackBps, uint32 warrantyDays, uint64 startedAt, bool ended, uint8 count)",
   "function retainers(uint256) view returns (address client, uint256 worker, bytes32 brief, uint128 fee, uint16 penaltyBps, uint64 startedAt, uint32 funded, uint32 closed, uint32 nextIncident, bool stopped)",
   "function disputeEngagement(uint256) view returns (uint256)",
+  "function disputes(uint256) view returns (address client, uint256 workerLicence, uint64 openedAt, uint64 drawnAt, uint64 seedBlock, uint32 round, uint8 yes, uint8 no, bool closed)",
 ]);
 async function callTo(env, to, data) {
   const r = await fetch(env.BSC_RPC, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to, data }, "latest"] }) });
@@ -488,6 +489,12 @@ async function postReproJob(env, req) {
   const b = await body(req);
   const m = b && b.manifest;
   if (!m || m.agt !== "builder-v1" || !/^\d+$/.test(String(m.dispute)) || !/^[0-9a-f]{32}$/.test(m.nonce || "") || !isAddress(m.signer || "") || !b.evidence) return fail(400, "need {manifest: builder-v1, evidence, signature}");
+  // bounded jobs (R-6) for a LIVE dispute only (R-7); attestation is verified by the parties, not here
+  if (!/^[0-9a-f]{40}$/.test(m.commit || "") || !Array.isArray(m.commands) || !m.commands.length || m.commands.length > 10 || m.commands.some((c) => typeof c !== "string" || !c.trim() || c.length > 300)) return fail(400, "1–10 commands of at most 300 characters, and a commit");
+  if (JSON.stringify(b.evidence).length > 65536) return fail(413, "evidence too large");
+  const dsp = LONG_IFACE.decodeFunctionResult("disputes", await callTo(env, env.ENGAGEMENT, LONG_IFACE.encodeFunctionData("disputes", [BigInt(m.dispute)])));
+  if (!Number(dsp.openedAt) || dsp.closed) return fail(409, "no open dispute with this number");
+  if (await env.EXAMS.get(`rjs:${m.dispute}:${m.signer.toLowerCase()}`)) return fail(409, "this builder already has a job for this dispute");
   let signer;
   try { signer = verifyMessage(`AGT repro job ${digestOf(m)}`, b.signature); } catch { return fail(400, "bad signature"); }
   if (getAddress(signer) !== getAddress(m.signer)) return fail(403, "not signed by the job key in the manifest");
@@ -496,6 +503,7 @@ async function postReproJob(env, req) {
   if (n >= REPRO_MAX_JOBS) return fail(429, "too many reproduction jobs for this dispute");
   await env.EXAMS.put(`rj:${m.nonce}`, JSON.stringify({ manifest: m, evidence: b.evidence, at: now() }), { expirationTtl: 60 * 86400 });
   await env.EXAMS.put(`rjd:${m.dispute}:${m.nonce}`, "1", { expirationTtl: 60 * 86400 });
+  await env.EXAMS.put(`rjs:${m.dispute}:${m.signer.toLowerCase()}`, m.nonce, { expirationTtl: 60 * 86400 });
   return json({ ok: true, nonce: m.nonce });
 }
 async function reproJobs(env, dispute) {
@@ -512,6 +520,8 @@ async function reproJobs(env, dispute) {
 async function postReproBundle(env, req, nonce) {
   const j = JSON.parse((await env.EXAMS.get(`rj:${nonce}`)) || "null");
   if (!j) return fail(404, "no such job");
+  if (Number(req.headers.get("content-length") || 0) > 30 * 1024 * 1024) return fail(413, "too large"); // before parsing (R-6)
+  if (await env.EXAMS.get(`rbx:${nonce}`)) return fail(409, "the source was already sent for this job"); // one-shot (R-5)
   const b = await body(req);
   if (!b || !b.sealed || b.sealed.v !== 1) return fail(400, "need {sealed, signature}");
   const text = JSON.stringify(b.sealed);
@@ -536,6 +546,8 @@ async function postReproResult(env, req, nonce) {
   try { signer = verifyMessage(getBytes(digestOf(b.result)), b.signature); } catch { return fail(400, "bad signature"); }
   if (getAddress(signer) !== getAddress(j.manifest.signer)) return fail(403, "not signed by this builder's job key");
   if (await env.EXAMS.get(`rr:${nonce}`)) return fail(409, "result already posted");
+  if (!(await env.EXAMS.get(`rbx:${nonce}`))) return fail(409, "no source was sent to this job yet"); // R-7
+  if (b.result.nonce !== j.manifest.nonce || Number(b.result.dispute) !== Number(j.manifest.dispute) || b.result.commit !== j.manifest.commit) return fail(400, "the result is for another job");
   await env.EXAMS.put(`rr:${nonce}`, JSON.stringify({ result: b.result, signature: b.signature, at: now() }), { expirationTtl: 60 * 86400 });
   await env.EXAMS.delete(`rb:${nonce}`); // the source is gone once the job is done
   return json({ ok: true });

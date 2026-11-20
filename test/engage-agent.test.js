@@ -329,7 +329,11 @@ describe("§14 — independent reproduction on attested builders (joint decision
     await ai.step(); // the worker's box sends the commit sealed to the job key (only to an attested builder)
     const entry = svc.jobs.get(job.manifest.nonce);
     if (entry.bundle) {
-      const tools = { run: async (_sh, args) => ({ code: args[1] === "make test" ? buildExit : 0, out: "log", timedOut: false }) };
+      const tools = { run: async (cmd, args, opts = {}) => {
+        if (cmd === GIT) { try { return { code: 0, out: execFileSync(GIT, args, { cwd: opts.cwd, encoding: "utf8" }), timedOut: false }; } catch (e) { return { code: 1, out: String(e.message), timedOut: false }; } }
+        if (cmd === "/bin/rm") { for (const f of args.slice(1)) fs.rmSync(f, { recursive: true, force: true }); return { code: 0, out: "", timedOut: false }; }
+        return { code: args[1] === "make test" ? buildExit : 0, out: "log", timedOut: false };
+      } };
       entry.result = await R.runJob({ job, sealedBundle: entry.bundle, tools, gitBin: GIT, workRoot: fs.mkdtempSync(path.join(os.tmpdir(), "agt-repro-")), chown: false });
     }
     await mine(3);
@@ -364,7 +368,7 @@ describe("§14 — independent reproduction on attested builders (joint decision
 
   it("a forged or mismatched result is never counted", async () => {
     const job = R.newJob({ dispute: 7, commit: "a".repeat(40), commands: ["make"], imageDigest: null });
-    const result = { schema: "agt-repro/v1", dispute: 7, nonce: job.manifest.nonce, commit: "a".repeat(40), treeHash: "t", imageDigest: null, commands: [{ cmd: "make", exit: 0, timedOut: false, logSha256: "x" }], ok: true };
+    const result = { schema: "agt-repro/v1", dispute: 7, nonce: job.manifest.nonce, commit: "a".repeat(40), treeHash: "b".repeat(40), imageDigest: null, commands: [{ cmd: "make", exit: 0, timedOut: false, logSha256: "x" }], ok: true };
     const good = await job.signer.signMessage(ethers.getBytes(R.resultDigest(result)));
     const base = { job, result, signature: good, evidence: {}, dispute: 7, commitBytes32: "0x" + "a".repeat(40).padEnd(64, "0"), commands: ["make"], verifyAttestation: () => true };
     expect(R.verifyResult(base)).to.include({ valid: true, ok: true });
@@ -374,5 +378,10 @@ describe("§14 — independent reproduction on attested builders (joint decision
     expect(R.verifyResult({ ...base, commands: ["make", "make test"] }).valid).to.equal(false);
     expect(R.verifyResult({ ...base, dispute: 8 }).valid).to.equal(false);
     expect(R.verifyResult({ ...base, verifyAttestation: () => false }).valid).to.equal(false);
+    const resign = async (r) => ({ ...base, result: r, signature: await job.signer.signMessage(ethers.getBytes(R.resultDigest(r))) });
+    expect(R.verifyResult(await resign({ ...result, ok: true, commands: [{ cmd: "make", exit: 2, timedOut: false, logSha256: "x" }] })).valid, "ok must follow from the exit codes").to.equal(false);
+    expect(R.verifyResult(await resign({ ...result, commands: [{ cmd: "rm -rf /", exit: 0, timedOut: false, logSha256: "x" }] })).valid, "commands must be the manifest's").to.equal(false);
+    expect(R.verifyResult(await resign({ ...result, imageDigest: "sha256:other" })).valid, "image must be the attested one").to.equal(false);
+    expect(R.verifyResult(await resign({ ...result, treeHash: "" })).valid, "a tree hash is required").to.equal(false);
   });
 });

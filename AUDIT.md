@@ -62,6 +62,13 @@
 | CI-8 (Codex) | Medium | The client can move the AI's branch after CI passed. | **Accepted**: the chain records the exact commit sha (content-addressed); the branch name is only a pointer. |
 | CI-9 (Codex) | Low | `file://` repositories are allowed when `allowFileUrls` is on. | **Accepted**: test-only option, never set in the box (start.js does not pass it). |
 | — (found in testing) | High | While a milestone was under dispute, the loop worked on the next milestone. | **Fixed**: a disputed milestone stops the loop like any unfinished one. |
+| R-1 (Codex) | High | Reproduction: the git bundle carried the commit's whole history (unrelated proprietary code). | **Fixed** (2026-11-21): the worker sends a parentless snapshot of exactly the disputed tree plus the original commit object; the builder's supervisor hashes the commit object itself and checks the snapshot's tree against it. |
+| R-2 (Codex) | High | The builder parsed the untrusted bundle with git as root. | **Fixed**: every git operation on the bundle runs as the sandbox user; the root supervisor only hashes bytes. |
+| R-3 (Codex) | High | Result verification lacked bindings (tree, image, command records, `ok` consistency). | **Fixed**: all checked; tests for each. The production attestation verifier must authenticate the full canonical manifest (open: builder launcher + approved-image policy). |
+| R-4 (Codex) | High | One verified failing reproduction decided the dispute automatically. | **Fixed (Claude agreed in part)**: a failing reproduction is evidence for the judgement; only a worker's claim over a failing client CI with no passing reproduction stays with the client. |
+| R-5 (Codex) | Medium | Source delivery could repeat; bindings before disclosure. | **Fixed**: one bundle per job (remembered by the worker's box and refused twice by the service); commit and commands checked before sending. |
+| R-6 (Codex) | High | No caps on commands, total time or request size. | **Fixed**: ≤ 10 commands of ≤ 300 characters, ≤ 1 h in total, request size refused before parsing; VM-level limits come with the launcher. |
+| R-7 (Codex) | Medium | Anyone could fill a dispute's job slots; results without a source. | **Fixed**: jobs only for a live dispute on chain, one per builder key per dispute; results only after a source was sent, and only for that job; the source is deleted once the result is in. |
 
 ### Slither results
 

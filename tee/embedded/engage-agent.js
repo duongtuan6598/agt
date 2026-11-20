@@ -258,7 +258,7 @@ class EngageLoop {
           const commit = x.result.slice(2, 42);
           for (const j of await this.repro.jobs(Number(x.dispute))) {
             const mf = j.manifest;
-            if (j.hasBundle || j.result) continue;
+            if (j.hasBundle || j.result || (await this.state.get(`bundle:${mf.nonce}`))) continue;
             if (mf.commit !== commit || R.canonical(mf.commands) !== R.canonical(commands) || !commands.length) continue; // not the disputed work
             if (!this.verifyBuilder(mf, j.evidence)) { this.log(`dispute #${x.dispute}: builder job ${mf.nonce} is not an attested builder — no source sent`); continue; }
             const token = await this.token("engagement", id);
@@ -268,6 +268,7 @@ class EngageLoop {
               ws.clone(b.fields.repository, token, `agt/engagement-${id}-m${m + 1}`);
               const sealed = R.exportBundle({ gitBin: this.gitBin || "git", gitDir: ws.gitDir, commit, manifest: mf });
               await this.repro.postBundle(mf.nonce, sealed);
+              await this.state.set(`bundle:${mf.nonce}`, { sentAt: this.now() });
               this.log(`dispute #${x.dispute}: sent commit ${commit.slice(0, 10)} to builder ${mf.nonce} (sealed to its job key)`);
             } finally {
               ws.dispose();
@@ -382,9 +383,11 @@ class EngageLoop {
         const claimSilent = Number(ms.disputeKind) === 4 && !!report && report.schema === "agt-claim/v1" && report.ci && report.ci.state === "pending" &&
           shaToBytes32(String(report.commit || "")) === ms.result;
         const claimFailingReproduced = Number(ms.disputeKind) === 4 && repro === "pass"; // §14: a reproduction can overrule a failing client CI
-        const weigh = repro !== "fail" && (reportOk || warranty || claimSilent || claimFailingReproduced);
+        // R-4: a reproduction is evidence, not an oracle — a verified failure goes to the judgement with everything
+        // else; only a worker's claim over a FAILING client CI with no passing reproduction stays with the client.
+        const weigh = reportOk || warranty || claimSilent || claimFailingReproduced;
         const allEvidence = `${evidence}\n\nIndependent reproductions on attested builders (§14): ${repro}\n${reproNotes.join("\n")}`;
-        const v = weigh ? await this.model.judge(text, allEvidence) : { verdict: "reject", reason: repro === "fail" ? "an attested independent reproduction failed" : "no passing client-CI report for the delivered commit" };
+        const v = weigh ? await this.model.judge(text, allEvidence) : { verdict: "reject", reason: "no passing client-CI report and no passing reproduction for the delivered commit" };
         if (!["accept", "reject"].includes(v.verdict)) continue;
         const workerRight = v.verdict === "accept" && weigh;
         await (await this.eng.vote(d, lic, workerRight, `${workerRight ? "worker" : "client"} is right: ${v.reason}`.slice(0, 500))).wait();
