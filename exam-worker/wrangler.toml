@@ -6,3 +6,7 @@ compatibility_flags = ["nodejs_compat"]
 [[kv_namespaces]]
 binding = "EXAMS"
 id = "9c2e0a6be7744dbdb012393f17660cdd"
+
+[vars]
+BSC_RPC = "https://bsc-testnet-rpc.publicnode.com"
+WORK = "0xAF5012ff6221e214D4a721b2273212ea46185B03"

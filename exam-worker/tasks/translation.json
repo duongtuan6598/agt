@@ -1,0 +1,49 @@
+{
+  "_note": "Open documents waiting to be translated English → Vietnamese (trade 1). Each source is released CC0 by its authors so any translation can be published freely. Add tasks by pull request; a task is done once one translation of it is accepted on chain.",
+  "trade": 1,
+  "target": "vi",
+  "tasks": [
+    {
+      "id": "doc-backup-basics",
+      "title": "Backups that actually work",
+      "license": "CC0-1.0",
+      "glossary": [["backup", "bản sao lưu"], ["restore", "khôi phục"]],
+      "source": "Keep at least three copies of anything you cannot afford to lose: the original, a backup on a different device, and a backup in a different place.\n\nA backup is only useful if you can restore it. Once a month, pick one file at random and restore it from each backup. If that fails, fix it today.\n\nDo not keep your only backup connected to the computer all the time. Ransomware encrypts every drive it can reach."
+    },
+    {
+      "id": "doc-password-manager",
+      "title": "Why use a password manager",
+      "license": "CC0-1.0",
+      "glossary": [["password manager", "trình quản lý mật khẩu"], ["two-factor authentication", "xác thực hai lớp"]],
+      "source": "Reusing one password everywhere means one leak opens all your accounts. A password manager creates a different long password for every site and remembers it for you.\n\nYou then need to remember only one strong master password. Protect it with two-factor authentication, and write your recovery codes on paper.\n\nNever type your master password into a page you reached from a link in an email."
+    },
+    {
+      "id": "doc-phishing",
+      "title": "Recognising phishing messages",
+      "license": "CC0-1.0",
+      "glossary": [["phishing", "lừa đảo qua mạng"], ["link", "liên kết"]],
+      "source": "Phishing messages pretend to come from a bank, a delivery company or a colleague. They usually ask you to act fast: pay a fee, confirm a password or open an attachment.\n\nBefore you click a link, check where it really goes. If in doubt, open the official website or app yourself instead of using the link.\n\nNo real bank will ask for your one-time code by phone or message."
+    },
+    {
+      "id": "doc-safe-water",
+      "title": "Storing drinking water at home",
+      "license": "CC0-1.0",
+      "glossary": [["drinking water", "nước uống"], ["container", "thùng chứa"]],
+      "source": "Store drinking water in clean containers with tight lids, away from sunlight and chemicals.\n\nUse containers made for food or water. Wash them with soap, rinse well, and let them dry before filling.\n\nReplace stored water every six months, and write the filling date on each container."
+    },
+    {
+      "id": "doc-open-source-issue",
+      "title": "How to report a bug in an open-source project",
+      "license": "CC0-1.0",
+      "glossary": [["bug", "lỗi"], ["issue", "báo cáo lỗi"], ["maintainer", "người duy trì"]],
+      "source": "Before you open an issue, search the existing ones: the bug may already be known.\n\nA good bug report says what you did, what you expected, and what happened instead. Include the version you used and the smallest steps that reproduce the problem.\n\nBe patient and polite. Most maintainers work on the project in their free time."
+    },
+    {
+      "id": "doc-data-labels",
+      "title": "Writing clear labelling instructions",
+      "license": "CC0-1.0",
+      "glossary": [["dataset", "bộ dữ liệu"], ["label", "nhãn"]],
+      "source": "Labelling instructions must be short enough that people actually read them. Give one rule per line and one example for each label.\n\nShow the hard cases too: images where two labels both seem right, and what to choose then.\n\nBefore labelling the whole dataset, ask two people to label the same 50 samples and compare their answers."
+    }
+  ]
+}

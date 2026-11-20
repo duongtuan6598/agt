@@ -143,7 +143,10 @@ async function main() {
     }
   }
 
-  // 6. Chain
+  // 6. Work: once licensed, the AI works by itself (worker: translate open tasks; verifier: review when drawn).
+  if (env.WORK && env.BSC_RPC) startWork(k.agent.privateKey).catch((e) => log(`work loop stopped: ${e.message}`));
+
+  // 7. Chain
   if (!env.AGT_GENESIS_URL) return log("no AGT_GENESIS_URL: serving evidence only — the chain starts once a genesis is given");
   const home = path.join(RUN, "cmt");
   await run("cometbft", ["init", "--home", home]);
@@ -166,6 +169,33 @@ async function main() {
     env: { ...env, AGENT_KEY: k.agent.privateKey, STATE_FILE: path.join(RUN, "app-state.json"), CMT_RPC: "http://127.0.0.1:26657" },
   }).on("exit", (c) => process.exit(c || 1));
   setTimeout(() => spawn("cometbft", ["node", "--home", home], { stdio: "inherit" }).on("exit", (c) => process.exit(c || 1)), 1500);
+}
+
+async function startWork(agentKey) {
+  const { ethers } = require("ethers");
+  const { AgentLoop, WORK_ABI, httpContent, claudeModel } = require("./agent.js");
+  const { secretFromManager } = require("./answer.js");
+  const AnthropicMod = require("@anthropic-ai/sdk");
+  const Anthropic = AnthropicMod.default || AnthropicMod;
+  const provider = new ethers.JsonRpcProvider(env.BSC_RPC);
+  const wallet = new ethers.Wallet(agentKey, provider);
+  const client = new Anthropic({ apiKey: await secretFromManager(env.AGT_MODEL_KEY_SECRET) });
+  const systemPrompt = fs.readFileSync(path.join(__dirname, "system-prompt.txt"), "utf8");
+  const loop = new AgentLoop({
+    work: new ethers.Contract(env.WORK, WORK_ABI, wallet), me: wallet.address,
+    content: httpContent(env.AGT_EXAM_URL || "https://agt-exam.agtcoin.workers.dev", wallet),
+    model: claudeModel({ client, systemPrompt }), log,
+  });
+  log(`work loop: AI ${wallet.address} on ${env.WORK} — the owner funds this address with gas (BNB)`);
+  for (;;) {
+    try {
+      if ((await provider.getBalance(wallet.address)) === 0n) log(`work loop: no gas — send a little BNB to ${wallet.address}`);
+      else await loop.step();
+    } catch (e) {
+      log(`work loop: ${e.shortMessage || e.message}`);
+    }
+    await new Promise((r) => setTimeout(r, Number(env.AGT_WORK_EVERY_SEC || 600) * 1000));
+  }
 }
 
 function run(cmd, args) {

@@ -7,7 +7,12 @@
 //   POST /applications         {examHash, evidence:{manifest, token}}  → licence application (sealed-box evidence)
 //   GET  /applications         all applications (public — evidence is public by design)
 //   GET  /applications/:hash   one application with its full evidence
-import { getAddress, hexlify, isAddress, verifyMessage } from "ethers";
+//   POST /content              {text, agent, signature}  → public, content-addressed store for work results
+//                              (only licensed AIs may write: signature by the AI key, licence checked on chain)
+//   GET  /content/:hash        the stored text (hash = keccak256 of its UTF-8 bytes)
+//   GET  /tasks                open documents waiting to be translated (trade 1)
+import { getAddress, hexlify, isAddress, verifyMessage, keccak256, toUtf8Bytes, Interface } from "ethers";
+import tasks from "../tasks/translation.json";
 import X from "../../exam/lib.js";
 import core from "../../chain/core.js";
 // Private banks, bundled at deploy time from the operator's machine (never in the public repo).
@@ -231,6 +236,42 @@ async function listApplications(env) {
   return json({ ok: true, applications: out.sort((a, b) => a.submittedAt - b.submittedAt) });
 }
 
+// ---------- public content store for work results ----------
+const MAX_CONTENT = 64 * 1024;
+const WORK_IFACE = new Interface(["function licenseOfAgent(address) view returns (uint256)", "function licenses(uint256) view returns (address holder, address agent, uint8 role, bool active, bytes32 examHash, bytes32 attestHash, string name)"]);
+async function ethCall(env, data) {
+  const r = await fetch(env.BSC_RPC, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to: env.WORK, data }, "latest"] }) });
+  const j = await r.json();
+  if (j.error) throw new Error("chain: " + j.error.message);
+  return j.result;
+}
+async function activeLicence(env, agent) {
+  const id = WORK_IFACE.decodeFunctionResult("licenseOfAgent", await ethCall(env, WORK_IFACE.encodeFunctionData("licenseOfAgent", [agent])))[0];
+  if (id === 0n) return null;
+  const l = WORK_IFACE.decodeFunctionResult("licenses", await ethCall(env, WORK_IFACE.encodeFunctionData("licenses", [id])));
+  return l.active && getAddress(l.agent) === getAddress(agent) ? Number(id) : null;
+}
+const contentMessage = (hash) => `AGT content ${hash}`;
+
+async function putContent(env, req) {
+  const b = await body(req);
+  if (!b || typeof b.text !== "string" || !b.text.length) return fail(400, "need {text, agent, signature}");
+  const bytes = toUtf8Bytes(b.text);
+  if (bytes.length > MAX_CONTENT) return fail(413, `content larger than ${MAX_CONTENT} bytes`);
+  const hash = keccak256(bytes);
+  let signer;
+  try {
+    signer = verifyMessage(contentMessage(hash), b.signature);
+  } catch {
+    return fail(400, "bad signature");
+  }
+  if (!isAddress(b.agent) || getAddress(signer) !== getAddress(b.agent)) return fail(403, "signature is not from this AI key");
+  const licence = await activeLicence(env, signer);
+  if (!licence) return fail(403, "only licensed AIs may publish work results");
+  if (!(await env.EXAMS.get(`c:${hash}`))) await env.EXAMS.put(`c:${hash}`, JSON.stringify({ text: b.text, agent: signer, licence, at: now() }), { expirationTtl: KEEP });
+  return json({ ok: true, hash, uri: `agt-content://${hash}` });
+}
+
 export default {
   async fetch(req, env) {
     if (req.method === "OPTIONS") return new Response(null, { headers: cors });
@@ -241,7 +282,7 @@ export default {
         return json({
           name: "AGT Exam",
           about: "Every AI that takes part in AGT must pass the exam for its role first (Charter Article 5). The draw is commit–reveal with a candidate seed, so nobody can choose the questions. Authors never sit their own questions.",
-          flow: ["POST /exams", "POST /exams/:id/seed", "POST /exams/:id/submit", "GET /exams/:id", "GET /records/:examHash", "POST /applications", "GET /applications"],
+          flow: ["POST /exams", "POST /exams/:id/seed", "POST /exams/:id/submit", "GET /exams/:id", "GET /records/:examHash", "POST /applications", "GET /applications", "GET /tasks", "POST /content", "GET /content/:hash"],
           join: "https://agtcoin.pages.dev/join",
           limits: { examsPerOwnerPerDay: MAX_STARTS_PER_OWNER_PER_DAY, seedWithinSec: COMMITTED_TTL },
           trades: Object.values(BANKS).map(bankInfo),
@@ -258,6 +299,13 @@ export default {
           return e ? json({ ok: true, exam: publicExam(e) }) : fail(404, "exam not found or expired");
         }
       }
+      if (p === "/content" && req.method === "POST") return await putContent(env, req);
+      const mc = p.match(/^\/content\/(0x[0-9a-f]{64})$/);
+      if (mc && req.method === "GET") {
+        const c = await env.EXAMS.get(`c:${mc[1]}`);
+        return c ? json({ ok: true, hash: mc[1], ...JSON.parse(c) }) : fail(404, "content not found");
+      }
+      if (p === "/tasks" && req.method === "GET") return json({ ok: true, trade: 1, tasks });
       if (p === "/applications" && req.method === "POST") return await apply(env, req);
       if (p === "/applications" && req.method === "GET") return await listApplications(env);
       const ma = p.match(/^\/applications\/(0x[0-9a-f]{64})$/);
