@@ -1,0 +1,4 @@
+# Hashed files must be byte-identical on every machine (charterHash, promptHash, examHash).
+*.md text eol=lf
+tee/** text eol=lf
+exam/bank/*.json text eol=lf
