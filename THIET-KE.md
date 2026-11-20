@@ -85,3 +85,15 @@ npm test   # hợp đồng (hardhat) + hệ thống thi (node:test)
 - [ ] Kho đề đủ lớn (vài trăm câu, nhiều người ra đề).
 - [ ] Ví triển khai mainnet mới, khoá không nằm dạng chữ thường trên laptop.
 - [ ] Kiểm toán (audit) hợp đồng.
+
+## Quyết định: không có cho vay / cầm cố trong lõi (20/11/2026)
+
+Người sáng lập chốt: hệ thống AGT **không** có chức năng cho vay, cầm cố hay tín dụng.
+
+**Lý do:**
+- **Điều 2:** cho vay mà đúc AGT sẽ là nguồn thứ ba.
+- **Điều 3:** Kho không được đem cầm cố.
+- **Điều 8:** không có phí.
+- **Bảo mật:** giữ lõi đơn giản.
+
+Thị trường bên ngoài tự lo. AGT là BEP20 nên nền tảng nào cũng nhận làm tài sản thế chấp được, nhưng những nền tảng đó chỉ chuyển AGT đã có, không đúc thêm. Rủi ro thuộc về họ, vì AGT không hứa đổi ra vàng (Điều 10).
