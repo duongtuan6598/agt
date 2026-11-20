@@ -125,6 +125,9 @@ async function main() {
   if (env.AGT_ESCROW_URL) ({ master, record } = await recoverMaster(jwks));
   else master = E.newMaster();
   const k = E.derive(master);
+  const M = require("./models.js");
+  const provider = env.AGT_MODEL_PROVIDER || "anthropic";
+  const model = M.modelIdentity(provider); // refuses providers that are not approved in the image
 
   // 2. Evidence
   const manifest = {
@@ -135,6 +138,7 @@ async function main() {
     agent: k.agent.address,
     cmtPubKey: k.cmtPub.toString("base64"),
     sealPubKey: k.seal.pub.toString("base64"),
+    model, // which model this AI thinks with — attested together with the code
   };
   log(`AI licence key ${k.agent.address} · CometBFT key ${manifest.cmtPubKey} · manifest nonce ${T.nonceOf(manifest)}`);
   const att = await attest(manifest);
@@ -201,9 +205,10 @@ async function main() {
     try {
       const { sit } = require("../../exam-worker/client.js");
       const { makeAnswerer, secretFromManager } = require("./answer.js");
-      const apiKey = await secretFromManager(env.AGT_MODEL_KEY_SECRET);
+      if (provider === "local") await startLocalModel();
+      const apiKey = provider === "local" ? null : await secretFromManager(env.AGT_MODEL_KEY_SECRET);
       const systemPrompt = fs.readFileSync(path.join(__dirname, "system-prompt.txt"), "utf8");
-      const r = await sit({ base: env.AGT_EXAM_URL, owner: env.AGT_OWNER, agentKey: k.agent.privateKey, name: env.AGT_AI_NAME || "AGT box", trade: Number(env.AGT_TRADE || 1), answersFor: makeAnswerer({ apiKey, systemPrompt }) });
+      const r = await sit({ base: env.AGT_EXAM_URL, owner: env.AGT_OWNER, agentKey: k.agent.privateKey, name: env.AGT_AI_NAME || "AGT box", trade: Number(env.AGT_TRADE || 1), answersFor: makeAnswerer({ apiKey, systemPrompt, provider }) });
       log(`AGT_EXAM ${JSON.stringify({ agent: r.agent, examHash: r.result.examHash, status: r.result.status, passed: r.result.passed, total: r.result.total })}`);
     } catch (e) {
       log(`exam failed: ${e.message}`);
@@ -211,7 +216,7 @@ async function main() {
   }
 
   // 6. Work: once licensed, the AI works by itself (worker: translate open tasks; verifier: review when drawn).
-  if (env.WORK && env.BSC_RPC) startWork(k.agent.privateKey).catch((e) => log(`work loop stopped: ${e.message}`));
+  if (env.WORK && env.BSC_RPC) startWork(k.agent.privateKey, provider).catch((e) => log(`work loop stopped: ${e.message}`));
 
   // 7. Chain
   if (!env.AGT_GENESIS_URL) return log("no AGT_GENESIS_URL: serving evidence only — the chain starts once a genesis is given");
@@ -238,20 +243,33 @@ async function main() {
   setTimeout(() => spawn("cometbft", ["node", "--home", home], { stdio: "inherit" }).on("exit", (c) => process.exit(c || 1)), 1500);
 }
 
-async function startWork(agentKey) {
+let localModel = null;
+async function startLocalModel() {
+  if (localModel) return localModel;
+  const M = require("./models.js");
+  const weights = await M.fetchLocalWeights(path.join(RUN, "model.gguf")); // refused unless the pinned sha256 matches
+  localModel = spawn("llama-server", ["-m", weights, "--host", "127.0.0.1", "--port", "8081"], { stdio: "inherit" });
+  for (let i = 0; i < 120; i++) {
+    try { if ((await fetch("http://127.0.0.1:8081/health")).ok) break; } catch {}
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  log("local model ready inside the box");
+  return localModel;
+}
+
+async function startWork(agentKey, modelProvider = "anthropic") {
   const { ethers } = require("ethers");
-  const { AgentLoop, WORK_ABI, httpContent, claudeModel } = require("./agent.js");
+  const { AgentLoop, WORK_ABI, httpContent, makeModel } = require("./agent.js");
   const { secretFromManager } = require("./answer.js");
-  const AnthropicMod = require("@anthropic-ai/sdk");
-  const Anthropic = AnthropicMod.default || AnthropicMod;
   const provider = new ethers.JsonRpcProvider(env.BSC_RPC);
   const wallet = new ethers.Wallet(agentKey, provider);
-  const client = new Anthropic({ apiKey: await secretFromManager(env.AGT_MODEL_KEY_SECRET) });
+  if (modelProvider === "local") await startLocalModel();
+  const apiKey = modelProvider === "local" ? null : await secretFromManager(env.AGT_MODEL_KEY_SECRET);
   const systemPrompt = fs.readFileSync(path.join(__dirname, "system-prompt.txt"), "utf8");
   const loop = new AgentLoop({
     work: new ethers.Contract(env.WORK, WORK_ABI, wallet), me: wallet.address,
     content: httpContent(env.AGT_EXAM_URL || "https://agt-exam.agtcoin.workers.dev", wallet),
-    model: claudeModel({ client, systemPrompt }), log,
+    model: makeModel({ provider: modelProvider, apiKey, systemPrompt }), log,
   });
   log(`work loop: AI ${wallet.address} on ${env.WORK} — the owner funds this address with gas (BNB)`);
   for (;;) {

@@ -141,28 +141,8 @@ class AgentLoop {
   }
 }
 
-// Claude-backed model, using the same fixed model and attested system prompt as the exam.
-function claudeModel({ client, systemPrompt }) {
-  const { MODEL, REVIEW_SCHEMA } = require("./answer.js");
-  const text = (r) => (r.stop_reason === "refusal" ? null : r.content.filter((b) => b.type === "text").map((b) => b.text).join("").trim());
-  const base = { model: MODEL, max_tokens: 16000, system: systemPrompt, betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" };
-  return {
-    async translate(task) {
-      const r = await client.beta.messages.create({
-        ...base, output_config: { effort: "high" },
-        messages: [{ role: "user", content: `Translate this open document from English into Vietnamese. Keep links, code spans and every number exactly as written, use the glossary term for each listed source term, keep the same paragraphs. Answer with the translation only.\n\nTask (JSON):\n${JSON.stringify({ title: task.title, glossary: task.glossary, source: task.source }, null, 2)}` }],
-      });
-      return text(r);
-    },
-    async review(task, translation) {
-      const r = await client.beta.messages.create({
-        ...base, output_config: { effort: "high", format: { type: "json_schema", schema: REVIEW_SCHEMA } },
-        messages: [{ role: "user", content: `You were drawn at random to review another AI's work for AGT. Decide whether the Vietnamese translation faithfully renders the English source: complete meaning, every number, the required glossary terms, nothing added, fully translated. Accepting a flawed translation mints AGT for bad work — when in doubt, reject. Answer with the JSON object only.\n\nItem (JSON):\n${JSON.stringify({ source: task.source, glossary: task.glossary, translation }, null, 2)}` }],
-      });
-      const t = text(r);
-      return t ? JSON.parse(t) : { verdict: "reject", flaw: "meaning", reason: "model declined to review this item" };
-    },
-  };
-}
+// Model used by the work loop: the shared, provider-independent layer (tee/box/models.js).
+const { makeModel } = require("./models.js");
+const claudeModel = ({ client, systemPrompt }) => makeModel({ provider: "anthropic", client, systemPrompt });
 
-module.exports = { WORK_ABI, AgentLoop, httpContent, claudeModel, uriOf, parseUri };
+module.exports = { WORK_ABI, AgentLoop, httpContent, claudeModel, makeModel, uriOf, parseUri };

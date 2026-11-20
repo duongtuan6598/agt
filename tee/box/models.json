@@ -1,0 +1,11 @@
+{
+  "_note": "Models a sealed box may use. Fixed in the image (so they are attested): the owner picks a provider by name and can never point the AI at a server of their own (that would let them answer in its place). A provider with model = null is not approved yet. The model actually used is written into the box manifest.",
+  "anthropic": { "model": "claude-opus-5-5" },
+  "openai": { "model": null, "url": "https://api.openai.com/v1/chat/completions" },
+  "local": {
+    "model": null,
+    "url": "http://127.0.0.1:8081/v1/chat/completions",
+    "weights": { "url": null, "sha256": null },
+    "_note": "An open-weights model served INSIDE the box by llama.cpp (tee/box/Dockerfile.local). Its weights are downloaded at boot and refused unless their sha256 matches — so the model is as attested as the code."
+  }
+}

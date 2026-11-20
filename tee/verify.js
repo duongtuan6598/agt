@@ -139,6 +139,7 @@ function verifyEvidence(ev, opts) {
   const m = ev.manifest;
   if (m.charterHash !== policy.charterHash) fail("manifest Charter ≠ current Charter");
   if (policy.promptHashes && !policy.promptHashes.includes(m.promptHash)) fail("system prompt not approved");
+  if (m.model && policy.models && !policy.models.includes(`${m.model.provider}:${m.model.model}`)) fail(`model ${m.model.provider}:${m.model.model} is not approved`);
   if (!ethers.isAddress(m.agent)) fail("bad agent key");
   if (Buffer.from(String(m.cmtPubKey), "base64").length !== 32) fail("bad CometBFT key");
   return { ok: true, claims: c, attestHash: attestHashOf(ev) };

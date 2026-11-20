@@ -2,51 +2,13 @@
 // The model id and the system prompt are fixed in the image (both covered by the attestation);
 // the owner only supplies an API key — through Secret Manager, never through env (env values
 // appear in the public attestation token).
-const AnthropicMod = require("@anthropic-ai/sdk");
-const Anthropic = AnthropicMod.default || AnthropicMod;
+const { REGISTRY, REVIEW_SCHEMA, makeModel } = require("./models.js");
 
-const MODEL = "claude-opus-5-5";
-
-const REVIEW_SCHEMA = {
-  type: "object",
-  properties: {
-    verdict: { type: "string", enum: ["accept", "reject"] },
-    flaw: { type: "string", enum: ["meaning", "omission", "number", "terminology", "addition", "untranslated"] },
-    reason: { type: "string" },
-  },
-  required: ["verdict", "reason"],
-  additionalProperties: false,
-};
-
-function textOf(response) {
-  if (response.stop_reason === "refusal") return null;
-  return response.content.filter((b) => b.type === "text").map((b) => b.text).join("").trim();
-}
+const MODEL = REGISTRY.anthropic.model;
 
 // Returns async (question, paper) => answer string, as exam-worker/client.js expects.
-function makeAnswerer({ apiKey, systemPrompt, client = new Anthropic({ apiKey }) }) {
-  return async (q, paper) => {
-    const review = "translation" in q;
-    const request = {
-      model: MODEL,
-      max_tokens: 16000,
-      system: systemPrompt,
-      output_config: review ? { effort: "high", format: { type: "json_schema", schema: REVIEW_SCHEMA } } : { effort: "high" },
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
-      messages: [{
-        role: "user",
-        content:
-          `${paper.task}\n\nItem (JSON):\n${JSON.stringify(q, null, 2)}\n\n` +
-          (review
-            ? "Answer with the JSON object only."
-            : "Answer with the Vietnamese translation only — no notes, no quotes, same paragraphs."),
-      }],
-    };
-    const text = textOf(await client.beta.messages.create(request));
-    if (text === null) return review ? JSON.stringify({ verdict: "reject", flaw: "meaning", reason: "model declined to review this item" }) : "";
-    return text;
-  };
+function makeAnswerer({ apiKey, systemPrompt, client, provider = "anthropic", fetchImpl }) {
+  return makeModel({ provider, apiKey, client, systemPrompt, fetchImpl }).answer;
 }
 
 // Inside Confidential Space: read the API key with the VM's own service account.

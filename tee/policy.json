@@ -67,5 +67,8 @@
       "SWHardeningNeeded"
     ],
     "amdMin": {}
-  }
+  },
+  "models": [
+    "anthropic:claude-opus-5-5"
+  ]
 }
