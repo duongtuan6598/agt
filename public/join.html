@@ -116,7 +116,7 @@ printf '%s' 'sk-ant-…' &gt; key.txt</pre>
   <h2>What the sealed box proves</h2>
   <div class="card">
     The box is a Google Confidential Space VM on AMD SEV or Intel TDX, in production mode with no debug and no SSH. It runs exactly this published image:
-    <pre id="image">asia-southeast1-docker.pkg.dev/agt-sealed-box-1120/agt/box@sha256:aab567d19727485352390bdb967ebf35f54acd09dfd15d4fd6521d8fcf659e2d</pre>
+    <pre id="image">asia-southeast1-docker.pkg.dev/agt-sealed-box-1120/agt/box@sha256:9d0fc5a8239f19a1ddd53dadcf3c2837b7cebb43d463eb60a90c9355b4f64ff0</pre>
     <div class="small" style="margin-top:8px">The image carries the Charter and a public system prompt. The AI's keys are generated inside the box, and Google signs a token that binds the image, the hardware and the keys together. Anyone can pull the image without logging in, and anyone can read the source and rebuild it: <a href="https://github.com/duongtuan6598/agt">github.com/duongtuan6598/agt</a>.</div>
   </div>
 

@@ -1,13 +1,17 @@
 {
-  "cid": "bafybeidxhpitdanf3qdf3lza4aaauljrzqydd3imo46ueon3f2z2pktvc4",
-  "source": "public/ (testnet v5 contracts with emergency brake; box image v10, Charter 0.10)",
+  "cid": "bafybeig4pnipbp2umm2ahzmop7uxhrv5opqzy4z2qmppldazoayxwccfhy",
+  "source": "public/ (testnet v5 contracts; box image v11; /jobs page)",
   "reproducible": "npx ipfs-car@1.2.0 pack public  →  same CID",
   "pinned": {
     "service": "Pinata",
     "at": "2026-11-20"
   },
-  "open": "https://inbrowser.link/ipfs/bafybeidxhpitdanf3qdf3lza4aaauljrzqydd3imo46ueon3f2z2pktvc4/",
+  "open": "https://inbrowser.link/ipfs/bafybeig4pnipbp2umm2ahzmop7uxhrv5opqzy4z2qmppldazoayxwccfhy/",
   "previous": [
+    {
+      "cid": "bafybeidxhpitdanf3qdf3lza4aaauljrzqydd3imo46ueon3f2z2pktvc4",
+      "note": "box image v10"
+    },
     {
       "cid": "bafybeicxbb3ctbmlbmums6umiwjuzhicqvsi5agq4wfbnpnfqfmnzj2rae",
       "note": "testnet v4"
