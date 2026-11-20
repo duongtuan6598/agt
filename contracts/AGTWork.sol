@@ -75,6 +75,7 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
     mapping(uint256 => Category) public categories;
     mapping(uint256 => Job) public jobs;
     mapping(uint256 => mapping(uint256 => bool)) public voted; // job => giấy phép nghiệm thu
+    mapping(uint256 => mapping(address => bool)) public ownerVoted; // job => CHỦ — 1 chủ 1 phiếu, dù có nhiều AI nghiệm thu
     mapping(uint256 => uint256[]) internal _yesVoters;
     mapping(uint256 => uint256[]) internal _noVoters;
     mapping(uint256 => mapping(uint256 => mapping(uint256 => uint32))) public dailyCount; // giấy phép => nghề => ngày
@@ -397,8 +398,9 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
         if (!selfFound && !disputed) revert BadState();
         address v = licenses[verifierLicense].holder;
         if (v == licenses[j.workerLicense].holder || v == j.client || msg.sender == j.client) revert NotAllowed();
-        if (voted[id][verifierLicense]) revert AlreadyVoted();
+        if (voted[id][verifierLicense] || ownerVoted[id][v]) revert AlreadyVoted();
         voted[id][verifierLicense] = true;
+        ownerVoted[id][v] = true;
         emit Voted(id, verifierLicense, approve, reason);
 
         uint8 need = selfFound ? categories[j.category].approvals : disputeApprovals;
