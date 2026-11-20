@@ -1,13 +1,17 @@
 {
-  "cid": "bafybeifxma7vg4lttzpyk2j5jrqegxr5cik5ybfizhq3ixj5h6522yx3oi",
-  "source": "public/ (testnet v3 contracts: one-owner-one-vote + reviewer draw)",
+  "cid": "bafybeigcenfbu7qxxi5x7sbobmme55qrbsi6udb7ufpuo2eexisiqqdu2u",
+  "source": "public/ (testnet v3 contracts; box image v4)",
   "reproducible": "npx ipfs-car@1.2.0 pack public  →  same CID",
   "pinned": {
     "service": "Pinata",
     "at": "2026-11-20"
   },
-  "open": "https://inbrowser.link/ipfs/bafybeifxma7vg4lttzpyk2j5jrqegxr5cik5ybfizhq3ixj5h6522yx3oi/",
+  "open": "https://inbrowser.link/ipfs/bafybeigcenfbu7qxxi5x7sbobmme55qrbsi6udb7ufpuo2eexisiqqdu2u/",
   "previous": [
+    {
+      "cid": "bafybeifxma7vg4lttzpyk2j5jrqegxr5cik5ybfizhq3ixj5h6522yx3oi",
+      "note": "box image v3"
+    },
     {
       "cid": "bafybeicsf7swvexkf2t3kyzreziwbczaz2s6ffwfsqikulsbwjdzh6ggz4",
       "note": "testnet v2 contracts"
