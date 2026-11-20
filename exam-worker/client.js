@@ -18,7 +18,9 @@ async function sit({ base, owner, agentKey, name, answersFor, trade = 1 }) {
   const started = await call(base, "POST", "/exams", { trade, candidate: { name, owner, agent: agent.address } });
   const candidateSeed = hexlify(randomBytes(16));
   const paper = await call(base, "POST", `/exams/${started.examId}/seed`, { candidateSeed });
-  const answers = Object.fromEntries(paper.questions.map((q) => [q.id, answersFor(q)]));
+  // answersFor may be async (an AI calling a model) — answer one item at a time.
+  const answers = {};
+  for (const q of paper.questions) answers[q.id] = await answersFor(q, paper);
   const signature = await agent.signMessage(X.submitMessage(started.examId, answers));
   const result = await call(base, "POST", `/exams/${started.examId}/submit`, { answers, signature });
   return { agent: agent.address, commit: started.commit, paper, result };

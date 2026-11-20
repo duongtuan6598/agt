@@ -1,0 +1,4 @@
+test-key.pem
+test-jwks.json
+record.json
+Dockerfile.test

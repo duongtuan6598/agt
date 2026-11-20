@@ -47,9 +47,9 @@ function verifyJwt(token, jwks) {
   return JSON.parse(b64url(parts[1]));
 }
 
-// Returns { ok: true, claims, attestHash } or throws with the first rule that failed.
-function verifyEvidence(ev, { jwks, policy, now = Math.floor(Date.now() / 1000), checkExpiry = true }) {
-  const c = verifyJwt(ev.token, jwks);
+// Checks that a token comes from a genuine, production AGT box (any manifest). Returns the claims.
+function verifyBoxToken(token, { jwks, policy, now = Math.floor(Date.now() / 1000), checkExpiry = true }) {
+  const c = verifyJwt(token, jwks);
   const fail = (m) => { throw new Error(m); };
   if (c.iss !== ISSUER) fail(`issuer ${c.iss}`);
   const aud = Array.isArray(c.aud) ? c.aud : [c.aud];
@@ -64,8 +64,17 @@ function verifyEvidence(ev, { jwks, policy, now = Math.floor(Date.now() / 1000),
   const ctr = (c.submods && c.submods.container) || {};
   if (!policy.imageDigests.includes(ctr.image_digest)) fail(`container ${ctr.image_digest} is not an approved AGT image`);
   if (ctr.restart_policy && ctr.restart_policy !== "Never") fail("restart policy must be Never (a restart would mean new keys)");
-  const nonces = Array.isArray(c.eat_nonce) ? c.eat_nonce : [c.eat_nonce];
-  if (!nonces.includes(nonceOf(ev.manifest))) fail("token was not issued for this manifest (nonce mismatch)");
+  return c;
+}
+
+const tokenNonces = (c) => (Array.isArray(c.eat_nonce) ? c.eat_nonce : [c.eat_nonce]);
+
+// Returns { ok: true, claims, attestHash } or throws with the first rule that failed.
+function verifyEvidence(ev, opts) {
+  const c = verifyBoxToken(ev.token, opts);
+  const { policy } = opts;
+  const fail = (m) => { throw new Error(m); };
+  if (!tokenNonces(c).includes(nonceOf(ev.manifest))) fail("token was not issued for this manifest (nonce mismatch)");
   const m = ev.manifest;
   if (m.charterHash !== policy.charterHash) fail("manifest Charter ≠ current Charter");
   if (policy.promptHashes && !policy.promptHashes.includes(m.promptHash)) fail("system prompt not approved");
@@ -84,7 +93,7 @@ function loadPolicy(file = path.join(__dirname, "policy.json")) {
   return { audience: AUDIENCE, ...p, charterHash: p.charterHash === "current" ? charterHash() : p.charterHash };
 }
 
-module.exports = { ISSUER, AUDIENCE, JWKS_URL, verifyJwt, verifyEvidence, manifestHash, nonceOf, attestHashOf, charterHash, loadPolicy, fetchJwks };
+module.exports = { ISSUER, AUDIENCE, JWKS_URL, verifyJwt, verifyBoxToken, tokenNonces, verifyEvidence, manifestHash, nonceOf, attestHashOf, charterHash, loadPolicy, fetchJwks };
 
 if (require.main === module) {
   (async () => {

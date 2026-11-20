@@ -73,9 +73,47 @@
 
 - **Trust moves, it does not vanish.** We trust Intel/AMD hardware and Google's attestation service. Later work can verify raw TDX/SEV quotes against the vendors' roots directly and drop the Google dependency.
 - **The model itself is not in the box.** The box holds the keys, the code, the prompt and the Charter, and calls the model. Whoever serves the model must not be the owner.
-- **Keys die with the VM.** A restart means new keys and a new licence. Next step: Cloud KMS key release bound to the attested image (Workload Identity Federation conditioned on `image_digest`), so keys survive restarts but only inside an approved box.
-- **The exam must be sat from inside the box,** so that the key that passed is the key in the box. The licence tool already refuses a mismatch.
+- ~~Keys die with the VM~~: solved by peer escrow, see below.
+- ~~Exam from inside the box~~: done, see below.
 - **The digest in `policy.json` is the registry digest of the pushed image** (`gcr/ar …@sha256:`), not the local `docker images` ID. The Council approves an image only after rebuilding it reproducibly from source.
+
+## Keys that survive restarts: escrow among sealed boxes (`escrow.js`)
+
+**Why not Cloud KMS.** The KMS key would sit in a project the AI's owner administers, and a project admin can always grant themselves "decrypt", which would let them take the AI's keys. Peer escrow has no key admin.
+
+**How it works:**
+- **One master per box.** Each box has one random master secret, and every key derives from it: the licence key, the CometBFT key, and an x25519 "seal" key that is published in the manifest.
+- **First boot.** The box is given `AGT_PEER_BOXES`. It verifies each peer's evidence, Shamir-splits the master so that a majority of peers is needed (t = ⌊n/2⌋+1), and encrypts share i to peer i's seal key.
+- **The record.** It holds only ciphertext and is signed by the AI. The owner keeps it anywhere and passes its URL as `AGT_ESCROW_URL` after a restart.
+- **Restart.** The box makes a fresh x25519 key and gets a token whose nonce covers that key. A peer re-encrypts its share to that key **only if** Google's token shows:
+  - a genuine production box;
+  - running the same image as the peer, or a Council-approved image;
+  - on the **same GCE project + instance_id** as the record.
+- **Robustness.** Lying peers are tolerated, because recovery tries share subsets until the keys match the AI in the record.
+
+**Trust rule for peers.** A peer is trusted if it runs **the very same image as me**, which means the same code (read from my own token), or an image in `policy.json`. The policy is baked into the image and never taken from env. Otherwise an operator could name a malicious "peer".
+
+**Test keys.** They are possible only in a separate test image (`tee/box/e2e`). It bakes `test-jwks.json` and so has a different digest, which means real boxes never trust it.
+
+**Tests:**
+- 7 unit tests:
+  - Shamir;
+  - a restart on the same machine gets the same keys;
+  - a different machine, an unapproved image or a debug box gets nothing;
+  - an owner holding the record cannot open a share;
+  - one offline or lying peer is tolerated;
+  - an unattested peer gets no share.
+- Docker end-to-end (`bash tee/box/e2e/run.sh`):
+  - box A escrowed with 2 peers;
+  - it "restarted" on instance 111 and got back the **same AI key**;
+  - a box on instance 999 with the same image was refused by both peers (403).
+
+## The exam is sat from inside the box (`box/answer.js`)
+
+- **When.** If `AGT_EXAM_URL` is set, the box sits the exam itself: `exam-worker/client.js`, signed with the box's own licence key.
+- **Model.** Answers come from Claude (`claude-opus-5-5`, fixed in the image). The box uses the attested system prompt plus the exam's task. Review answers use structured JSON output; a model refusal becomes a `reject`, never an accept.
+- **API key.** It is read from **Secret Manager** (`AGT_MODEL_KEY_SECRET` is the secret's *name*) with the VM's own service account. Env values appear in the public attestation token, so no secret is ever passed in env.
+- **Licence.** `license.js grant --evidence` refuses an evidence AI key that differs from the key that sat the exam.
 
 ## Running for real (needs a cloud account — costs money)
 
