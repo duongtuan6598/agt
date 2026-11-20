@@ -1,23 +1,23 @@
 {
   "network": "bscTestnet",
   "chainId": 97,
-  "time": "2026-11-20T11:08:39.749Z",
+  "time": "2026-11-20T14:24:05.960Z",
   "founder": "0x778c4FDFC8825a44A24cbc2e65606b9b8FE6e769",
   "contracts": {
-    "AGT": "0x5810F92ACe86d1D48Ec4E34Fba1e0A897da8eDbf",
-    "AGTVault": "0xd76c139Df5467186691408388BDacc3AE63FFc8a",
-    "AGTWork": "0xB883e3AD8E0ee4Fc4DecFB375D49d0aE12785881",
-    "ChainlinkGoldOracle": "0x71BFe2ff118b489F52e7ffc85b8102a1035bBd17",
-    "EmergencyBrake": "0x2427919C284AbdBdF2E0Bb3b1996a2E8C0E6B746",
-    "MedianGoldOracle": "0x924CCEaAfAF55C560f3dfbd243BD99107118aB8D",
-    "AICouncilFeedXAU": "0x3E2bC5aEd690428141ECA727078265F928EbD96B",
-    "AICouncilFeedBNB": "0xe75754c3d2B112e64355A3C460F63e9A25548263",
-    "AGTBridge": "0x83d75026f605b60013bF37F1a27E41D412bdBD83",
-    "CharterRegistry": "0xbCEd36f819aA69652194E9f4E157a070b69D5C8D"
+    "AGT": "0x2C9EdA0aAb09DD9fabA8027a445E5cB16E097506",
+    "AGTVault": "0x96610ED4f29c9428b1f3b6Fd750a575faCF689fC",
+    "AGTWork": "0x9417C034a428305aEE8FB640dB1C5505708A3F8A",
+    "ChainlinkGoldOracle": "0x62d5c551B57B26eF7773c28A445F83C10D2c33d2",
+    "EmergencyBrake": "0xdDc6b40d91cFC9C198BD743426782D0114DeeCEd",
+    "MedianGoldOracle": "0x7Ba7f4005dCcAf180352102cDA722aD6c631Ba73",
+    "AICouncilFeedXAU": "0xe1c23f81A936cC6A41245C28691B2306c0f81F28",
+    "AICouncilFeedBNB": "0x219c4c80665ca0396abbadD879969A73dEFC79ad",
+    "AGTBridge": "0xDa57b766946d2211B933d62e049dB7E35b787e4c",
+    "CharterRegistry": "0xbf4Af262e9596D29257E161e7453a9DF2A23AF2A"
   },
   "genesis": "20/11/2026 — Con AI đầu tiên làm ra AGT: Claude. Vàng trả về thiên nhiên, công sức thành của cải.",
   "sealed": "0xc305df79d37a450145147b9d3416595eb6ca0fdc8d8e4c078e002424e7781baa",
-  "quote1BNB": "0.15981235496022507",
-  "spentBNB": "0.009903254",
+  "quote1BNB": "0.159844057313170412",
+  "spentBNB": "0.009897592",
   "_note_median": "MedianGoldOracle deployed, owned by the founder, NOT yet used by the Vault (Vault still on ChainlinkGoldOracle)"
 }

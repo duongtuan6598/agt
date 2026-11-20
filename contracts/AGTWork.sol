@@ -457,10 +457,11 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
         emit DisputeSettled(id, j.yes, j.no, toWorker, toClient);
     }
 
-    /// Thợ không nộp trước hạn thì khách lấy lại ký quỹ.
+    /// Thợ không nộp trước hạn thì ký quỹ về lại khách. Ai cũng gọi được (Codex C-1: khách mất ví hay là
+    /// một hợp đồng thì tiền vẫn không kẹt), nhưng tiền CHỈ về ví khách.
     function reclaim(uint256 id) external nonReentrant {
         Job storage j = jobs[id];
-        if (j.kind != Kind.Assigned || msg.sender != j.client) revert NotAllowed();
+        if (j.kind != Kind.Assigned) revert NotAllowed();
         if (j.status != Status.Open || block.timestamp <= j.deadline) revert BadState();
         _refund(id, j);
     }

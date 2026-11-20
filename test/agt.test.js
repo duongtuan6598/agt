@@ -279,4 +279,12 @@ describe("Công việc", () => {
     await work.connect(client).reclaim(1);
     expect(await agt.balanceOf(client.address)).to.equal(E(0.1));
   });
+
+  it("quá hạn thì ai cũng gọi được hoàn ký quỹ, nhưng tiền chỉ về ví khách (Codex C-1)", async () => {
+    const { work, agt, client, stranger } = await assigned();
+    await time.increase(86401);
+    await work.connect(stranger).reclaim(1);
+    expect(await agt.balanceOf(client.address)).to.equal(E(0.1));
+    expect(await agt.balanceOf(stranger.address)).to.equal(0);
+  });
 });

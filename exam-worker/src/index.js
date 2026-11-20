@@ -242,7 +242,18 @@ async function apply(env, req) {
     exam: r.result, hwmodel: claims.hwmodel, imageDigest: claims.submods && claims.submods.container && claims.submods.container.image_digest,
     attestedAt: claims.iat, submittedAt: now(), status: "pending", evidence: b.evidence,
   };
-  await env.EXAMS.put(`app:${b.examHash}`, JSON.stringify(app), { expirationTtl: KEEP });
+  // The first application is never overwritten (Codex audit C-2): the cheap checks above cannot tell a forged
+  // TDX/SNP report from a real one, so a later submission is kept as an ALTERNATIVE. The licence process
+  // verifies every candidate in full and uses the first that passes — a forgery can neither replace nor block.
+  const prev = JSON.parse((await env.EXAMS.get(`app:${b.examHash}`)) || "null");
+  const evHash = keccak256(toUtf8Bytes(JSON.stringify(b.evidence)));
+  if (!prev) {
+    await env.EXAMS.put(`app:${b.examHash}`, JSON.stringify(app), { expirationTtl: KEEP });
+  } else if (keccak256(toUtf8Bytes(JSON.stringify(prev.evidence))) !== evHash) {
+    const alts = await env.EXAMS.list({ prefix: `appalt:${b.examHash}:` });
+    if (alts.keys.length >= 10) return fail(429, "too many alternative applications for this exam");
+    await env.EXAMS.put(`appalt:${b.examHash}:${evHash}`, JSON.stringify(app), { expirationTtl: KEEP });
+  }
   return json({ ok: true, application: { ...app, evidence: undefined }, next: "The licence process will verify the sealed box and review the exam. Watch the ledger for your licence." });
 }
 
@@ -502,7 +513,10 @@ export default {
       const ma = p.match(/^\/applications\/(0x[0-9a-f]{64})$/);
       if (ma && req.method === "GET") {
         const a = await env.EXAMS.get(`app:${ma[1]}`);
-        return a ? json({ ok: true, application: JSON.parse(a) }) : fail(404, "application not found");
+        if (!a) return fail(404, "application not found");
+        const alternatives = [];
+        for (const k of (await env.EXAMS.list({ prefix: `appalt:${ma[1]}:` })).keys) alternatives.push(JSON.parse(await env.EXAMS.get(k.name)));
+        return json({ ok: true, application: JSON.parse(a), alternatives });
       }
       m = p.match(/^\/records\/(0x[0-9a-f]{64})$/);
       if (m && req.method === "GET") {

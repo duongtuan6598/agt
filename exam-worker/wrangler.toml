@@ -9,5 +9,5 @@ id = "9c2e0a6be7744dbdb012393f17660cdd"
 
 [vars]
 BSC_RPC = "https://bsc-testnet-rpc.publicnode.com"
-WORK = "0xB883e3AD8E0ee4Fc4DecFB375D49d0aE12785881"
+WORK = "0x9417C034a428305aEE8FB640dB1C5505708A3F8A"
 CHAIN_ID = "97"

@@ -127,10 +127,15 @@ async function main() {
   if (o.evidence === "auto") {
     const r = await fetch(`${examUrl}/applications/${o.hash}`);
     if (!r.ok) throw new Error(`no application for ${o.hash} at ${examUrl}`);
-    const file = path.join(root, "deployments", "evidence", `application-${o.hash}.json`);
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, JSON.stringify((await r.json()).application.evidence, null, 2) + "\n");
-    o.evidence = file;
+    // The first application and any alternatives (a forged submission can never replace a real one: Codex C-2).
+    const j = await r.json();
+    fs.mkdirSync(path.join(root, "deployments", "evidence"), { recursive: true });
+    o.evidenceFiles = [j.application, ...(j.alternatives || [])].map((a, i) => {
+      const file = path.join(root, "deployments", "evidence", `application-${o.hash}${i ? "-alt" + i : ""}.json`);
+      fs.writeFileSync(file, JSON.stringify(a.evidence, null, 2) + "\n");
+      return file;
+    });
+    o.evidence = o.evidenceFiles[0];
   }
   const checked = await checkRecord(examUrl, o.hash);
 
@@ -149,10 +154,6 @@ async function main() {
     if (o.evidence) {
       // Sealed box (Charter Article 12): attestHash is written ONLY after the evidence verifies.
       const T = require("../tee/verify.js");
-      const ev = JSON.parse(fs.readFileSync(o.evidence, "utf8"));
-      // The token may have expired since (they live 1 h); what matters is that it was issued while the
-      // exam was running: then the key that signed the exam was provably inside the box at that time.
-      const collateral = await require("../tee/collateral.js").forAttestation(ev); // fresh, vendor-signed TCB info + CRLs
       const policy = T.loadPolicy();
       // Article 14: the Charter in force is the one recorded on chain, not whatever file is on this machine.
       const dep = JSON.parse(fs.readFileSync(path.join(root, "deployments", `${o.net}.json`), "utf8"));
@@ -160,7 +161,22 @@ async function main() {
         const reg = new ethers.Contract(dep.contracts.CharterRegistry, ["function charter() view returns (bytes32)"], provider);
         policy.charterHash = await reg.charter();
       }
-      const v = T.verifyEvidence(ev, { jwks: await T.fetchJwks(), policy, checkExpiry: false, collateral });
+      // Try the first application, then any alternatives (Codex C-2); use the first that verifies in full.
+      // The token may have expired since (they live 1 h); what matters is that it was issued while the
+      // exam was running: then the key that signed the exam was provably inside the box at that time.
+      let v, ev, last;
+      for (const file of o.evidenceFiles || [o.evidence]) {
+        ev = JSON.parse(fs.readFileSync(file, "utf8"));
+        try {
+          const collateral = await require("../tee/collateral.js").forAttestation(ev); // fresh, vendor-signed TCB info + CRLs
+          v = T.verifyEvidence(ev, { jwks: await T.fetchJwks(), policy, checkExpiry: false, collateral });
+          break;
+        } catch (e) {
+          last = e;
+          console.log(`evidence ${path.basename(file)} refused: ${e.message}`);
+        }
+      }
+      if (!v) throw last;
       if (ev.manifest.agent.toLowerCase() !== record.candidate.agent.toLowerCase())
         throw new Error("refusing: the sealed box's AI key is not the key that sat the exam");
       const iat = Number(v.claims.iat);

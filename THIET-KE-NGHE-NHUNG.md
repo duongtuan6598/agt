@@ -46,7 +46,17 @@ Mỗi mốc ghi rõ phải qua **những nấc nào**. AI phân xử chấm theo
 | **N4. Ngân sách và chất lượng** | Flash, RAM, stack trong giới hạn; phân tích tĩnh (cppcheck, clang-tidy, tập luật MISRA) không có vi phạm mới | Hộp kín |
 | **N5. Phần cứng thật (HIL)** | Chạy trên bo mạch thật của khách theo kịch bản thử | **Khách** chạy trên bàn thử của mình, rồi ký xác nhận kết quả bằng ví |
 
-N1–N4 do hộp kín tự chứng minh và kèm báo cáo. **N5 luôn do con người làm.** Nếu khách không báo kết quả N5 trong thời hạn đã thoả thuận (ví dụ 14 ngày), mốc được nghiệm thu theo N1–N4, để khách không giữ tiền mãi được.
+N1–N4 do hộp kín tự chứng minh và kèm báo cáo. **N5 luôn do con người làm.**
+
+**Mốc có yêu cầu N5 không bao giờ tự nghiệm thu theo N1–N4** (sửa theo rà soát Codex C-4). Tiền của mốc chia hai phần:
+- **Phần mô phỏng** (ví dụ 70%) trả khi qua N1–N4.
+- **Phần phần cứng** (ví dụ 30%) chỉ trả khi khách xác nhận N5 đạt.
+
+Nếu khách im lặng:
+- Sau 14 ngày, AI được gửi nhắc và thời hạn kéo thêm 14 ngày.
+- Hết 28 ngày mà khách **chưa từng nộp một log lỗi phần cứng nào** thì phần phần cứng được trả.
+
+Muốn chặn khoản trả đó, khách chỉ cần nộp **log lỗi thật từ bo mạch** (log, ảnh chụp dao động ký, kịch bản tái hiện). Khi đó mốc chuyển sang sửa lại, hoặc sang phân xử bốc thăm nếu hai bên không thống nhất. Như vậy khách không giữ tiền vô cớ được, mà firmware hỏng trên bo thật cũng không được trả đủ.
 
 ---
 
