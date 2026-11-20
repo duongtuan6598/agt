@@ -59,7 +59,8 @@ class Workspace {
     return execFileSync(this.gitBin, ["--git-dir", this.gitDir, "--work-tree", this.tree, ...args], { env: this._env(token), encoding: "utf8", timeout: 300000, maxBuffer: 64 * 1024 * 1024, ...opts });
   }
 
-  /// Clone the repository, then work on `branch` from the default branch's head.
+  /// Clone the repository, then work on `branch`: from the remote `branch` if it exists (a later round on the
+  /// AI's own branch), otherwise from the default branch's head.
   clone(url, token, branch) {
     this.url = checkRepoUrl(url, this.allowFileUrls);
     if (!/^agt\/[\w.-]+$/.test(branch)) throw new Error("bad branch name");
@@ -68,7 +69,9 @@ class Workspace {
     fs.mkdirSync(this.base, { recursive: true, mode: 0o700 });
     execFileSync(this.gitBin, ["clone", "--no-checkout", "--no-recurse-submodules", "--separate-git-dir", this.gitDir, this.url, this.tree], { env: this._env(token), encoding: "utf8", timeout: 600000 });
     fs.rmSync(path.join(this.tree, ".git"), { force: true }); // the gitdir pointer file: root passes --git-dir explicitly
-    this._git(["checkout", "-q", "-f", "-B", branch], token);
+    let fromRemote = false;
+    try { this._git(["rev-parse", "--verify", "-q", `refs/remotes/origin/${branch}`]); fromRemote = true; } catch {}
+    this._git(fromRemote ? ["checkout", "-q", "-f", "-B", branch, `refs/remotes/origin/${branch}`] : ["checkout", "-q", "-f", "-B", branch], token);
     fs.chmodSync(this.base, 0o711); // builder may reach the tree, never the git dir
     fs.chmodSync(this.gitDir, 0o700);
     // Hand the fresh checkout to the builder ONCE, before any client code has run (no planted links can exist yet).

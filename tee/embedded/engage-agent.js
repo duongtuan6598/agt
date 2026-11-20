@@ -1,37 +1,45 @@
-// The sealed AI's long-term work loop for the embedded trade (THIET-KE-NGHE-NHUNG.md). Runs in the embedded box.
-//   worker AI   — accept engagements it can do (after reading the brief); for each milestone in order: open the
-//                 client's sealed repository token, clone, let the model change the code, run N1–N4 in the sandbox,
-//                 retry with the failure log (≤ ROUNDS), push a branch, deliver with the report; same for revision
-//                 requests (the client's note), hardware failure logs, warranty claims (deliverFix) and maintenance
-//                 incidents (acknowledge at once, fix security incidents, resolve), and the monthly status report.
+// The sealed AI's long-term work loop for the embedded trade (THIET-KE-NGHE-NHUNG.md; §12 joint decision of
+// Claude and Codex: the client's code NEVER runs in the AI's box — the client's own CI runs N1–N4).
+//   worker AI   — accept engagements it can do (after reading the brief). For each piece of work (a milestone in
+//                 order, a revision, a hardware failure log, a warranty claim, a maintenance incident):
+//                 open the client's sealed repository token → clone → the model changes the code → push a branch
+//                 → LATER STEPS read the client's CI for that commit: success → deliver (with a public CI report);
+//                 failure → the CI's failure text goes back to the model, next round (≤ ROUNDS); silence → wait,
+//                 then give up. It never delivers a commit whose required CI checks have not all passed.
 //   reviewer AI — draw reviewers for open disputes; when drawn, judge the delivery against the brief and vote.
-// It never delivers work whose N1–N4 checks fail. Every action is signed with the AI's own key.
+// Every action is signed with the AI's own key. Steps never block: pending work is kept in `state`.
 const { ethers } = require("ethers");
 const Brief = require("../../public/forms/brief.js");
 const FORM = require("../../public/forms/embedded.json");
 const S = require("./secrets.js");
 const { EngagementMemory } = require("./memory.js");
 const { Workspace, shaToBytes32 } = require("./workspace.js");
+const { ciStatus } = require("./forge.js");
 
 const ROUNDS = 3;
-
-/// What may be published about a delivery: results, hashes and sizes — never raw logs, which can contain the
-/// client's private source or secrets (Codex W-7). The full logs stay in the engagement's encrypted memory.
-function publicReport(result) {
-  const parts = result.parts.map((p) => ({
-    level: p.level, check: p.check || null, ok: !!p.ok,
-    sha256: p.sha256 || null, warnings: p.warnings ?? null, flash: p.flash ?? null, ram: p.ram ?? null, flashLimit: p.flashLimit ?? null, ramLimit: p.ramLimit ?? null,
-    newFindings: Array.isArray(p.newFindings) ? p.newFindings.length : null, missing: Array.isArray(p.missing) ? p.missing.length : null, tampered: Array.isArray(p.tampered) ? p.tampered.length : null,
-  }));
-  return JSON.stringify({ schema: "agt-n-report/v1", ok: !!result.ok, memoryHead: JSON.parse(result.text).memoryHead || null, parts });
-}
+const CI_TIMEOUT = 6 * 3600; // seconds without a CI verdict before the attempt is abandoned
 const M = { PENDING: 1, DELIVERED: 2, HWTEST: 3, DONE: 4, DISPUTED: 5 };
+
+/// What is published about a delivery: the commit and the client's CI verdicts — evidence SUPPLIED BY THE
+/// CLIENT'S CI, not attested by the box (§12). No logs (they may contain private source — Codex W-7).
+function ciReport({ sha, branch, ci, memoryHead }) {
+  return JSON.stringify({
+    schema: "agt-ci-report/v1",
+    evidence: "client-ci",
+    commit: sha, branch,
+    ok: ci.state === "success",
+    checks: ci.checks.map((c) => ({ name: c.name, conclusion: c.conclusion, url: c.url })),
+    memoryHead: memoryHead || null,
+  });
+}
 
 class EngageLoop {
   // eng, mnt: ethers Contracts connected to the AI's signer · content: {get(hash), put(text)} · sealed: {get(kind,id)}
-  // model: {assess, engineer, judge} · tools: tee/embedded/tools.js · keys: E.derive(master) · memStore: memory storage
-  constructor({ eng, mnt, me, chainId, content, sealed, model, tools, keys, memStore, wsRoot = "/var/agt/ws", log = () => {}, allowFileUrls = false, gitBin }) {
-    Object.assign(this, { eng, mnt, me, chainId, content, sealed, model, tools, keys, memStore, wsRoot, log, allowFileUrls, gitBin });
+  // model: {assess, engineer, judge} · ci: {status({repository, token, sha, required})} · keys: E.derive(master)
+  // memStore: encrypted memory storage · state: {get(key), set(key, value|null)} for pending work
+  constructor({ eng, mnt, me, chainId, content, sealed, model, ci, keys, memStore, state, wsRoot = "/var/agt/ws", log = () => {}, allowFileUrls = false, gitBin }) {
+    Object.assign(this, { eng, mnt, me, chainId, content, sealed, model, keys, memStore, state, wsRoot, log, allowFileUrls, gitBin });
+    this.ci = ci || { status: ciStatus };
     this.chainNow = 0;
   }
 
@@ -41,9 +49,9 @@ class EngageLoop {
   }
 
   async licence() {
-    const id = Number(await this.eng.work().then((w) => new ethers.Contract(w, ["function licenseOfAgent(address) view returns (uint256)", "function licenses(uint256) view returns (address holder, address agent, uint8 role, bool active, bytes32 examHash, bytes32 attestHash, string name)"], this.eng.runner).licenseOfAgent(this.me)));
+    const w = new ethers.Contract(await this.eng.work(), ["function licenseOfAgent(address) view returns (uint256)", "function licenses(uint256) view returns (address holder, address agent, uint8 role, bool active, bytes32 examHash, bytes32 attestHash, string name)"], this.eng.runner);
+    const id = Number(await w.licenseOfAgent(this.me));
     if (!id) return null;
-    const w = new ethers.Contract(await this.eng.work(), ["function licenses(uint256) view returns (address holder, address agent, uint8 role, bool active, bytes32 examHash, bytes32 attestHash, string name)"], this.eng.runner);
     const l = await w.licenses(id);
     return l.active ? { id, role: Number(l.role), holder: l.holder } : null;
   }
@@ -62,76 +70,87 @@ class EngageLoop {
     try { return await this.content.get(hash); } catch { return "(the client's note for this hash has not been published)"; }
   }
 
+  contractOf(kind) {
+    return kind === "engagement" ? this.eng.target : this.mnt.target;
+  }
+
   memory(kind, id) {
-    return new EngagementMemory(this.keys.memory, S.contextOf(this.chainId, kind === "engagement" ? this.eng.target : this.mnt.target, id), this.memStore);
+    return new EngagementMemory(this.keys.memory, S.contextOf(this.chainId, this.contractOf(kind), id), this.memStore);
   }
 
   async token(kind, id) {
     const box = await this.sealed.get(kind, id);
     if (!box) return null;
     try {
-      return S.open(this.keys.client.priv, box, S.contextOf(this.chainId, kind === "engagement" ? this.eng.target : this.mnt.target, id));
+      return S.open(this.keys.client.priv, box, S.contextOf(this.chainId, this.contractOf(kind), id));
     } catch (e) {
       this.log(`${kind} #${id}: the sealed access cannot be opened by this box (${e.message}) — ask the client to seal it again`);
       return null;
     }
   }
 
-  // ---------- one piece of work: clone → model → N1–N4 → (retry) → push ----------
-  async doWork({ kind, id, branch, b, briefText, task, notes = "" }) {
+  /// One piece of work, advanced one step. Returns { done: {sha, reportHash} } when CI has passed,
+  /// { waiting } while CI runs, { failed } when given up. Nothing of the client's runs here.
+  async advance({ key, kind, id, branch, b, briefText, task, notes = "" }) {
     const token = await this.token(kind, id);
-    if (!token) return { ok: false, why: "the client has not given repository access yet" };
+    if (!token) return { waiting: "the client has not given repository access yet" };
+    const required = b.fields.ciChecks;
+    const mem = this.memory(kind, id);
+    let st = await this.state.get(key);
+    if (st && st.gaveUp) return { failed: st.gaveUp };
+    if (st && st.sha) {
+      const ci = await this.ci.status({ repository: b.fields.repository, token, sha: st.sha, required });
+      if (ci.state === "success") {
+        const reportHash = await this.content.put(ciReport({ sha: st.sha, branch, ci, memoryHead: await mem.head() }));
+        await mem.append("delivery", `${task.split("\n")[0]} → ${st.sha} on ${branch}; client CI passed: ${ci.checks.map((c) => c.name).join(", ")}`);
+        await this.state.set(key, null);
+        return { done: { sha: st.sha, reportHash } };
+      }
+      if (ci.state === "pending") {
+        if (this.now() - st.pushedAt < CI_TIMEOUT) return { waiting: `client CI still running for ${st.sha.slice(0, 10)}` };
+        st = { ...st, gaveUp: `the client's CI gave no verdict for ${st.sha.slice(0, 10)} within ${CI_TIMEOUT / 3600} h` };
+        await this.state.set(key, st);
+        await mem.append("note", st.gaveUp);
+        return { failed: st.gaveUp };
+      }
+      // failure → next round with the CI's failure text (untrusted, from the client's CI)
+      if (st.round >= ROUNDS) {
+        st = { ...st, gaveUp: `client CI still failing after ${ROUNDS} rounds` };
+        await this.state.set(key, st);
+        await mem.append("note", `${task.split("\n")[0]}: ${st.gaveUp}; not delivered.`);
+        return { failed: st.gaveUp };
+      }
+      return this.attempt({ key, kind, id, branch, b, briefText, task, notes, token, mem, round: st.round + 1, failure: ci.failures || "the client's CI reported a failure" });
+    }
+    return this.attempt({ key, kind, id, branch, b, briefText, task, notes, token, mem, round: 1, failure: "" });
+  }
+
+  async attempt({ key, kind, id, branch, b, briefText, task, notes, token, mem, round, failure }) {
     const ws = new Workspace({ root: this.wsRoot, id: `${kind}-${id}`, allowFileUrls: this.allowFileUrls, git: this.gitBin });
     try {
-      return await this._work(ws, { kind, id, branch, b, briefText, task, notes, token });
-    } finally {
-      ws.dispose(); // no client's code stays where the next build could read it (Codex W-4)
-    }
-  }
-
-  async _work(ws, { kind, id, branch, b, briefText, task, notes, token }) {
-    ws.clone(b.fields.repository, token, branch);
-    const mem = this.memory(kind, id);
-    const pinned = Object.fromEntries(b.fields.pinnedTests || []);
-    let failure = "", result = null, summary = "";
-    for (let round = 1; round <= ROUNDS; round++) {
+      ws.clone(b.fields.repository, token, branch);
       const { tree, files } = ws.read();
       const a = await this.model.engineer({ brief: briefText, task, notes, memory: await mem.context_(8000), files, tree, failure });
-      if (a.cannot) return { ok: false, why: "the AI cannot do this as asked: " + a.cannot };
-      if (!a.files.length) { failure = "no files were changed"; continue; }
-      try { ws.write(a.files, pinned); } catch (e) { failure = e.message; continue; }
-      summary = a.summary;
-      result = await this.check(ws.tree, b, await mem.head());
-      if (result.ok) break;
-      failure = result.parts.filter((p) => !p.ok).map((p) => `${p.level}${p.check ? " " + p.check : ""}: ${(p.log || p.output || (p.newFindings || []).map((f) => `${f.file}:${f.line} ${f.id}`).join("\n") || JSON.stringify(p)).slice(-3000)}`).join("\n\n");
-      this.log(`${kind} #${id}: round ${round} failed checks`);
+      if (a.cannot) {
+        const why = "the AI cannot do this as asked: " + a.cannot;
+        await this.state.set(key, { gaveUp: why, round });
+        await mem.append("note", `${task.split("\n")[0]}: ${why}`);
+        return { failed: why };
+      }
+      if (!a.files.length) return { waiting: "the model changed nothing; will try again" };
+      ws.write(a.files, Object.fromEntries(b.fields.pinnedTests || []));
+      const sha = ws.commit(`${task.split("\n")[0]} (round ${round})\n\n${a.summary}`);
+      ws.push(branch, token);
+      await this.state.set(key, { sha, round, pushedAt: this.now() });
+      await mem.append("decision", `${task.split("\n")[0]}, round ${round}: pushed ${sha} to ${branch}. ${a.summary}`);
+      this.log(`${kind} #${id}: round ${round} pushed ${sha.slice(0, 10)} — waiting for the client's CI`);
+      return { waiting: "pushed; the client's CI runs it" };
+    } catch (e) {
+      this.log(`${kind} #${id}: ${e.message}`);
+      return { waiting: e.message };
+    } finally {
+      ws.dispose();
     }
-    if (!result || !result.ok) {
-      await mem.append("note", `Attempt for "${task.split("\n")[0]}" failed its checks after ${ROUNDS} rounds; not delivered.`);
-      return { ok: false, why: "checks still failing after " + ROUNDS + " rounds" };
-    }
-    const sha = ws.commit(`${task.split("\n")[0]}\n\n${summary}\n\nN1–N4 report: ${result.hash}`);
-    ws.push(branch, token);
-    const reportHash = await this.content.put(publicReport(result)); // structured results only (Codex W-7)
-    const logs = result.parts.map((p) => `${p.level}${p.check ? " " + p.check : ""}: ${String(p.log || p.output || "").slice(-1500)}`).join("\n");
-    await mem.append("test", `N1–N4 logs for ${sha}:\n${logs}`);
-    await mem.append("delivery", `${task.split("\n")[0]} → ${sha} on ${branch}. ${summary}`);
-    return { ok: true, sha, reportHash, summary };
-  }
-
-  /// N1–N4 exactly as the brief agreed.
-  async check(dir, b, memoryHead) {
-    const f = b.fields;
-    const pinned = Object.fromEntries(f.pinnedTests || []);
-    const parts = [await this.tools.build({ dir, cmd: f.buildCommand, artifact: f.artifact })];
-    if (parts[0].ok) {
-      const elf = require("path").join(dir, f.artifact);
-      if (f.testCommand) parts.push(await this.tools.unitTests({ dir, cmd: f.testCommand, pinned }));
-      if (f.simTarget && f.simTarget !== "none") parts.push(await this.tools.simulate({ elf, target: f.simTarget, expect: f.simulation || [] }));
-      if (f.flashLimit || f.ramLimit) parts.push(await this.tools.size({ elf, flashLimit: f.flashLimit, ramLimit: f.ramLimit }));
-      parts.push(await this.tools.staticAnalysis({ dir }));
-    }
-    return { ...this.tools.report(parts, { memoryHead }), parts };
   }
 
   // ---------- engagements ----------
@@ -175,19 +194,19 @@ class EngageLoop {
         const st = Number(x.state);
         if (st === M.PENDING && Number(x.dueAt) <= this.now()) { this.log(`engagement #${id}: milestone ${m + 1} is overdue — the client may take it back`); break; }
         if (st === M.PENDING) {
-          const notes = Number(x.revisions) ? await this.lastNote(id, m, "RevisionRequested") : "";
+          const rev = Number(x.revisions);
+          const notes = rev ? await this.lastNote(id, m, "RevisionRequested") : "";
           const line = (b.fields.milestones || [])[m] || `milestone ${m + 1}`;
-          const task = `Milestone ${m + 1} of ${e.count}: ${line}${Number(x.revisions) ? `\n(revision ${x.revisions}: the client's note says what to change)` : ""}`;
-          const r = await this.doWork({ kind: "engagement", id, branch: `agt/engagement-${id}-m${m + 1}`, b, briefText: text, task, notes });
-          if (r.ok) { await (await this.eng.deliver(id, m, shaToBytes32(r.sha), r.reportHash)).wait(); this.log(`engagement #${id}: milestone ${m + 1} delivered ${r.sha}`); }
-          else this.log(`engagement #${id} milestone ${m + 1}: ${r.why}`);
+          const task = `Milestone ${m + 1} of ${e.count}: ${line}${rev ? `\n(revision ${rev}: the client's note says what to change)` : ""}`;
+          const r = await this.advance({ key: `engagement:${id}:m${m}:r${rev}`, kind: "engagement", id, branch: `agt/engagement-${id}-m${m + 1}`, b, briefText: text, task, notes });
+          if (r.done) { await (await this.eng.deliver(id, m, shaToBytes32(r.done.sha), r.done.reportHash)).wait(); this.log(`engagement #${id}: milestone ${m + 1} delivered ${r.done.sha}`); }
+          else this.log(`engagement #${id} milestone ${m + 1}: ${r.waiting || r.failed}`);
           break; // milestones in order: one at a time
         }
         if (st === M.DONE && Number(x.claimAt) && !Number(x.fixAt) && x.dispute === 0n) {
           const claim = await this.note(x.claim);
-          const r = await this.doWork({ kind: "engagement", id, branch: `agt/engagement-${id}-m${m + 1}-warranty`, b, briefText: text, task: `Warranty claim on milestone ${m + 1} (${(b.fields.milestones || [])[m] || ""}): fix the defect the client reports.`, notes: claim });
-          if (r.ok) { await (await this.eng.deliverFix(id, m, shaToBytes32(r.sha))).wait(); this.log(`engagement #${id}: warranty fix ${r.sha}`); }
-          else this.log(`engagement #${id} warranty: ${r.why}`);
+          const r = await this.advance({ key: `engagement:${id}:m${m}:claim${Number(x.claimAt)}`, kind: "engagement", id, branch: `agt/engagement-${id}-m${m + 1}-warranty`, b, briefText: text, task: `Warranty claim on milestone ${m + 1} (${(b.fields.milestones || [])[m] || ""}): fix the defect the client reports.`, notes: claim });
+          if (r.done) { await (await this.eng.deliverFix(id, m, shaToBytes32(r.done.sha))).wait(); this.log(`engagement #${id}: warranty fix ${r.done.sha}`); }
         }
         if (st < M.DONE && st !== M.PENDING) break; // wait for the client before the next milestone
       }
@@ -215,8 +234,8 @@ class EngageLoop {
           if (!Number(x.ackAt)) { await (await this.mnt.acknowledge(id, i)).wait(); this.log(`maintenance #${id}: incident ${i + 1} acknowledged`); }
           if (!Number(x.fixAt)) {
             const what = await this.note(x.description);
-            const w = await this.doWork({ kind: "maintenance", id, branch: `agt/maintenance-${id}-incident-${i + 1}`, b, briefText: text, task: `${Number(x.severity) === 2 ? "SECURITY incident" : "Incident"} ${i + 1}: fix what the client reports.`, notes: what });
-            if (w.ok) { await (await this.mnt.resolve(id, i, shaToBytes32(w.sha))).wait(); this.log(`maintenance #${id}: incident ${i + 1} resolved ${w.sha}`); }
+            const w = await this.advance({ key: `maintenance:${id}:incident${i}`, kind: "maintenance", id, branch: `agt/maintenance-${id}-incident-${i + 1}`, b, briefText: text, task: `${Number(x.severity) === 2 ? "SECURITY incident" : "Incident"} ${i + 1}: fix what the client reports.`, notes: what });
+            if (w.done) { await (await this.mnt.resolve(id, i, shaToBytes32(w.done.sha))).wait(); this.log(`maintenance #${id}: incident ${i + 1} resolved ${w.done.sha}`); }
           }
         }
         await this.monthlyStatus(id, r, b);
@@ -224,6 +243,7 @@ class EngageLoop {
     }
   }
 
+  /// The monthly status: the client's CI verdict on the default branch head, and recent activity (no build here).
   async monthlyStatus(id, r, b) {
     const month = Math.floor((this.now() - Number(r.startedAt)) / (30 * 86400));
     if (month >= Number(r.funded) || (await this.mnt.statusReport(id, month)) !== ethers.ZeroHash) return;
@@ -234,8 +254,10 @@ class EngageLoop {
     let text;
     try {
       ws.clone(b.fields.repository, token, `agt/maintenance-${id}-status`);
-      const checks = await this.check(ws.tree, b, await this.memory("maintenance", id).head());
-      text = JSON.stringify({ schema: "agt-status/v1", maintenance: id, month: month + 1, recentCommits: ws.log(10).split("\n").filter(Boolean).length, checks: JSON.parse(publicReport(checks)) });
+      const head = ws.log(1).split(" ")[0];
+      const full = ws._git(["rev-parse", "HEAD"]).trim();
+      const ci = await this.ci.status({ repository: b.fields.repository, token, sha: full, required: b.fields.ciChecks });
+      text = JSON.stringify({ schema: "agt-status/v1", maintenance: id, month: month + 1, head, recentCommits: ws.log(10).split("\n").filter(Boolean).length, ci: { state: ci.state, checks: ci.checks }, evidence: "client-ci" });
     } finally {
       ws.dispose();
     }
@@ -261,21 +283,24 @@ class EngageLoop {
         const e = await this.eng.engagements(id);
         const ms = await this.eng.milestone(id, m);
         const { text } = await this.brief(e.brief);
+        // Hard rules first, the model second (Codex W-5): a delivery whose public CI report is missing, unreadable,
+        // failing, or not about the delivered commit can never be voted "worker right". The CI report is evidence
+        // supplied by the client's CI (§12) — independent reproduction by reviewers' disposable builders is step 2.
+        let report = null;
+        try { report = JSON.parse(await this.content.get(ms.report)); } catch {}
+        const reportOk = !!report && report.schema === "agt-ci-report/v1" && report.ok === true && Array.isArray(report.checks) && report.checks.length > 0 &&
+          report.checks.every((c) => c.conclusion === "success") && shaToBytes32(String(report.commit || "")) === ms.result;
         const evidence = [
           `Milestone ${m + 1}; dispute kind ${["", "delivery", "hardware", "warranty"][Number(ms.disputeKind)]}.`,
-          `Delivered commit ${ms.result}. N1–N4 report:\n${await this.note(ms.report)}`,
+          `Delivered commit ${ms.result}. CI report (evidence supplied by the client's CI, not attested by any box):\n${report ? JSON.stringify(report) : "(missing)"}`,
           `Client's revision notes:\n${await this.lastNote(id, m, "RevisionRequested")}`,
           `Client's hardware failure log:\n${await this.lastNote(id, m, "HardwareFailure")}`,
           Number(ms.claimAt) ? `Warranty claim:\n${await this.note(ms.claim)}\nFix delivered: ${ms.fix}` : "",
         ].filter(Boolean).join("\n\n");
-        // Hard rules first, the model second (Codex W-5): a delivery whose public N1–N4 report is missing,
-        // unreadable or failing can never be voted "worker right", whatever the texts say.
-        let report = null;
-        try { report = JSON.parse(await this.content.get(ms.report)); } catch {}
-        const reportOk = !!report && report.schema === "agt-n-report/v1" && report.ok === true && Array.isArray(report.parts) && report.parts.every((p) => p.ok === true);
-        const v = reportOk || Number(ms.disputeKind) === 3 ? await this.model.judge(text, evidence) : { verdict: "reject", reason: "the delivery has no passing N1–N4 report" };
+        const warranty = Number(ms.disputeKind) === 3;
+        const v = reportOk || warranty ? await this.model.judge(text, evidence) : { verdict: "reject", reason: "the delivery has no passing client-CI report for its commit" };
         if (!["accept", "reject"].includes(v.verdict)) continue;
-        const workerRight = v.verdict === "accept" && (reportOk || Number(ms.disputeKind) === 3);
+        const workerRight = v.verdict === "accept" && (reportOk || warranty);
         await (await this.eng.vote(d, lic, workerRight, `${workerRight ? "worker" : "client"} is right: ${v.reason}`.slice(0, 500))).wait();
         this.log(`dispute #${d}: voted ${workerRight ? "worker" : "client"}`);
       } catch (e) { this.log(`dispute #${d}: ${e.message}`); }
@@ -300,4 +325,16 @@ function httpSealed(base) {
   return { async get(kind, id) { const r = await (await fetch(`${base}/sealed/${kind}/${id}`)).json(); return r.ok ? r.box : null; } };
 }
 
-module.exports = { EngageLoop, httpSealed, ROUNDS };
+/// Pending-work state on the box's disk (root-only): which commit is waiting for which CI, which round.
+function fileState(dir) {
+  const fs = require("fs");
+  const path = require("path");
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const f = (k) => path.join(dir, k.replace(/[^\w:.-]/g, "_") + ".json");
+  return {
+    get: async (k) => (fs.existsSync(f(k)) ? JSON.parse(fs.readFileSync(f(k), "utf8")) : null),
+    set: async (k, v) => (v === null ? fs.rmSync(f(k), { force: true }) : fs.writeFileSync(f(k), JSON.stringify(v), { mode: 0o600 })),
+  };
+}
+
+module.exports = { EngageLoop, httpSealed, fileState, ciReport, ROUNDS, CI_TIMEOUT };

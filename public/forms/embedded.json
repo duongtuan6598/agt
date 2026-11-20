@@ -10,13 +10,14 @@
     "Firmware for ARM Cortex-M and RISC-V microcontrollers: bare metal, FreeRTOS, Zephyr; C, C++",
     "Drivers from datasheets and register maps (UART, SPI, I²C, CAN, ADC, timers, DMA)",
     "Bug fixes, porting to a new chip or SDK, security updates of libraries, CI set-up",
-    "Every delivery checked in the box: build (N1), unit tests (N2), simulation (N3), flash/RAM and static analysis (N4)"
+    "Every delivery checked by YOUR CI (build, tests, simulation, budgets, static analysis) before it is delivered"
   ],
   "cannotDo": [
     "PCB or hardware design, choosing components, manufacturing",
     "Signing safety certifications (ISO 26262, IEC 62304, IEC 61508, DO-178C)",
     "Flashing devices in the field: you test on your own board (N5) and release with your own key",
-    "Code without clear ownership, or software meant to attack or break devices"
+    "Code without clear ownership, or software meant to attack or break devices",
+    "Running your build inside the AI's box: your own CI runs it"
   ],
   "fields": [
     {
@@ -73,62 +74,36 @@
       "maxLength": 300
     },
     {
-      "key": "buildCommand",
-      "label": "Build command (run in the repository root)",
-      "type": "text",
+      "key": "ciChecks",
+      "label": "Your CI checks that must pass on the AI's branch (one per line, exact names as your CI shows them: e.g. build, unit-tests, qemu-sim, size, static-analysis)",
+      "type": "list",
       "required": true,
+      "maxItems": 20,
+      "help": "Your own CI (GitHub Actions or GitLab CI) runs N1–N4 on every branch the AI pushes. The AI reads the results and delivers only when all of these pass. Your code never runs inside the AI's sealed box."
+    },
+    {
+      "key": "buildCommand",
+      "label": "Build command — for reference: your CI runs it (run in the repository root)",
+      "type": "text",
+      "required": false,
       "maxLength": 300,
       "example": "cmake -B build -G Ninja && cmake --build build"
     },
     {
       "key": "artifact",
-      "label": "Firmware file produced by the build (ELF, path from the repository root)",
+      "label": "Firmware file produced by the build — for reference: your CI runs it (ELF, path from the repository root)",
       "type": "text",
-      "required": true,
+      "required": false,
       "maxLength": 200,
       "example": "build/firmware.elf"
     },
     {
       "key": "testCommand",
-      "label": "Unit test command (host side, optional)",
+      "label": "Unit test command — for reference: your CI runs it (host side, optional)",
       "type": "text",
       "required": false,
       "maxLength": 300,
       "example": "ctest --test-dir build-host"
-    },
-    {
-      "key": "simTarget",
-      "label": "Simulator for N3",
-      "type": "select",
-      "required": true,
-      "options": [
-        "none",
-        "cortex-m3",
-        "cortex-m4",
-        "riscv32"
-      ],
-      "optionLabels": [
-        "No simulation",
-        "QEMU Cortex-M3 (lm3s6965evb)",
-        "QEMU Cortex-M4 (netduinoplus2)",
-        "QEMU RISC-V 32 (virt)"
-      ]
-    },
-    {
-      "key": "flashLimit",
-      "label": "Flash limit for the firmware (bytes, optional)",
-      "type": "number",
-      "required": false,
-      "min": 1,
-      "max": 67108864
-    },
-    {
-      "key": "ramLimit",
-      "label": "RAM limit for the firmware (bytes, optional)",
-      "type": "number",
-      "required": false,
-      "min": 1,
-      "max": 67108864
     },
     {
       "key": "description",
@@ -193,12 +168,11 @@
     }
   ],
   "acceptance": [
-    "N1 build: the firmware builds from the repository with the agreed toolchain, with no new warnings; the artifact's sha256 is in the report.",
-    "N2 tests: the agreed test command passes, and every pinned test file is unchanged.",
-    "N3 simulation: where a simulation is agreed, the firmware runs in it and prints every agreed line.",
-    "N4 budgets and analysis: flash and RAM within the agreed limits; static analysis shows no new finding (only suppressions pinned in this brief count).",
-    "Delivered as a branch with a pull request, never pushed to the main branch; the AI never signs releases.",
-    "Each milestone delivers what its line in Milestones says, and nothing outside this brief."
+    "N1–N4: every CI check named in this brief passes on the delivered commit, as reported by the client's own CI (evidence supplied by the client's CI, not attested by the sealed box).",
+    "Pinned test files are unchanged in the delivered commit.",
+    "Delivered as a branch, never pushed to the main branch; the AI never signs releases.",
+    "Each milestone delivers what its line in Milestones says, and nothing outside this brief.",
+    "The change is focused: no unrelated rewrites, no new dependencies unless the brief allows them."
   ],
   "maxExtraCriteria": 5,
   "deliverable": {

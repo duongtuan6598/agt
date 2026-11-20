@@ -282,18 +282,11 @@ async function startWork(agentKey, modelProvider = "anthropic", keys = null) {
   // Long-term work (embedded trade): only in the embedded box image, when the contracts are configured.
   let engage = null;
   const engagePath = path.join(__dirname, "..", "embedded", "engage-agent.js");
-  let isolated = false;
+  // §12 (joint decision of Claude and Codex): the client's code never runs in this box; its own CI runs N1–N4.
+  // The TEE sockets are still locked to root as defence in depth (tee/embedded/isolation.js).
   if (env.ENGAGEMENT && env.MAINTENANCE && keys && fs.existsSync(engagePath)) {
-    // Fail closed: client code runs only if the sandbox provably cannot reach the TEE socket, the cloud
-    // metadata server (the owner's credentials) or the box's key files (tee/embedded/isolation.js).
-    const I = require("../embedded/isolation.js");
-    I.lockDown(log);
-    const p = await I.probe({ extraUrls: env.AGT_SKR_URL ? [env.AGT_SKR_URL] : [] });
-    if (p.ok) isolated = true;
-    else log(`long-term work DISABLED — the sandbox is not isolated enough: ${p.failures.join("; ")}`);
-  }
-  if (isolated) {
-    const { EngageLoop, httpSealed } = require(engagePath);
+    require("../embedded/isolation.js").lockDown(log);
+    const { EngageLoop, httpSealed, fileState } = require(engagePath);
     const abi = (n) => require(path.join(__dirname, "..", "..", "public", "abi", n + ".json"));
     const memDir = "/var/agt/memory";
     fs.mkdirSync(memDir, { recursive: true, mode: 0o700 });
@@ -303,7 +296,7 @@ async function startWork(agentKey, modelProvider = "anthropic", keys = null) {
       me: wallet.address, chainId: Number((await provider.getNetwork()).chainId),
       content: httpContent(env.AGT_EXAM_URL || "https://agt-exam.agtcoin.workers.dev", wallet),
       sealed: httpSealed(env.AGT_EXAM_URL || "https://agt-exam.agtcoin.workers.dev"),
-      model: makeModel({ provider: modelProvider, apiKey, systemPrompt }), tools: require("../embedded/tools.js"), keys,
+      model: makeModel({ provider: modelProvider, apiKey, systemPrompt }), keys, state: fileState("/var/agt/state"),
       // memory: ciphertext only, on the box's disk (a replaced VM keeps its keys through escrow, not this disk)
       memStore: { put: async (k, v) => fs.writeFileSync(fileName(k), v, { mode: 0o600 }), get: async (k) => (fs.existsSync(fileName(k)) ? fs.readFileSync(fileName(k), "utf8") : null), list: async (p) => fs.readdirSync(memDir).filter((f) => f.startsWith(p.replace(/[^\w:.-]/g, "_"))) },
       log,
