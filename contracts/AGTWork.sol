@@ -5,6 +5,7 @@ import {Ownable2Step, Ownable} from "@openzeppelin/contracts/access/Ownable2Step
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {IEmergencyBrake} from "./IEmergencyBrake.sol";
 
 interface IAGTWorkMint {
     function work() external view returns (address);
@@ -65,6 +66,8 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
     uint8 public constant MAX_VOTES = 9;
 
     IAGTWorkMint public agt;
+    /// Phanh khẩn cấp (Hiến chương Điều 14 khoản 5) — gắn một lần; chỉ chặn việc MỚI, việc dở vẫn chạy.
+    IEmergencyBrake public brake;
     uint8 public disputeApprovals = 3;
     uint128 public disputeVerifierReward;
     uint64 public reviewWindow = 3 days;
@@ -159,6 +162,7 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
     error DailyCapReached();
     error AlreadyVoted();
     error NotSealed();
+    error Braked();
     error TooEarly();
     error NotEnoughReviewers();
     error BadParams();
@@ -184,6 +188,15 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
         if (IAGTWorkMint(agt_).work() != address(this)) revert WrongAgt();
         agt = IAGTWorkMint(agt_);
         emit Bound(agt_);
+    }
+
+    function setBrake(address brake_) external onlyOwner {
+        if (address(brake) != address(0)) revert AlreadyBound();
+        brake = IEmergencyBrake(brake_);
+    }
+
+    function _notBraked() internal view {
+        if (address(brake) != address(0) && brake.paused(2)) revert Braked();
     }
 
     /// Cấp giấy phép sau khi AI thi đạt (Điều 5).
@@ -349,6 +362,7 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
     // ---------- việc AI tự tìm ----------
 
     function submitSelf(uint256 workerLicense, uint256 category, bytes32 result, string calldata uri) external returns (uint256 id) {
+        _notBraked();
         _requireAgent(workerLicense, Role.Worker);
         Category storage c = categories[category];
         if (!c.active) revert BadCategory();
@@ -370,6 +384,7 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
 
     /// Khách ký quỹ AGT để giao việc cho một thợ.
     function assign(uint256 workerLicense, uint256 amount, bytes32 spec, uint64 deadline) external nonReentrant returns (uint256 id) {
+        _notBraked();
         License storage w = licenses[workerLicense];
         if (w.role != Role.Worker || !w.active) revert BadLicense();
         if (amount == 0 || deadline <= block.timestamp) revert BadParams();

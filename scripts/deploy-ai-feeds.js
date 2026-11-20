@@ -16,6 +16,15 @@ async function main() {
   await xau.waitForDeployment();
   await bnb.waitForDeployment();
   console.log(`AI price feeds: XAU ${xau.target} · BNB ${bnb.target}`);
+  if (!d.contracts.MedianGoldOracle) {
+    // Founder-owned for now; NOT yet used by the Vault (see AUDIT F-3).
+    const [founder] = await ethers.getSigners();
+    const m = await (await ethers.getContractFactory("MedianGoldOracle")).deploy(founder.address, 2, 200, 100, opts);
+    await m.waitForDeployment();
+    d.contracts.MedianGoldOracle = m.target;
+    d._note_median = "MedianGoldOracle deployed, owned by the founder, NOT yet used by the Vault (Vault still on ChainlinkGoldOracle)";
+    console.log(`MedianGoldOracle: ${m.target}`);
+  }
   const oracle = await ethers.getContractAt("MedianGoldOracle", d.contracts.MedianGoldOracle);
   const PYTH = "0x5744Cbf430D99456a0A8771208b674F27f8EF0Fb";
   const src = (kind, at, id = ethers.ZeroHash, maxAge = 3600) => ({ kind, at, id, maxAge });

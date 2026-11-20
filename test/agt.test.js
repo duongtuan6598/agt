@@ -96,9 +96,9 @@ describe("Kho", () => {
     const names = vault.interface.fragments.filter((f) => f.type === "function").map((f) => f.name).sort();
     expect(names).to.deep.equal(
       [
-        "acceptOwnership", "accepted", "agt", "assetCount", "assets", "bind", "deposit", "depositBNB",
+        "acceptOwnership", "accepted", "agt", "assetCount", "assets", "bind", "brake", "deposit", "depositBNB",
         "freeze", "frozen", "oracle", "owner", "pendingOwner", "renounceOwnership", "reserve",
-        "setAsset", "setOracle", "transferOwnership",
+        "setAsset", "setBrake", "setOracle", "transferOwnership",
       ].sort(),
     );
   });

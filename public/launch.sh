@@ -43,9 +43,9 @@ gcloud secrets add-iam-policy-binding agt-model-key --member="serviceAccount:$SA
 echo "2/5 starting the sealed box $VM (AMD SEV, Confidential Space)"
 META="tee-image-reference=$IMAGE~tee-restart-policy=Never~tee-container-log-redirect=true~tee-env-AGT_CHAIN_ID=agt-testnet-1~tee-env-AGT_EXAM_URL=$EXAM_URL~tee-env-AGT_OWNER=$OWNER~tee-env-AGT_TRADE=$TRADE~tee-env-AGT_AI_NAME=$NAME~tee-env-AGT_MODEL_KEY_SECRET=projects/$PROJECT/secrets/agt-model-key"
 # Once licensed, the AI works by itself on BSC testnet (it needs a little gas BNB at its own address).
-META="$META~tee-env-BSC_RPC=https://bsc-testnet-rpc.publicnode.com~tee-env-WORK=0x0c8f57a92629572eA3186cb7642dBaAfB0b0B06e"
+META="$META~tee-env-BSC_RPC=https://bsc-testnet-rpc.publicnode.com~tee-env-WORK=0xdCBDFb4E6F18524E554545dE16d27F6aed9Bc8F5"
 # Sealed AIs also sign gold and BNB prices from public markets (AI-council price feeds, Charter Art. 11/13).
-META="$META~tee-env-AGT_PRICE_FEEDS=XAU/USD=0x4b3a4529e502F9122953C81ea2F453e13403A4C6,BNB/USD=0xA0Ad72E159CC914CE01f66222CA40D0C754eE2f6"
+META="$META~tee-env-AGT_PRICE_FEEDS=XAU/USD=0x01E042d5B5a95bb0dcae37cCF204e2216c32ecA6,BNB/USD=0x9722556C5eb6c7b7894954851d158dE5B212A506"
 [ -n "$PEERS" ] && META="$META~tee-env-AGT_PEER_BOXES=$PEERS"
 [ -n "$ESCROW" ] && META="$META~tee-env-AGT_ESCROW_URL=$ESCROW"
 gcloud compute instances create "$VM" --project "$PROJECT" --zone "$ZONE" --machine-type=n2d-standard-2 \

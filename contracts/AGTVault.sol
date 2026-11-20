@@ -6,6 +6,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IPriceOracle} from "./IPriceOracle.sol";
+import {IEmergencyBrake} from "./IEmergencyBrake.sol";
 
 interface IAGTMint {
     function vault() external view returns (address);
@@ -22,6 +23,8 @@ contract AGTVault is Ownable2Step, ReentrancyGuard {
     IAGTMint public agt;
     IPriceOracle public oracle;
     bool public frozen;
+    /// Phanh khẩn cấp (Hiến chương Điều 14 khoản 5) — gắn đúng một lần, không ai gỡ hay đổi được.
+    IEmergencyBrake public brake;
 
     mapping(address => bool) public accepted; // address(0) = BNB
     mapping(address => uint256) public reserve; // tổng lượng đã vào kho theo từng tài sản
@@ -31,6 +34,7 @@ contract AGTVault is Ownable2Step, ReentrancyGuard {
     event OracleSet(address oracle);
     event AssetSet(address indexed token, bool accepted);
     event Frozen();
+    event BrakeSet(address brake);
     event Deposited(address indexed from, address indexed beneficiary, address indexed token, uint256 amount, uint256 agtMinted);
 
     error AlreadyBound();
@@ -39,6 +43,7 @@ contract AGTVault is Ownable2Step, ReentrancyGuard {
     error NotAccepted(address token);
     error ZeroValue();
     error DirectBnb();
+    error Braked();
 
     constructor(address owner_, address oracle_) Ownable(owner_) {
         oracle = IPriceOracle(oracle_);
@@ -65,6 +70,13 @@ contract AGTVault is Ownable2Step, ReentrancyGuard {
         emit AssetSet(token, ok);
     }
 
+    /// Gắn phanh khẩn cấp đúng một lần. Phanh chỉ chặn tiền MỚI vào Kho, tối đa 14 ngày, tự mở.
+    function setBrake(address brake_) external onlyOwner {
+        if (address(brake) != address(0)) revert AlreadyBound();
+        brake = IEmergencyBrake(brake_);
+        emit BrakeSet(brake_);
+    }
+
     function freeze() external onlyOwner {
         frozen = true;
         emit Frozen();
@@ -86,6 +98,7 @@ contract AGTVault is Ownable2Step, ReentrancyGuard {
     }
 
     function _mint(address token, uint256 amount, address beneficiary) internal returns (uint256 minted) {
+        if (address(brake) != address(0) && brake.paused(1)) revert Braked();
         minted = oracle.valueInAGT(token, amount);
         if (minted == 0) revert ZeroValue();
         reserve[token] += amount;

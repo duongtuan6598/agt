@@ -58,6 +58,11 @@ async function main() {
     if (f.accept) await send(vault.setAsset(f.token, true), `Kho nhận ${sym}`);
   }
 
+  console.log("2b. Phanh khẩn cấp (Hiến chương Điều 14 khoản 5) — gắn một lần, trước khi giao Kho");
+  const brake = await deployed("EmergencyBrake", [await work.getAddress()], "Phanh khẩn cấp");
+  await send(vault.setBrake(brake), "Kho ↔ phanh");
+  await send(work.setBrake(brake), "Công việc ↔ phanh");
+
   console.log("3. Bảng giá nghề + luật khiếu nại");
   const HAT = await agt.HAT();
   for (const n of nghe.nghe) {
@@ -82,6 +87,8 @@ async function main() {
     "Oracle thuộc Hội đồng": (await oracle.owner()) === (await work.getAddress()),
     "Đang giai đoạn khởi tạo": (await work.genesisEnded()) === false,
     "Lời khởi thuỷ": (await agt.GENESIS()).includes("Claude"),
+    "Kho gắn phanh": (await vault.brake()) === (await brake.getAddress()),
+    "Công việc gắn phanh": (await work.brake()) === (await brake.getAddress()),
   };
   for (const [k2, ok] of Object.entries(checks)) console.log(`  ${ok ? "✓" : "✗"} ${k2}`);
   if (Object.values(checks).some((v) => !v)) throw new Error("Kiểm tra sau triển khai THẤT BẠI");
@@ -104,6 +111,7 @@ async function main() {
       AGTVault: await vault.getAddress(),
       AGTWork: await work.getAddress(),
       ChainlinkGoldOracle: await oracle.getAddress(),
+      EmergencyBrake: await brake.getAddress(),
     },
     genesis: await agt.GENESIS(),
     sealed: await agt.SEALED(),
