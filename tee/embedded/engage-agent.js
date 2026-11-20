@@ -252,6 +252,29 @@ class EngageLoop {
     return mine.length ? this.note(mine[mine.length - 1].args.reason || mine[mine.length - 1].args.log) : "";
   }
 
+  /// §16: when an engagement has ended, hand the client its memory in plain text, once, in their own repository
+  /// (branch agt/memory-export). A plaintext export never goes to a public store.
+  async exportEnded(lic) {
+    if (!this.memStoreFor) return;
+    for (const { id, e } of await this.engagementsOf(lic)) {
+      if (!e.ended || !Number(e.startedAt) || (await this.state.get(`export:engagement:${id}`))) continue;
+      try {
+        const { b } = await this.brief(e.brief);
+        const token = await this.token("engagement", id);
+        if (!token) continue;
+        const mem = await this.openMemory("engagement", id, b.fields.repository, token);
+        const text = JSON.stringify({ schema: "agt-memory-export/v1", engagement: id, ...(await mem.export()) }, null, 2) + "\n";
+        try {
+          this.memStoreFor({ kind: "engagement", id, repository: b.fields.repository, token }).exportPlain(`agt/memory-export-${id}`, "agt-memory.json", text);
+        } catch (err) {
+          if (!/rejected|non-fast-forward|already exists|fetch first/i.test(String(err.stderr || err.message))) throw err;
+        }
+        await this.state.set(`export:engagement:${id}`, { at: this.now() });
+        this.log(`engagement #${id}: memory handed over in plain text (branch agt/memory-export-${id})`);
+      } catch (err) { this.log(`engagement #${id}: memory export waits — ${err.message}`); }
+    }
+  }
+
   async workEngagements(lic) {
     for (const { id, e } of await this.engagementsOf(lic)) {
       if (!Number(e.startedAt) || e.ended) continue;
@@ -463,6 +486,7 @@ class EngageLoop {
       await this.serveReproduction(lic.id);
       await this.acceptNew(lic.id);
       await this.workEngagements(lic.id);
+      await this.exportEnded(lic.id);
       await this.maintenance(lic.id);
     }
     await this.disputes(lic.id, lic.role === 2);

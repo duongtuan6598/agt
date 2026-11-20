@@ -86,3 +86,15 @@ test("anything an AGT box would not write on the branch (big blob, symlink, stra
     await assert.rejects(new EngagementMemory(master, CTX, box(url)).append("note", "x"), /unexpected content|entries/, `${what}: no write on top of it either`);
   }
 });
+
+test("end of the engagement: the plaintext memory is handed over once, on its own branch of the client's repo", async () => {
+  const { url, bare } = clientRepo();
+  const s = box(url);
+  const m = new EngagementMemory(master, CTX, s);
+  await m.append("decision", "keep the bootloader at 0x08000000");
+  const text = JSON.stringify(await m.export());
+  s.exportPlain("agt/memory-export-7", "agt-memory.json", text);
+  assert.match(remoteGit(bare, ["show", "agt/memory-export-7:agt-memory.json"]), /bootloader at 0x08000000/);
+  assert.throws(() => s.exportPlain("agt/memory-export-7", "agt-memory.json", "{}"), "never overwritten");
+  assert.throws(() => s.exportPlain("main", "x.json", "{}"), /bad export name/, "only an agt/ branch");
+});

@@ -108,4 +108,17 @@ class RepoMemoryStore {
   }
 }
 
+/// End of an engagement: the plaintext memory goes to the client's repository on its own branch (created once,
+/// never overwritten). Reuses the store's hardened git env; nothing is checked out.
+RepoMemoryStore.prototype.exportPlain = function (branch, file, text) {
+  if (!/^agt\/[\w.-]+$/.test(branch) || !/^[\w.-]+$/.test(file)) throw new Error("bad export name");
+  this._init();
+  const blob = this._git(["hash-object", "-w", "--stdin"], { input: text }).trim();
+  const tree = this._git(["mktree", "-z"], { input: `100644 blob ${blob}\t${file}\0` }).trim();
+  const commit = this._git(["commit-tree", tree, "-m", "AGT: the AI's memory of this engagement, in plain text (handed over at the end)"]).trim();
+  // no force: if the branch exists already, the export was handed over before
+  this._git(["push", "-q", this.ws.url, `${commit}:refs/heads/${branch}`]);
+  return commit;
+};
+
 module.exports = { RepoMemoryStore, MemoryConflict, BRANCH };
