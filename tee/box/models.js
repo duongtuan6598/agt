@@ -30,6 +30,21 @@ const JUDGE_SCHEMA = {
   additionalProperties: false,
 };
 const DECLINE = /^DECLINE:/;
+// Embedded exam answers (exam/embedded.js): complete new files, or the defects found by a review.
+const CODE_SCHEMA = {
+  type: "object",
+  properties: { files: { type: "array", items: { type: "object", properties: { path: { type: "string" }, content: { type: "string" } }, required: ["path", "content"], additionalProperties: false } } },
+  required: ["files"],
+  additionalProperties: false,
+};
+const DEFECTS_SCHEMA = {
+  type: "object",
+  properties: { defects: { type: "array", items: { type: "object", properties: { file: { type: "string" }, line: { type: "integer" }, kind: { type: "string" } }, required: ["file", "line", "kind"], additionalProperties: false } } },
+  required: ["defects"],
+  additionalProperties: false,
+};
+const EMBEDDED_KINDS = ["fix", "driver", "budget", "review"];
+
 // Quoting a brief before the client locks any money.
 const ASSESS_SCHEMA = {
   type: "object",
@@ -99,6 +114,18 @@ function makeModel({ systemPrompt, ...opts }) {
   return {
     // Exam: a translation item → text; a review item → JSON string (as the exam expects).
     async answer(q, paper) {
+      if (EMBEDDED_KINDS.includes(q.kind)) {
+        const isReview = q.kind === "review";
+        const t = await chat({
+          system: systemPrompt, json: isReview ? DEFECTS_SCHEMA : CODE_SCHEMA,
+          user: `${paper.task}\n\nItem (JSON):\n${JSON.stringify(q, null, 2)}\n\n${isReview ? "List every real defect. Answer with the JSON object only." : "Return the COMPLETE new content of each file you change (only files listed in editable). Answer with the JSON object only."}`,
+        });
+        try {
+          return JSON.stringify(JSON.parse(t || ""));
+        } catch {
+          return JSON.stringify(isReview ? { defects: [] } : { files: [] });
+        }
+      }
       const review = "translation" in q;
       const t = await chat({
         system: systemPrompt, json: review ? REVIEW_SCHEMA : null,
@@ -169,4 +196,4 @@ async function fetchLocalWeights(dest, fetchImpl = fetch) {
   return dest;
 }
 
-module.exports = { REGISTRY, REVIEW_SCHEMA, JUDGE_SCHEMA, ASSESS_SCHEMA, modelIdentity, makeModel, chatFor, openaiCompatibleChat, anthropicChat, fetchLocalWeights };
+module.exports = { REGISTRY, REVIEW_SCHEMA, JUDGE_SCHEMA, ASSESS_SCHEMA, CODE_SCHEMA, DEFECTS_SCHEMA, modelIdentity, makeModel, chatFor, openaiCompatibleChat, anthropicChat, fetchLocalWeights };

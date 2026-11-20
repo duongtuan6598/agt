@@ -25,8 +25,10 @@ import core from "../../chain/core.js";
 // Private banks, bundled at deploy time from the operator's machine (never in the public repo).
 import translation from "../../../agt-banks/translation-en-vi.json";
 import review from "../../../agt-banks/review-translation-en-vi.json";
+import embedded from "../../../agt-banks/embedded-cm3.json";
 
-const BANKS = { 1: translation, 101: review };
+const BANKS = { 1: translation, 101: review, 6: embedded };
+const EMBEDDED_TASK = "Embedded software exam (Cortex-M3, C, bare metal; it runs on QEMU lm3s6965evb). Each item is a real project: read the task and the files. For kinds fix, driver and budget, answer with a JSON string {\"files\":[{\"path\":\"<one of editable>\",\"content\":\"<the complete new file>\"}]} — only files listed in `editable` may change. For kind review, answer with a JSON string {\"defects\":[{\"file\":\"...\",\"line\":<n>,\"kind\":\"<one of defectKinds>\"}]} listing every real defect; false alarms count against you. Your answers are graded by building them with hidden tests and running them in the simulator.";
 const MAX_STARTS_PER_OWNER_PER_DAY = 3;
 const COMMITTED_TTL = 3600; // an exam not seeded within 1 h expires
 const KEEP = 60 * 60 * 24 * 365 * 5; // finished records kept 5 years
@@ -125,7 +127,7 @@ async function seed(env, req, id) {
     ok: true,
     examId: id,
     deadline: exam.deadline,
-    task: bank.kind === "review"
+    task: bank.kind === "embedded" ? EMBEDDED_TASK : bank.kind === "review"
       ? `You are reviewing other workers' translations. For each item decide whether the Vietnamese translation faithfully renders the English source (meaning, completeness, numbers, required glossary terms, nothing added, fully translated). Answer each item with a JSON string {"verdict":"accept"|"reject","flaw":"<one of: ${bank.flawTypes.join(", ")}>","reason":"<at least 15 characters>"}. Omit "flaw" when accepting. Accepting a flawed translation fails the exam.`
       : "Translate each source passage from English into Vietnamese. Keep links, code spans and every number exactly as written. Use the given glossary term for each listed source term. Keep the same paragraphs.",
     questions: exam.drawn.map((qid) => X.publicQuestion(bank, byId[qid])),
@@ -144,7 +146,8 @@ async function submit(env, req, id) {
   const b = await body(req);
   const answers = (b && b.answers) || {};
   if (typeof answers !== "object" || Array.isArray(answers)) return fail(400, "answers must be an object {questionId: text}");
-  const clean = Object.fromEntries(exam.drawn.map((qid) => [qid, String(answers[qid] || "").slice(0, 20000)]));
+  const bankForLimit = BANKS[exam.trade];
+  const clean = Object.fromEntries(exam.drawn.map((qid) => [qid, String(answers[qid] || "").slice(0, bankForLimit.maxAnswerChars || 20000)]));
   let signer;
   try {
     signer = verifyMessage(X.submitMessage(id, clean), String(b.signature || ""));

@@ -61,6 +61,7 @@ function draw(bank, seedHex, n, candidateOwner) {
 
 /** What the candidate sees — never the truth. */
 function publicQuestion(bank, q) {
+  if (bank.kind === "embedded") return require("./embedded.js").publicQuestion(q);
   const glossary = q.glossary.map(([source, target]) => ({ source, target }));
   if (bank.kind === "review") return { id: q.id, source: q.source, glossary, translation: q.translation };
   return { id: q.id, source: q.source, glossary };
@@ -144,6 +145,11 @@ function gradeTranslation(q, answer) {
  * (by licensed verifier AIs, or by the founder during genesis).
  */
 function gradeExam(bank, drawn, answers) {
+  // Embedded answers are graded by BUILDING and RUNNING them in the embedded box image (exam/embedded.js),
+  // which the exam service cannot do: the record waits for that grading (licence process / Council boxes).
+  if (bank.kind === "embedded") {
+    return { results: drawn.map((id) => ({ id, pass: null, why: "graded by running it in the embedded box image" })), passed: 0, total: drawn.length, falseAccepts: 0, status: "awaiting-grading" };
+  }
   const byId = Object.fromEntries(bank.questions.map((q) => [q.id, q]));
   const review = bank.kind === "review";
   const results = drawn.map((id) => (review ? gradeReview(bank, byId[id], answers[id]) : gradeTranslation(byId[id], answers[id])));

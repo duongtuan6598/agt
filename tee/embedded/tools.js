@@ -90,10 +90,11 @@ const QEMU = {
 
 /// N3: run the firmware in QEMU; pass when every expected line from the BRIEF appears and it exits 0.
 /// Semihosting runs as `builder` (the firmware's host file access is the sandbox's, inside its own work dir).
-async function simulate({ elf, target = "cortex-m3", expect = [], timeoutMs = 20000 }) {
+async function simulate({ elf, target = "cortex-m3", expect = [], serial = false, timeoutMs = 20000 }) {
   const q = QEMU[target];
   if (!q) throw new Error(`no simulator for ${target}`);
-  const args = ["-M", q.machine, "-nographic", "-semihosting-config", "enable=on,target=native", "-kernel", elf, "-monitor", "none", "-serial", "null", "-nic", "none"];
+  // serial: the first UART goes to the captured output (driver checks); otherwise only semihosting output counts
+  const args = ["-M", q.machine, "-nographic", "-semihosting-config", "enable=on,target=native", "-kernel", elf, "-monitor", "none", "-serial", serial ? "stdio" : "null", "-nic", "none"];
   if (q.bios) args.push("-bios", q.bios);
   const r = await run(q.bin, args, { cwd: path.dirname(elf), timeoutMs });
   const missing = expect.filter((e) => !r.out.includes(e));

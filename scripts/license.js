@@ -14,9 +14,26 @@ const root = path.join(__dirname, "..");
 const BANKS = {
   get 1() { return require("../exam/banks.js").requireBank(1); },
   get 101() { return require("../exam/banks.js").requireBank(101); },
+  get 6() { return require("../exam/banks.js").requireBank(6); },
 };
 // Which licence role each exam grants.
-const TRADE_ROLE = { 1: { role: 1, label: "Worker" }, 101: { role: 2, label: "Verifier" } };
+const TRADE_ROLE = { 1: { role: 1, label: "Worker" }, 101: { role: 2, label: "Verifier" }, 6: { role: 1, label: "Worker (embedded)" } };
+
+// Embedded answers are graded by building and running them in the embedded box image (needs Docker).
+// AGT_EMBEDDED_IMAGE should be the approved image digest; the grader and the bank are mounted read-only.
+function gradeEmbedded(record, answers) {
+  const { execFileSync } = require("child_process");
+  const os = require("os");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agt-grade-"));
+  fs.writeFileSync(path.join(dir, "input.json"), JSON.stringify({ drawn: record.questions, answers }));
+  const image = process.env.AGT_EMBEDDED_IMAGE || "agt-box-embedded:dev";
+  const banks = require("../exam/banks.js").banksDir();
+  const out = execFileSync("docker", ["run", "--rm", "--network", "none",
+    "-v", `${path.join(root, "exam")}:/agt/exam:ro`, "-v", `${banks}:/banks:ro`, "-v", `${dir}:/in:ro`,
+    "--entrypoint", "node", image, "/agt/exam/grade-cli.js", "/in/input.json"], { encoding: "utf8", env: { ...process.env, MSYS_NO_PATHCONV: "1" }, maxBuffer: 64 * 1024 * 1024 });
+  fs.rmSync(dir, { recursive: true, force: true });
+  return JSON.parse(out.slice(out.indexOf("{")));
+}
 
 function env() {
   const f = path.join(root, ".env");
@@ -139,12 +156,27 @@ async function main() {
   }
   const checked = await checkRecord(examUrl, o.hash);
 
-  if (o.cmd === "review") return printReview(checked);
+  if (o.cmd === "review" || o.cmd === "grade") {
+    if (checked.bank && checked.bank.kind === "embedded") {
+      const g = gradeEmbedded(checked.record, checked.answers);
+      for (const r of g.results) console.log(`${r.pass ? "✓" : "✗"} ${r.id}: ${r.why}`);
+      console.log(`Embedded grading in the box image: ${g.passed}/${g.total} (pass mark ${checked.bank.passMark}) → ${g.status}`);
+      return;
+    }
+    return printReview(checked);
+  }
 
   if (o.cmd === "grant") {
     const { record, problems } = checked;
     if (problems.length) throw new Error("refusing: integrity problems — " + problems.join("; "));
-    if (!["awaiting-review", "passed"].includes(record.result.status)) throw new Error(`refusing: exam status is ${record.result.status}`);
+    if (!["awaiting-review", "passed", "awaiting-grading"].includes(record.result.status)) throw new Error(`refusing: exam status is ${record.result.status}`);
+    if (record.result.status === "awaiting-grading") {
+      // Embedded trade: the licence is granted only if the answers pass when BUILT and RUN with the hidden tests.
+      const g = gradeEmbedded(record, checked.answers);
+      for (const r of g.results) console.log(`${r.pass ? "✓" : "✗"} ${r.id}: ${r.why}`);
+      if (g.status !== "passed") throw new Error(`refusing: embedded grading ${g.passed}/${g.total}, pass mark ${checked.bank.passMark}`);
+      console.log(`embedded grading passed: ${g.passed}/${g.total}`);
+    }
     const tr = TRADE_ROLE[record.trade];
     if (!tr) throw new Error(`no licence role defined for trade ${record.trade}`);
     const wallet = new ethers.Wallet(net.key(), provider);
