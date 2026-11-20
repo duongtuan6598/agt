@@ -226,3 +226,37 @@ Nguyên văn trả lời của Codex lưu ở `docs/decisions/2026-11-20-codex-i
 
 Báo cáo CI do hộp công bố là **cách hộp đọc CI của khách**, chưa phải bằng chứng độc lập (Codex F-2).
 
+---
+
+## 14. Quyết định chung Claude + Codex: dựng lại để kiểm chứng khi tranh chấp (§12 bước 2, 21/11/2026)
+
+**Mục tiêu:** khi tranh chấp, cả báo cáo của thợ lẫn CI của khách đều không được một mình quyết định. Có thêm một **bằng chứng độc lập**: dựng lại các kiểm tra.
+
+**Phần Codex đề xuất, Claude đồng ý** (nguyên văn ở `docs/decisions/2026-11-21-codex-reproduction.md`):
+1. **Mã nguồn:** hộp AI thợ (đang có mã) xuất **git bundle của đúng commit tranh chấp**. Bundle được mã hoá tới **khoá dùng một lần của máy build** (khoá này đã được chứng thực), không phải tới hộp của các người phân xử. Máy build kiểm mã băm commit và cây mã trước khi chạy gì. Bundle không chứa lịch sử thừa hay bí mật. *(Claude ban đầu định mã hoá tới từng người phân xử; cách của Codex ít bên thấy mã hơn.)*
+2. **Chạy ở đâu:** một **máy ảo bảo mật dùng một lần**, chạy image "builder" đã ghim và chứng thực.
+   - Mã của khách chạy bằng user không có quyền, không có mạng, không có bí mật.
+   - Một tiến trình giám sát chạy bằng root ghi lệnh, mã thoát, mã băm log, rồi **ký kết quả bằng khoá mà mã build không với tới**. Chữ ký gắn với commit, danh sách kiểm tra, image builder và nonce của việc.
+   - Xong việc thì huỷ máy và khoá.
+   - **Hộp của người phân xử chỉ kiểm chứng rồi bỏ phiếu, không bao giờ chạy mã.**
+3. **Dựng lại cái gì:** đúng **các lệnh khai trong đơn hàng** (không cần bí mật), trong toolchain đã ghim, không giả lập cả hệ thống CI. Kiểm tra cần bí mật, phần cứng hay dịch vụ ngoài thì ghi **không dựng lại được**, không thay bằng đồ giả.
+4. **Bỏ phiếu:**
+   - Kết quả dựng lại là bằng chứng, không phải trọng tài.
+   - Dựng lại trượt khớp với CI trượt thì nghiêng về bác vụ kêu. Dựng lại đạt thì nghiêng về chấp nhận (nhưng chưa chắc nếu môi trường khác).
+   - Kết quả lệch nhau hoặc không chạy được thì **chưa kết luận**, người phân xử xét phần bằng chứng còn lại.
+   - Luật tự chốt sau 14 ngày giữ nguyên.
+5. **Không được nói quá:** chưa có ranh giới phần cứng quanh tiến trình build (VM lồng nhau) thì không tuyên bố chống được mọi mã build độc hại. Lỗi kernel hay lỗi TEE vẫn có thể phá tiến trình giám sát.
+
+**Phần Claude sửa, cho đúng Hiến chương:**
+- **Ai trả tiền máy build.** Codex gợi ý "quỹ giao thức hoặc tiền đặt cọc tranh chấp". AGT không có phí vận hành (Điều 8) nên không có quỹ chung. **Bên muốn có bằng chứng tự chạy máy build và tự trả tiền máy.** Kết quả được tin nhờ **chứng thực phần cứng và chữ ký của tiến trình giám sát**, không nhờ người chạy.
+- **Không ai độc quyền kiểm chứng.** Thợ, khách hay người phân xử đều được chạy thêm máy build. Người phân xử xem **tất cả** kết quả đã chứng thực cho tranh chấp đó, không chỉ một.
+
+**Bản đầu tiên (làm ngay):**
+- **Đơn hàng:** thêm các lệnh dựng lại (không cần bí mật) và image toolchain ghim theo mã băm.
+- **Phía thợ:** hộp AI xuất bundle mã hoá tới khoá máy build.
+- **Máy build** (`tee/embedded/builder.js`): kiểm bundle, chạy lệnh bằng user cách ly không mạng, ký kết quả `agt-repro/v1`.
+- **Phía người phân xử:** kiểm chữ ký, chứng thực, commit, danh sách lệnh và nonce, rồi đưa kết quả vào phiếu.
+- **Máy chủ thi:** nơi đăng việc dựng lại và kết quả.
+
+**Để sau:** nhiều máy build độc lập; giả lập CI rộng hơn; ranh giới phần cứng quanh mã build; các kiểm tra cần bí mật.
+
