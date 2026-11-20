@@ -1,13 +1,17 @@
 {
-  "cid": "bafybeiavlix4bqprwqhj5lmb5yvkjz7nbxvjt6pm3ubjongm642yjaolom",
-  "source": "public/ (testnet v7: Codex audit fixes)",
+  "cid": "bafybeihe2mufqb5gbarloa4xymqkrdb5lk22zcwndz4xdwxezl7wxy3dfa",
+  "source": "public/ (testnet v8: Engagement + Maintenance)",
   "reproducible": "npx ipfs-car@1.2.0 pack public  →  same CID",
   "pinned": {
     "service": "Pinata",
     "at": "2026-11-20"
   },
-  "open": "https://inbrowser.link/ipfs/bafybeiavlix4bqprwqhj5lmb5yvkjz7nbxvjt6pm3ubjongm642yjaolom/",
+  "open": "https://inbrowser.link/ipfs/bafybeihe2mufqb5gbarloa4xymqkrdb5lk22zcwndz4xdwxezl7wxy3dfa/",
   "previous": [
+    {
+      "cid": "bafybeiavlix4bqprwqhj5lmb5yvkjz7nbxvjt6pm3ubjongm642yjaolom",
+      "note": "testnet v7"
+    },
     {
       "cid": "bafybeiaenq44amgsf4mkiilpkljrvtsd2v5f2pbpmffnlljesvuw76txou",
       "note": "testnet v6"

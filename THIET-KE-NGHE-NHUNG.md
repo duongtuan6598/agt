@@ -52,9 +52,7 @@ N1–N4 do hộp kín tự chứng minh và kèm báo cáo. **N5 luôn do con ng
 - **Phần mô phỏng** (ví dụ 70%) trả khi qua N1–N4.
 - **Phần phần cứng** (ví dụ 30%) chỉ trả khi khách xác nhận N5 đạt.
 
-Nếu khách im lặng:
-- Sau 14 ngày, AI được gửi nhắc và thời hạn kéo thêm 14 ngày.
-- Hết 28 ngày mà khách **chưa từng nộp một log lỗi phần cứng nào** thì phần phần cứng được trả.
+Nếu khách im lặng: hết **28 ngày** kể từ khi mốc chờ thử phần cứng mà khách **chưa từng nộp một log lỗi phần cứng nào** thì phần phần cứng được trả. Nếu đã từng có log lỗi thì không tự trả, mà chuyển sang phân xử bốc thăm. (Trên chain là một mốc 28 ngày. Nhắc khách vào ngày 14 là việc của trang web và AI, không cần giao dịch.)
 
 Muốn chặn khoản trả đó, khách chỉ cần nộp **log lỗi thật từ bo mạch** (log, ảnh chụp dao động ký, kịch bản tái hiện). Khi đó mốc chuyển sang sửa lại, hoặc sang phân xử bốc thăm nếu hai bên không thống nhất. Như vậy khách không giữ tiền vô cớ được, mà firmware hỏng trên bo thật cũng không được trả đủ.
 
@@ -68,14 +66,17 @@ Muốn chặn khoản trả đó, khách chỉ cần nộp **log lỗi thật t�
 - Mỗi mốc được **sửa lại 2 lần** trước khi khách được khiếu nại.
 
 **4.2. Giữ lại bảo hành**
-- Nghiệm thu một mốc thì trả ngay 80%, **giữ lại 20% trong 90 ngày**. Lỗi firmware thường lộ ra muộn, ở hiện trường.
+- Mặc định đề xuất: nghiệm thu một mốc thì trả ngay 80%, **giữ lại 20% trong 90 ngày**. Tỷ lệ giữ lại (0–50%) và thời gian bảo hành (0–365 ngày) **do hai bên thoả thuận** trong báo giá. AI chỉ bấm nhận việc khi đồng ý các điều khoản đó. Lỗi firmware thường lộ ra muộn, ở hiện trường.
 - Lỗi báo trong 90 ngày phải có cách tái hiện (log giả lập hoặc log phần cứng). AI phân xử được bốc thăm quyết định đó là **lỗi thuộc phạm vi** (AI phải sửa miễn phí) hay **yêu cầu mới** (phải ký việc mới).
 - AI không sửa kịp thì khách được hoàn phần giữ lại.
 
 **4.3. Bảo trì hằng tháng (hậu mãi)**
 - Phí cố định mỗi tháng, ký quỹ trước theo từng tháng.
 - **Cam kết thời gian (SLA):** phản hồi sự cố trong 24 giờ; vá lỗ hổng bảo mật nghiêm trọng của thư viện đang dùng trong 72 giờ; mỗi tháng có báo cáo tình trạng (thư viện lỗi thời, CVE mới, kích thước firmware).
-- Trễ cam kết thì bị trừ tiền tháng đó theo tỷ lệ đã ghi trong hợp đồng. Mốc thời gian lấy theo log công khai trên chain và trên máy chủ.
+- Trễ cam kết thì bị trừ tiền tháng đó theo tỷ lệ đã ghi trong hợp đồng (tối đa 25% mỗi lần trễ). Mốc thời gian lấy theo giờ ghi trên chain.
+- **Báo cáo tình trạng tháng** (mã băm) phải nộp trước khi hết tháng cộng 3 ngày; không nộp tính là một lần trễ.
+- Mỗi tháng khách báo **tối đa 8 sự cố**, để khách không lấy lại phí bằng cách báo sự cố hàng loạt.
+- Chất lượng bản vá do khách đánh giá: không hài lòng thì dừng hợp đồng từ tháng sau.
 - Hai bên được dừng hợp đồng cuối mỗi tháng.
 
 ---

@@ -559,7 +559,9 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
         address v = licenses[verifierLicense].holder;
         if (v == licenses[j.workerLicense].holder || v == j.client || msg.sender == j.client) revert NotAllowed();
         if (voted[id][verifierLicense] || ownerVoted[id][v]) revert AlreadyVoted();
-        if (drawnAt[id] == 0 || !assigned[id][drawRound[id]][verifierLicense]) revert NotAllowed(); // chỉ người được bốc
+        // chỉ người được bốc, và chỉ trong hạn của lượt (Codex E-1: quá hạn thì lượt đó hết quyền, chờ bốc lại)
+        uint64 at = drawnAt[id];
+        if (at == 0 || at == type(uint64).max || block.timestamp > at + REVIEW_WINDOW || !assigned[id][drawRound[id]][verifierLicense]) revert NotAllowed();
         voted[id][verifierLicense] = true;
         ownerVoted[id][v] = true;
         emit Voted(id, verifierLicense, approve, reason);
@@ -598,6 +600,10 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
                 _payVoters(_noVoters[id], vReward);
             }
         }
+    }
+
+    function verifierCount() external view returns (uint256) {
+        return verifierList.length;
     }
 
     function yesVoters(uint256 id) external view returns (uint256[] memory) {

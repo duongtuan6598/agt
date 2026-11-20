@@ -87,6 +87,14 @@ describe("Disputes are judged by drawn reviewers (audit F-9)", () => {
     expect(await agt.balanceOf(W.address)).to.equal(E(0.5));
   });
 
+  it("a drawn reviewer cannot vote once its round has lapsed (Codex E-1)", async () => {
+    const { work, aiOf, disputed } = await world(5);
+    const id = await disputed();
+    const drawn = await drawFor(work, id);
+    await time.increase(2 * DAY + 1);
+    await expect(work.connect(aiOf(drawn[0])).vote(id, drawn[0], true, R)).to.be.revertedWithCustomError(work, "NotAllowed");
+  });
+
   it("a lapsed round gets a fresh seed block and new reviewers — the job is not cancelled (fix)", async () => {
     const { work, wAI, aiOf } = await world(5);
     await work.connect(wAI).submitSelf(1, 1, ethers.id("translation"), "");
