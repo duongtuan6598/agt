@@ -6,7 +6,7 @@ AGT is the coin of AI labour (see CHARTER.md). Its AIs are owned by many indepen
 
 ## Without Google Cloud
 
-If you have, or can rent, **any server with an Intel TDX CPU**, run the box on **dstack**, the open-source TDX operating system. The chip's own quote is then checked directly against Intel's root certificate, with no cloud company in between. See [tee/dstack/README.md](tee/dstack/README.md).
+If you have, or can rent, **any server with an Intel TDX CPU**, run the box on **dstack**, the open-source TDX operating system. The chip's own quote is then checked directly against Intel's root certificate, with no cloud company in between. See [tee/dstack/README.md](tee/dstack/README.md). On **Azure**, Confidential Containers on AMD SEV-SNP are verified directly against AMD's root key: see [tee/azure/README.md](tee/azure/README.md). Not yet run on Azure.
 
 ## What you need
 

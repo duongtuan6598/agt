@@ -27,7 +27,9 @@ const manifestHash = (m) => hashOf(m);
 const nonceOf = (m) => manifestHash(m).slice(2); // 64 hex chars — within Confidential Space's 10–74 byte nonce limit
 const attestHashOf = (ev) => hashOf({
   manifestHash: manifestHash(ev.manifest),
-  tokenHash: ev.platform === "dstack-tdx" ? ethers.keccak256("0x" + String(ev.quote).replace(/^0x/, "")) : ethers.keccak256(ethers.toUtf8Bytes(ev.token)),
+  tokenHash: ev.platform === "dstack-tdx" ? ethers.keccak256("0x" + String(ev.quote).replace(/^0x/, ""))
+    : ev.platform === "azure-snp" ? ethers.keccak256("0x" + String(ev.report).replace(/^0x/, ""))
+    : ethers.keccak256(ethers.toUtf8Bytes(ev.token)),
 });
 const fileHash = (p) => ethers.keccak256(fs.readFileSync(p));
 
@@ -93,9 +95,34 @@ function verifyDstack(att, { policy, at, qeIdentity, tdx = require("./tdx.js") }
   };
 }
 
-// Any attestation (a Confidential Space token, or a dstack quote + event log) → normalised claims.
+// ---------- Azure Confidential Containers (ACI) on AMD SEV-SNP — checked against AMD's root key ----------
+// The SKR sidecar returns the raw SNP report (report_data = sha256(runtime_data), runtime_data = our nonce)
+// and the VCEK ← ASK ← ARK chain. HOST_DATA = sha256 of the container security policy (it pins the image
+// digest and forbids exec), so an approved HOST_DATA means: exactly the AGT box, nobody can look inside.
+function verifyAzureSnp(att, { policy, at, snp = require("./snp.js") }) {
+  const fail = (m) => { throw new Error(m); };
+  const a = policy.azureAci || {};
+  const pems = String(att.certChain).match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g) || [];
+  if (pems.length < 3) fail("certificate chain must be VCEK, ASK, ARK");
+  const product = snp.productOf(pems.slice(1).join("\n"));
+  if (!product) fail("chain does not end at a pinned AMD root key");
+  const r = snp.verifyReport(att.report, { vcek: pems[0], chain: pems.slice(1).join("\n"), product, at });
+  if (!(a.hostData || []).includes(r.hostData)) fail(`container policy ${r.hostData} is not an approved AGT box`);
+  if (!(a.measurements || []).includes(r.measurement)) fail(`utility VM ${r.measurement.slice(0, 16)}… is not an approved release`);
+  const nonce = nonceOf(att.manifest);
+  const bound = crypto.createHash("sha256").update(Buffer.from(nonce, "hex")).digest("hex");
+  return {
+    platform: "azure-snp", hwmodel: `AMD_SEV_SNP_${product.toUpperCase()}`, swname: "ACI",
+    eat_nonce: r.reportData.slice(0, 64) === bound ? [nonce] : [],
+    submods: { container: { image_digest: `ccepolicy:${r.hostData}` }, gce: { project_id: "azure-aci", instance_id: r.chipId } },
+  };
+}
+
+// Any attestation (Confidential Space token, dstack TDX quote, Azure SNP report) → normalised claims.
 function verifyAttestation(att, opts) {
-  return att.platform === "dstack-tdx" ? verifyDstack(att, opts) : verifyBoxToken(att.token, opts);
+  if (att.platform === "dstack-tdx") return verifyDstack(att, opts);
+  if (att.platform === "azure-snp") return verifyAzureSnp(att, opts);
+  return verifyBoxToken(att.token, opts);
 }
 
 // Returns { ok: true, claims, attestHash } or throws with the first rule that failed.
@@ -122,7 +149,7 @@ function loadPolicy(file = path.join(__dirname, "policy.json")) {
   return { audience: AUDIENCE, ...p, charterHash: p.charterHash === "current" ? charterHash() : p.charterHash };
 }
 
-module.exports = { ISSUER, AUDIENCE, JWKS_URL, verifyJwt, verifyBoxToken, verifyAttestation, verifyDstack, tokenNonces, verifyEvidence, manifestHash, nonceOf, attestHashOf, charterHash, loadPolicy, fetchJwks };
+module.exports = { ISSUER, AUDIENCE, JWKS_URL, verifyJwt, verifyBoxToken, verifyAttestation, verifyDstack, verifyAzureSnp, tokenNonces, verifyEvidence, manifestHash, nonceOf, attestHashOf, charterHash, loadPolicy, fetchJwks };
 
 if (require.main === module) {
   (async () => {

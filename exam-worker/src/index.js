@@ -199,7 +199,8 @@ async function checkGoogleToken(token) {
 async function apply(env, req) {
   const b = await body(req);
   const dstack = b && b.evidence && b.evidence.platform === "dstack-tdx";
-  if (!b || !/^0x[0-9a-f]{64}$/.test(b.examHash || "") || !b.evidence || !b.evidence.manifest || !(b.evidence.token || (dstack && b.evidence.quote))) return fail(400, "need {examHash, evidence:{manifest, token | platform:\"dstack-tdx\", quote, eventLog}}");
+  const azure = b && b.evidence && b.evidence.platform === "azure-snp";
+  if (!b || !/^0x[0-9a-f]{64}$/.test(b.examHash || "") || !b.evidence || !b.evidence.manifest || !(b.evidence.token || (dstack && b.evidence.quote) || (azure && b.evidence.report))) return fail(400, "need {examHash, evidence:{manifest, token | platform:\"dstack-tdx\", quote, eventLog | platform:\"azure-snp\", report, certChain}}");
   const rec = JSON.parse((await env.EXAMS.get(`rec:${b.examHash}`)) || "null");
   if (!rec) return fail(404, "exam record not found");
   const r = rec.record;
@@ -207,7 +208,14 @@ async function apply(env, req) {
   const m = b.evidence.manifest;
   if (!isAddress(m.agent) || getAddress(m.agent) !== getAddress(r.candidate.agent)) return fail(409, "the sealed box's AI key is not the key that sat this exam");
   let claims;
-  if (dstack) {
+  if (azure) {
+    // SNP report: report_data (bytes 0x50..0x70) must be sha256(this manifest's nonce). The AMD chain and the
+    // signature are verified in full by the licence process (tee/snp.js).
+    const nonce = core.hashOf(m).slice(2);
+    const digest = [...new Uint8Array(await crypto.subtle.digest("SHA-256", Uint8Array.from(nonce.match(/../g).map((x) => parseInt(x, 16)))))].map((x) => x.toString(16).padStart(2, "0")).join("");
+    if (String(b.evidence.report).replace(/^0x/, "").slice(160, 224) !== digest) return fail(400, "report was not issued for this manifest");
+    claims = { hwmodel: "AMD_SEV_SNP", submods: { container: { image_digest: "azure-aci (checked at licensing)" } }, iat: now() };
+  } else if (dstack) {
     // TDX quote: the report_data (bytes 568..600) must be this manifest's hash. The Intel certificate chain,
     // the signatures and the RTMR3 replay are verified in full by the licence process (tee/tdx.js).
     const q = String(b.evidence.quote).replace(/^0x/, "");

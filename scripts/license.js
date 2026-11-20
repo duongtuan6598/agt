@@ -156,7 +156,7 @@ async function main() {
       if (ev.manifest.agent.toLowerCase() !== record.candidate.agent.toLowerCase())
         throw new Error("refusing: the sealed box's AI key is not the key that sat the exam");
       const iat = Number(v.claims.iat);
-      if (v.claims.platform !== "dstack-tdx" && !(iat <= record.finishedAt && iat >= record.startedAt - 3600))
+      if (!v.claims.platform && !(iat <= record.finishedAt && iat >= record.startedAt - 3600))
         throw new Error(`refusing: the attestation (issued ${new Date(iat * 1000).toISOString()}) does not cover the exam (${new Date(record.startedAt * 1000).toISOString()} – ${new Date(record.finishedAt * 1000).toISOString()})`);
       o.attest = v.attestHash;
       fs.mkdirSync(path.join(root, "deployments", "evidence"), { recursive: true });

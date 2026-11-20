@@ -55,6 +55,11 @@ function unixPost(sock, urlPath, body) {
 // Attestation bound to `manifest` (its hash is the nonce / report_data).
 async function attest(manifest) {
   const nonce = T.nonceOf(manifest);
+  if (env.AGT_SKR_URL) {
+    // Azure Confidential Containers: the SKR sidecar returns the raw SNP report and the AMD chain.
+    const r = await getJson(`${env.AGT_SKR_URL}/attest/combined`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ runtime_data: Buffer.from(nonce, "hex").toString("base64") }) });
+    return { platform: "azure-snp", report: Buffer.from(r.evidence, "base64").toString("hex"), certChain: Buffer.from(r.endorsements, "base64").toString("utf8") };
+  }
   const ds = dstackSock();
   if (ds) {
     const r = await unixPost(ds, "/GetQuote", { report_data: nonce });
@@ -64,6 +69,10 @@ async function attest(manifest) {
 }
 // Claims about THIS box, read from its own attestation (trusted: it was just produced here).
 function ownClaims(att) {
+  if (att.platform === "azure-snp") {
+    const r = require("../snp.js").parseReport(att.report);
+    return { platform: "azure-snp", measurement: r.measurement, submods: { container: { image_digest: `ccepolicy:${r.hostData}` }, gce: { project_id: "azure-aci", instance_id: r.chipId } } };
+  }
   if (att.platform !== "dstack-tdx") return claimsOf(att.token);
   const ev = {};
   for (const e of JSON.parse(att.eventLog)) if (e.imr === 3) ev[e.event] = e.event_payload;
@@ -124,7 +133,11 @@ async function main() {
   const evidence = { manifest, ...att };
   const mine = ownClaims(att);
   // Peers running EXACTLY this image run exactly this code: trust them as well as Council-approved images.
-  if (att.platform === "dstack-tdx") {
+  if (att.platform === "azure-snp") {
+    POLICY.azureAci = POLICY.azureAci || { hostData: [], measurements: [] };
+    POLICY.azureAci.hostData = [...new Set([...POLICY.azureAci.hostData, mine.submods.container.image_digest.slice("ccepolicy:".length)])];
+    POLICY.azureAci.measurements = [...new Set([...POLICY.azureAci.measurements, mine.measurement])];
+  } else if (att.platform === "dstack-tdx") {
     // same compose + same dstack OS as me = same code: trust it (plus Council-approved ones)
     const body = require("../tdx.js").parseQuote(att.quote).body;
     POLICY.dstack = POLICY.dstack || { osImages: [], composeHashes: [] };

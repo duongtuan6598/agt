@@ -46,5 +46,10 @@
     "_note": "Intel TDX boxes on dstack. osImages = approved dstack OS releases (mrTd + rtmr0..2, from a reproducible build); composeHashes = approved app-compose hashes (they pin the AGT box image digest). Empty = nothing approved yet.",
     "osImages": [],
     "composeHashes": []
+  },
+  "azureAci": {
+    "_note": "Azure Confidential Containers (AMD SEV-SNP), verified against AMD's root key. hostData = sha256 of the approved container security policy (pins the box image, no exec); measurements = approved utility-VM launch measurements. Empty = nothing approved yet.",
+    "hostData": [],
+    "measurements": []
   }
 }
