@@ -3,12 +3,15 @@
 # the supervisor that signs results with a one-job key. Build from the repo root:
 #   docker build -f tee/builder/Dockerfile -t agt-builder .
 FROM node@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293
-RUN apk add --no-cache gcc-arm-none-eabi newlib-arm-none-eabi gcc-riscv-none-elf newlib-riscv-none-elf \
-      qemu-system-arm qemu-system-riscv32 cppcheck make cmake ninja git python3 util-linux-misc \
- && addgroup -g 1500 builder && adduser -D -u 1500 -G builder -h /work builder
+COPY tee/apk.lock /tmp/apk.lock
+RUN apk add --no-cache $(grep -v '^#' /tmp/apk.lock) \
+ && rm /tmp/apk.lock \
+ && addgroup -g 1500 builder && adduser -D -u 1500 -G builder -h /work builder \
+ && rm -f /var/log/apk.log /etc/shadow- /etc/passwd- /etc/group- \
+ && sed -i -E 's/^(builder:[^:]*:)[0-9]+:/\10:/' /etc/shadow
 WORKDIR /agt
 COPY tee/box/package.json tee/box/package-lock.json ./
-RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
+RUN npm ci --omit=dev --ignore-scripts && rm -rf /root/.npm /tmp/*
 COPY chain/core.js chain/core.js
 COPY HIEN-CHUONG.md CHARTER.md ./
 COPY tee/verify.js tee/tdx.js tee/snp.js tee/der.js tee/collateral.js tee/policy.json tee/

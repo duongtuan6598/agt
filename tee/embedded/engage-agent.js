@@ -40,8 +40,10 @@ class EngageLoop {
   // memStore: encrypted memory storage · state: {get(key), set(key, value|null)} for pending work
   // repro: {jobs(dispute), postBundle(nonce, sealed)} — the exam service's §14 endpoints (null: no reproduction)
   // verifyBuilder(manifest, evidence) → true only for an approved builder image in a genuine TEE (default: none yet)
-  constructor({ eng, mnt, me, chainId, content, sealed, model, ci, keys, memStore, state, repro = null, verifyBuilder = () => false, wsRoot = "/var/agt/ws", log = () => {}, allowFileUrls = false, gitBin }) {
-    Object.assign(this, { eng, mnt, me, chainId, content, sealed, model, keys, memStore, state, repro, verifyBuilder, wsRoot, log, allowFileUrls, gitBin });
+  // memStoreFor({kind, id, repository, token}) → store: where the memory ciphertext lives (§16: the client's own
+  // repository, tee/embedded/repo-memory.js). Without it, memStore (tests) is used.
+  constructor({ eng, mnt, me, chainId, content, sealed, model, ci, keys, memStore, memStoreFor = null, state, repro = null, verifyBuilder = () => false, wsRoot = "/var/agt/ws", log = () => {}, allowFileUrls = false, gitBin }) {
+    Object.assign(this, { eng, mnt, me, chainId, content, sealed, model, keys, memStore, memStoreFor, state, repro, verifyBuilder, wsRoot, log, allowFileUrls, gitBin });
     this.ci = ci || { status: ciStatus };
     this.chainNow = 0;
   }
@@ -77,8 +79,45 @@ class EngageLoop {
     return kind === "engagement" ? this.eng.target : this.mnt.target;
   }
 
-  memory(kind, id) {
-    return new EngagementMemory(this.keys.memory, S.contextOf(this.chainId, this.contractOf(kind), id), this.memStore);
+  memory(kind, id, { repository = null, token = null, anchor = null } = {}) {
+    const store = this.memStoreFor ? (token && repository ? this.memStoreFor({ kind, id, repository, token }) : null) : this.memStore;
+    if (!store) return null;
+    return new EngagementMemory(this.keys.memory, S.contextOf(this.chainId, this.contractOf(kind), id), store, { anchor });
+  }
+
+  /// §16: the newest memory head this AI recorded ON CHAIN for this contract — in its delivery reports
+  /// (Engagement) or monthly status reports (Maintenance). The stored memory must contain it.
+  async memoryAnchor(kind, id) {
+    const reports = [];
+    if (kind === "engagement") {
+      const e = await this.eng.engagements(id);
+      for (let m = 0; m < Number(e.count); m++) {
+        const x = await this.eng.milestone(id, m);
+        if (x.report && x.report !== ethers.ZeroHash) reports.push({ at: Number(x.deliveredAt), hash: x.report });
+      }
+    } else {
+      const r = await this.mnt.retainers(id);
+      for (let month = 0; month < Number(r.funded); month++) {
+        const h = await this.mnt.statusReport(id, month);
+        if (h !== ethers.ZeroHash) reports.push({ at: month, hash: h });
+      }
+    }
+    reports.sort((a, b) => b.at - a.at);
+    for (const r of reports) {
+      const text = await this.content.get(r.hash); // unreachable content store → throws → the work waits (fail closed)
+      let j = null;
+      try { j = JSON.parse(text); } catch {}
+      if (j && typeof j.memoryHead === "string" && /^[0-9a-f]{64}$|^genesis$/.test(j.memoryHead)) return j.memoryHead;
+    }
+    return null;
+  }
+
+  /// The memory for one piece of work, checked against its on-chain anchor. Missing or rolled-back memory FAILS
+  /// CLOSED (Codex): the work waits and the log says why; the AI never carries on as if this were a new client.
+  async openMemory(kind, id, repository, token) {
+    const mem = this.memory(kind, id, { repository, token, anchor: await this.memoryAnchor(kind, id) });
+    await mem.entries();
+    return mem;
   }
 
   async token(kind, id) {
@@ -101,7 +140,13 @@ class EngageLoop {
     const token = await this.token(kind, id);
     if (!token) return { waiting: "the client has not given repository access yet" };
     const required = b.fields.ciChecks;
-    const mem = this.memory(kind, id);
+    let mem;
+    try {
+      mem = await this.openMemory(kind, id, b.fields.repository, token);
+    } catch (e) {
+      this.log(`${kind} #${id}: MEMORY PROBLEM — ${e.message}. Not working on this contract until it is recovered (the client can restore the agt/memory branch).`);
+      return { waiting: `memory: ${e.message}` };
+    }
     let st = await this.state.get(key);
     if (st && st.reportHash) return { done: { sha: st.sha, reportHash: st.reportHash } }; // CI passed; delivery not confirmed yet
     if (st && st.evidenceHash) return st.claimed ? { failed: st.gaveUp } : { claim: { sha: st.sha, evidenceHash: st.evidenceHash } };
@@ -188,11 +233,12 @@ class EngageLoop {
     for (const { id, e } of await this.engagementsOf(lic)) {
       if (Number(e.startedAt) || e.ended) continue;
       try {
-        const { text } = await this.brief(e.brief);
+        const { b, text } = await this.brief(e.brief);
         const a = await this.model.assess(text, 7);
         if (!a.feasible) { this.log(`engagement #${id}: not accepted — ${a.reason}`); continue; }
         await (await this.eng.start(id)).wait();
-        await this.memory("engagement", id).append("decision", `Accepted the engagement. ${a.reason}`);
+        const mem = this.memory("engagement", id, { repository: b.fields.repository, token: await this.token("engagement", id) });
+        if (mem) await mem.append("decision", `Accepted the engagement. ${a.reason}`);
         this.log(`engagement #${id}: accepted`);
       } catch (e) { this.log(`engagement #${id}: ${e.message}`); }
     }
@@ -318,12 +364,13 @@ class EngageLoop {
     if (!token) return;
     const ws = new Workspace({ root: this.wsRoot, id: `maintenance-${id}-status`, allowFileUrls: this.allowFileUrls, git: this.gitBin });
     let text;
+    const mem = await this.openMemory("maintenance", id, b.fields.repository, token);
     try {
       ws.clone(b.fields.repository, token, `agt/maintenance-${id}-status`);
       const head = ws.log(1).split(" ")[0];
       const full = ws._git(["rev-parse", "HEAD"]).trim();
       const ci = await this.ci.status({ repository: b.fields.repository, token, sha: full, required: b.fields.ciChecks });
-      text = JSON.stringify({ schema: "agt-status/v1", maintenance: id, month: month + 1, head, recentCommits: ws.log(10).split("\n").filter(Boolean).length, ci: { state: ci.state, checks: ci.checks }, evidence: "client-ci" });
+      text = JSON.stringify({ schema: "agt-status/v1", maintenance: id, month: month + 1, head, recentCommits: ws.log(10).split("\n").filter(Boolean).length, ci: { state: ci.state, checks: ci.checks }, evidence: "client-ci", memoryHead: await mem.head() });
     } finally {
       ws.dispose();
     }

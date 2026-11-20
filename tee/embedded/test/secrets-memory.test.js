@@ -51,7 +51,7 @@ test("memory: a dropped or reordered entry is detected", async () => {
   for (const t of ["a", "b", "c"]) await m.append("note", t);
   const keys = [...store.raw.keys()].sort();
   store.raw.delete(keys[1]);
-  await assert.rejects(m.entries(), /chain broken/);
+  await assert.rejects(m.entries(), /gap or a stray entry|chain broken/);
 });
 
 test("memory: truncating the newest entries is caught by the anchored head; concurrent appends do not collide", async () => {

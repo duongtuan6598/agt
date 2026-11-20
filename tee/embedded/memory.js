@@ -12,13 +12,17 @@ function keyFor(memoryMaster, context) {
 }
 
 const sha = (s) => crypto.createHash("sha256").update(s).digest("hex");
+const VERSION = "agt-memory-v1";
 
 class EngagementMemory {
   // store: { put(name, string), get(name) → string|null, list(prefix) → [names] }
-  constructor(memoryMaster, context, store) {
+  // anchor (§16): the newest memory head recorded on chain for this engagement. Every read requires the stored
+  // chain to contain it, so a rolled-back or deleted memory fails closed instead of looking like a new client.
+  constructor(memoryMaster, context, store, { anchor = null } = {}) {
     this.key = keyFor(memoryMaster, context);
     this.context = context;
     this.store = store;
+    this.anchor = anchor;
     // storage names are keyed: they cannot be linked to an engagement without the box's key (Codex S-9)
     this.prefix = "mem:" + crypto.createHmac("sha256", this.key).update("name").digest("hex").slice(0, 32) + ":";
     this.lock = Promise.resolve();
@@ -27,27 +31,30 @@ class EngagementMemory {
   _enc(obj) {
     const iv = crypto.randomBytes(12);
     const c = crypto.createCipheriv("aes-256-gcm", this.key, iv);
-    c.setAAD(Buffer.from(this.context));
+    c.setAAD(Buffer.from(`${this.context}|${VERSION}`));
     const ct = Buffer.concat([c.update(JSON.stringify(obj)), c.final()]);
-    return JSON.stringify({ iv: iv.toString("base64"), ct: ct.toString("base64"), tag: c.getAuthTag().toString("base64") });
+    return JSON.stringify({ v: VERSION, iv: iv.toString("base64"), ct: ct.toString("base64"), tag: c.getAuthTag().toString("base64") });
   }
 
   _dec(text) {
     const b = JSON.parse(text);
+    if (b.v !== VERSION) throw new Error(`memory entry format ${b.v} is not ${VERSION}`); // a future key rotation bumps this
     const d = crypto.createDecipheriv("aes-256-gcm", this.key, Buffer.from(b.iv, "base64"));
-    d.setAAD(Buffer.from(this.context));
+    d.setAAD(Buffer.from(`${this.context}|${VERSION}`));
     d.setAuthTag(Buffer.from(b.tag, "base64"));
     return JSON.parse(Buffer.concat([d.update(Buffer.from(b.ct, "base64")), d.final()]).toString());
   }
 
   /// `anchor`: a head hash recorded somewhere trusted (the on-chain delivery report). The stored chain must
   /// contain it, so storage cannot roll the memory back to an older prefix unseen (Codex S-7).
-  async entries({ anchor = null } = {}) {
+  async entries({ anchor = this.anchor } = {}) {
     const names = (await this.store.list(this.prefix)).sort();
     const out = [];
     let prev = "genesis";
-    for (const n of names) {
+    for (const [i, n] of names.entries()) {
+      if (n !== this.nameAt(i)) throw new Error(`memory has a gap or a stray entry at ${n}`); // Codex: check sequence and names
       const e = this._dec(await this.store.get(n));
+      if (e.n !== i) throw new Error(`memory entry ${n} has sequence ${e.n}, expected ${i}`);
       if (e.prev !== prev) throw new Error(`memory chain broken at ${n}`);
       prev = sha(JSON.stringify(e));
       out.push(e);
@@ -74,8 +81,12 @@ class EngagementMemory {
     const all = await this.entries();
     const prev = all.length ? sha(JSON.stringify(all[all.length - 1])) : "genesis";
     const e = { n: all.length, kind, text: String(text), at, prev };
-    await this.store.put(this.prefix + String(all.length).padStart(8, "0"), this._enc(e));
+    await this.store.put(this.nameAt(all.length), this._enc(e)); // create-only: a store refuses an existing name
     return e;
+  }
+
+  nameAt(i) {
+    return this.prefix + String(i).padStart(8, "0");
   }
 
   /// What the model reads before working on this client's project (newest last, bounded).
@@ -94,7 +105,7 @@ class EngagementMemory {
 
 function memoryStore() {
   const m = new Map();
-  return { put: async (k, v) => void m.set(k, v), get: async (k) => m.get(k) ?? null, list: async (p) => [...m.keys()].filter((k) => k.startsWith(p)), raw: m };
+  return { put: async (k, v) => { if (m.has(k)) throw new Error(`memory entry ${k} already exists`); m.set(k, v); }, get: async (k) => m.get(k) ?? null, list: async (p) => [...m.keys()].filter((k) => k.startsWith(p)), raw: m };
 }
 
 module.exports = { EngagementMemory, memoryStore, keyFor };

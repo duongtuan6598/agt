@@ -292,7 +292,7 @@ async function startWork(agentKey, modelProvider = "anthropic", keys = null) {
     const abi = (n) => require(path.join(__dirname, "..", "..", "public", "abi", n + ".json"));
     const memDir = "/var/agt/memory";
     fs.mkdirSync(memDir, { recursive: true, mode: 0o700 });
-    const fileName = (k) => path.join(memDir, k.replace(/[^\w:.-]/g, "_"));
+    const { RepoMemoryStore } = require(path.join(path.dirname(engagePath), "repo-memory.js"));
     engage = new EngageLoop({
       eng: new ethers.Contract(env.ENGAGEMENT, abi("Engagement"), wallet), mnt: new ethers.Contract(env.MAINTENANCE, abi("Maintenance"), wallet),
       me: wallet.address, chainId: Number((await provider.getNetwork()).chainId),
@@ -300,8 +300,9 @@ async function startWork(agentKey, modelProvider = "anthropic", keys = null) {
       sealed: httpSealed(env.AGT_EXAM_URL || "https://agt-exam.agtcoin.workers.dev"),
       model: makeModel({ provider: modelProvider, apiKey, systemPrompt }), keys, state: fileState("/var/agt/state"),
       repro: httpRepro(env.AGT_EXAM_URL || "https://agt-exam.agtcoin.workers.dev", wallet), verifyBuilder,
-      // memory: ciphertext only, on the box's disk (a replaced VM keeps its keys through escrow, not this disk)
-      memStore: { put: async (k, v) => fs.writeFileSync(fileName(k), v, { mode: 0o600 }), get: async (k) => (fs.existsSync(fileName(k)) ? fs.readFileSync(fileName(k), "utf8") : null), list: async (p) => fs.readdirSync(memDir).filter((f) => f.startsWith(p.replace(/[^\w:.-]/g, "_"))) },
+      // memory (§16): ciphertext in the client's own repository, branch agt/memory; the key comes back by escrow,
+      // so a replaced VM reads it all again. The local git dir is only a cache.
+      memStoreFor: ({ kind, id, repository, token }) => new RepoMemoryStore({ dir: path.join(memDir, `${kind}-${id}.git`), url: repository, token }),
       log,
     });
     log(`long-term work: Engagement ${env.ENGAGEMENT}, Maintenance ${env.MAINTENANCE}`);

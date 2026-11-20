@@ -8,10 +8,15 @@ FROM cometbft/cometbft@sha256:08f635fe1eff3bdcbe9d9a57091811351c55de66fbaa80190b
 
 FROM node@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293
 COPY --from=cmt /usr/bin/cometbft /usr/local/bin/cometbft
-RUN apk add --no-cache gcc-arm-none-eabi newlib-arm-none-eabi gcc-riscv-none-elf newlib-riscv-none-elf       qemu-system-arm qemu-system-riscv32 cppcheck make cmake ninja git python3 util-linux-misc  && addgroup -g 1500 builder && adduser -D -u 1500 -G builder -h /work builder
+COPY tee/apk.lock /tmp/apk.lock
+RUN apk add --no-cache $(grep -v '^#' /tmp/apk.lock) \
+ && rm /tmp/apk.lock \
+ && addgroup -g 1500 builder && adduser -D -u 1500 -G builder -h /work builder \
+ && rm -f /var/log/apk.log /etc/shadow- /etc/passwd- /etc/group- \
+ && sed -i -E 's/^(builder:[^:]*:)[0-9]+:/\10:/' /etc/shadow
 WORKDIR /agt
 COPY tee/box/package.json tee/box/package-lock.json ./
-RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
+RUN npm ci --omit=dev --ignore-scripts && rm -rf /root/.npm /tmp/*
 COPY HIEN-CHUONG.md CHARTER.md ./
 COPY chain/core.js chain/core.js
 COPY chain/abci/app.js chain/abci/app.js
@@ -20,7 +25,7 @@ COPY exam/lib.js exam/lib.js
 COPY exam-worker/client.js exam-worker/client.js
 COPY tee/verify.js tee/escrow.js tee/tdx.js tee/snp.js tee/der.js tee/collateral.js tee/policy.json tee/
 COPY public/forms/brief.js public/forms/index.json public/forms/translation.json public/forms/writing.json public/forms/embedded.json public/forms/
-COPY tee/embedded/tools.js tee/embedded/secrets.js tee/embedded/memory.js tee/embedded/workspace.js tee/embedded/engage-agent.js tee/embedded/isolation.js tee/embedded/forge.js tee/embedded/builder.js tee/embedded/
+COPY tee/embedded/tools.js tee/embedded/secrets.js tee/embedded/memory.js tee/embedded/repo-memory.js tee/embedded/workspace.js tee/embedded/engage-agent.js tee/embedded/isolation.js tee/embedded/forge.js tee/embedded/builder.js tee/embedded/
 COPY public/abi public/abi
 COPY tee/builder/verify-builder.js tee/builder/
 COPY tee/embedded/fixtures tee/embedded/fixtures

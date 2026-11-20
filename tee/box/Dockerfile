@@ -7,7 +7,7 @@ FROM node@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f60937229
 COPY --from=cmt /usr/bin/cometbft /usr/local/bin/cometbft
 WORKDIR /agt
 COPY tee/box/package.json tee/box/package-lock.json ./
-RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
+RUN npm ci --omit=dev --ignore-scripts && rm -rf /root/.npm /tmp/*
 COPY HIEN-CHUONG.md CHARTER.md ./
 COPY chain/core.js chain/core.js
 COPY chain/abci/app.js chain/abci/app.js

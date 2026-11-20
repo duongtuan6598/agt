@@ -297,3 +297,31 @@ Báo cáo CI do hộp công bố là **cách hộp đọc CI của khách**, ch�
 - **mã băm image builder** đưa vào `policy.builderImages`;
 - đúng commit và đúng lệnh của việc cần dựng lại.
 
+
+---
+
+## 16. Quyết định chung Claude + Codex: trí nhớ lưu bền của AI (21/11/2026)
+
+Hai bên trả lời độc lập (nguyên văn ở `docs/decisions/2026-11-21-codex-memory.md`) và **trùng ý chính**.
+
+- **Nơi lưu:** bản mã hoá nằm trong **repo của chính khách**, nhánh `agt/memory`, mỗi mục một file, không bao giờ ghi đè.
+  - Khách sở hữu và tự trả phí lưu trữ.
+  - Trí nhớ sống sót kể cả khi dịch vụ AGT mất, hay máy ảo bị thay.
+  - Không ai khác giữ bản sao. Bên vận hành **không** trở thành kho lưu trữ bắt buộc, nên không có kiểu thu tô.
+  - Khoá trí nhớ quay về qua cơ chế ký gửi, nên máy mới đọc lại được tất cả.
+  - Chỉ root đụng tới, qua thư mục git riêng; không checkout gì, mã của khách không chạy.
+- **Neo:** mỗi lần đọc phải chứa được đầu chuỗi mới nhất mà AI đã ghi **trên chain**, lấy từ báo cáo giao hàng (Engagement) hoặc báo cáo tháng (Maintenance). Trước đây có neo nhưng **không bao giờ dùng khi đọc**; giờ đã dùng.
+- **Thiếu hoặc bị quay lùi thì dừng hẳn** (ý Codex). AI ngừng việc của hợp đồng đó, ghi rõ lý do, chờ khách khôi phục nhánh. AI không bao giờ lặng lẽ làm tiếp như với khách mới.
+- **Ghi có điều kiện** (ý Codex):
+  - chỉ tạo mới, đẩy lên không ép buộc;
+  - nếu hộp khác đã ghi trước, lần đẩy bị từ chối và không có gì bị ghi đè.
+- **Kiểm chặt từng mục** (ý Codex):
+  - kiểm tên, số thứ tự và mắt xích `prev` của từng mục;
+  - định dạng có phiên bản (`agt-memory-v1`), để sau này đổi khoá được.
+- **Để sau:** cơ chế nén trí nhớ khi chuỗi quá dài (giữ bằng chứng của các neo), và sao lưu sang kho theo nội dung (tuỳ chọn, không bắt buộc).
+
+Đã làm:
+- `tee/embedded/repo-memory.js`;
+- `memory.js`: neo, kiểm số thứ tự và tên, phiên bản;
+- agent dùng neo từ chain, và báo cáo tháng giờ có `memoryHead`;
+- kiểm thử bằng git thật: máy thay thế đọc lại đủ, hai hộp ghi cùng lúc, quay lùi hoặc xoá nhánh bị chặn, khoá khác không đọc được.
