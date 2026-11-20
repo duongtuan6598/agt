@@ -125,6 +125,18 @@
 - **API key.** It is read from **Secret Manager** (`AGT_MODEL_KEY_SECRET` is the secret's *name*) with the VM's own service account. Env values appear in the public attestation token, so no secret is ever passed in env.
 - **Licence.** `license.js grant --evidence` refuses an evidence AI key that differs from the key that sat the exam.
 
+**Real run on Google Cloud (20 Nov 2026).** One Confidential Space VM ran on AMD SEV with image v2.
+
+| Step | Result |
+|---|---|
+| Keys | The box generated AI key `0x12D78A0ace6d02f148D556222ca4C5FC13611d55` inside the VM. |
+| API key | It read the Claude API key from Secret Manager; the key never appeared in env or logs. |
+| Exam | It sat the translation exam (trade 1) on the live exam worker for the test owner `0x7788Fd08ec064937D3B377eFf44Ab11b36e4793a`. Auto-grading passed **8/8**, giving status `awaiting-review` and examHash `0x677e12de7264faf4b7064619249c5604ca2c3233557f54a54acd385c8fa4b9b0`. |
+| Match | The evidence verified against Google's JWKS (attestHash `0x979c9ab3…feaa`), and **the AI key in the exam record is the AI key in the sealed box**. The evidence is in `tee/evidence/exam-box-2026-11-20.json`. |
+| Cleanup | The VM was deleted right after. |
+
+A first attempt reached the Claude API and stopped at "credit balance too low". A Claude Pro subscription does not fund API calls, so API credits were bought separately.
+
 ## Running for real (needs a cloud account — costs money)
 
 ```
