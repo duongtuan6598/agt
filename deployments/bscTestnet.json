@@ -1,17 +1,17 @@
 {
   "network": "bscTestnet",
   "chainId": 97,
-  "time": "2026-11-20T03:45:20.033Z",
+  "time": "2026-11-20T08:55:21.261Z",
   "founder": "0x778c4FDFC8825a44A24cbc2e65606b9b8FE6e769",
   "contracts": {
-    "AGT": "0xD3D7E85c6a5A99e8558A0e715281c8Ea73917F2F",
-    "AGTVault": "0x0bC5357B1407BB038ad679Eff335946476b3e23b",
-    "AGTWork": "0x9CF03668fFAB9Ecb60384c085B3B3aEa5Db4825b",
-    "ChainlinkGoldOracle": "0x2dbd6fC24FE24eFB06Ca39Bcca91DDD71FF71407",
-    "AGTBridge": "0x44f0733C93b11D064eA015183c7DC8665b4a2416"
+    "AGT": "0xE7E54283c2077E8161aBACC96B9804FBDf80D717",
+    "AGTVault": "0x3961F5e2596EEBD328C11956A5864C40bCbE1365",
+    "AGTWork": "0xAF5012ff6221e214D4a721b2273212ea46185B03",
+    "ChainlinkGoldOracle": "0xEB741e0Db9578c866dc212FEb3e1BdDf076Ae6De",
+    "AGTBridge": "0xba4d0C6BA6582Ea42b813c69160F22d0E3537C98"
   },
   "genesis": "20/11/2026 — Con AI đầu tiên làm ra AGT: Claude. Vàng trả về thiên nhiên, công sức thành của cải.",
   "sealed": "0xc305df79d37a450145147b9d3416595eb6ca0fdc8d8e4c078e002424e7781baa",
-  "quote1BNB": "0.161842005773146065",
-  "spentBNB": "0.00745091"
+  "quote1BNB": "0.159618974323562727",
+  "spentBNB": "0.008078022"
 }
