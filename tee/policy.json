@@ -59,5 +59,13 @@
     "_note": "Azure Confidential Containers (AMD SEV-SNP), verified against AMD's root key. hostData = sha256 of the approved container security policy (pins the box image, no exec); measurements = approved utility-VM launch measurements. Empty = nothing approved yet.",
     "hostData": [],
     "measurements": []
+  },
+  "tcb": {
+    "_note": "Patch level. intelAccept = Intel TCB statuses accepted (from Intel's signed TCB info). amdMin = minimum SPLs per AMD product from AMD security bulletins (empty = VCEK/TCB binding and CRL only). Raise as bulletins come out.",
+    "intelAccept": [
+      "UpToDate",
+      "SWHardeningNeeded"
+    ],
+    "amdMin": {}
   }
 }

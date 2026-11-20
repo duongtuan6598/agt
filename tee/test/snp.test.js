@@ -56,15 +56,15 @@ const evidence = (m) => ({ platform: "azure-snp", manifest: m, report: "00", cer
 
 test("Azure evidence: approved container policy + approved utility VM + report_data = sha256(nonce) → verified", () => {
   const m = manifest();
-  const r = T.verifyEvidence(evidence(m), { policy, snp: fakeSnp(bound(m)) });
+  const r = T.verifyEvidence(evidence(m), { policy, collateral: { amdCrl: Buffer.alloc(1) }, snp: fakeSnp(bound(m)) });
   assert.equal(r.claims.platform, "azure-snp");
   assert.equal(r.claims.hwmodel, "AMD_SEV_SNP_MILAN");
 });
 
 test("Azure evidence is refused for another container policy, another utility VM, or a swapped key", () => {
   const m = manifest();
-  assert.throws(() => T.verifyEvidence(evidence(m), { policy, snp: fakeSnp(bound(m), "00".repeat(32)) }), /not an approved AGT box/);
-  assert.throws(() => T.verifyEvidence(evidence(m), { policy, snp: fakeSnp(bound(m), HOST, "00".repeat(48)) }), /utility VM/);
+  assert.throws(() => T.verifyEvidence(evidence(m), { policy, collateral: { amdCrl: Buffer.alloc(1) }, snp: fakeSnp(bound(m), "00".repeat(32)) }), /not an approved AGT box/);
+  assert.throws(() => T.verifyEvidence(evidence(m), { policy, collateral: { amdCrl: Buffer.alloc(1) }, snp: fakeSnp(bound(m), HOST, "00".repeat(48)) }), /utility VM/);
   const other = { ...m, agent: ethers.Wallet.createRandom().address };
-  assert.throws(() => T.verifyEvidence(evidence(other), { policy, snp: fakeSnp(bound(m)) }), /nonce mismatch/);
+  assert.throws(() => T.verifyEvidence(evidence(other), { policy, collateral: { amdCrl: Buffer.alloc(1) }, snp: fakeSnp(bound(m)) }), /nonce mismatch/);
 });

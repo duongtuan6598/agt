@@ -15,8 +15,7 @@ With Google Confidential Space, Google's attestation service vouches for the box
 5. **No debug mode:** the TD is not in debug, so the owner cannot look inside.
 6. **The event log:** RTMR3 equals the replay of the dstack event log. This proves the **compose-hash** (which pins the AGT box image by digest) and the **instance id**.
 7. **The binding:** the report_data is the hash of the box's manifest (AI key, CometBFT key, Charter, system prompt).
-
-**Not yet checked** (TODO before mainnet): the TCB patch level against Intel's TCB info, and certificate revocation lists.
+8. **Patch level and revocation:** the TCB level from the PCK certificate and TEE_TCB_SVN is checked against Intel's signed TCB info, and only `UpToDate` / `SWHardeningNeeded` are accepted. The quoting enclave is checked against Intel's signed QE identity. The PCK and platform CA must not be on Intel's signed CRLs. All of this collateral is fetched fresh from Intel PCS by `tee/collateral.js` and is required. The real quote in the tests is refused today as `OutOfDate`, with 14 Intel advisories outstanding.
 
 **Tests:** 9 in `tee/test/tdx.test.js`. One of them uses a **real TDX quote** (test vector from automata-network/dcap-rs, Apache-2.0), verified to Intel's root.
 

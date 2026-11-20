@@ -23,7 +23,7 @@ Together with `tee/tdx.js` (Intel TDX, see `tee/dstack`), AGT now accepts boxes 
 - **The model API key:** env values on ACI are part of the security policy, so they are public. The key must therefore come through **Secure Key Release** from Azure Key Vault, which releases it only to this exact policy. That is not implemented yet.
 - **The utility VM is Microsoft's.** Its measurement is approved per release. Trust in Microsoft is not fully removed here; for that, use dstack on your own TDX server.
 - **Keys survive only on the same chip.** Escrow identifies the box by its `chip_id`. ACI may restart a group on another host, which then needs a new licence.
-- **Not yet checked:** the VCEK TCB extensions against the reported TCB, and CRLs. Both are TODO before mainnet, as for TDX.
+- **Patch level and revocation:** the VCEK must carry this chip's id and exactly the report's TCB (bootloader / TEE / SNP / microcode). An optional minimum TCB comes from `policy.json → tcb.amdMin`. The ASK must not be on AMD's ARK-signed CRL, which is fetched fresh from AMD KDS and required. Minimum SPLs are still empty: they should be set from AMD's security bulletins.
 
 ## Deploy (outline)
 

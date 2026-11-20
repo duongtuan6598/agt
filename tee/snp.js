@@ -4,8 +4,10 @@
 // self-hosted SEV-SNP machine.
 //
 // Verified: VCEK ← ASK ← ARK chain (ARK pinned by fingerprint, per product), report signature (ECDSA P-384)
-// by the VCEK, guest policy without debug. Not yet: VCEK TCB extensions vs reported TCB, CRL (TODO).
+// by the VCEK, guest policy without debug; the VCEK is for THIS chip (hwID = chip_id) at THIS TCB
+// (its TCB extensions = the report's reported_tcb); optional minimum TCB; ASK not on AMD's signed CRL.
 const crypto = require("crypto");
+const DER = require("./der.js");
 
 // AMD Root Keys, from https://kdsintf.amd.com/vcek/v1/<product>/cert_chain (SHA-256 fingerprints).
 const AMD_ARK = {
@@ -63,16 +65,52 @@ function verifyChain(vcekDer, askArkPem, product = "Milan", at = new Date()) {
   return vcek;
 }
 
+// TCB SPLs and chip id carried by a VCEK certificate (AMD KDS extensions).
+function vcekTcb(vcekCert) {
+  const ext = DER.extensions(new crypto.X509Certificate(vcekCert).raw);
+  const spl = (n) => (ext[`1.3.6.1.4.1.3704.1.3.${n}`] ? Number(DER.int(DER.node(ext[`1.3.6.1.4.1.3704.1.3.${n}`]).value)) : null);
+  const hw = ext["1.3.6.1.4.1.3704.1.4"];
+  return { bootloader: spl(1), tee: spl(2), snp: spl(3), microcode: spl(8), hwId: hw ? Buffer.from(hw).toString("hex") : null };
+}
+// reported_tcb (Milan/Genoa layout): byte 0 bootloader, 1 TEE, 6 SNP, 7 microcode.
+function splitTcb(tcb) {
+  const b = Buffer.alloc(8);
+  b.writeBigUInt64LE(tcb);
+  return { bootloader: b[0], tee: b[1], snp: b[6], microcode: b[7] };
+}
+// AMD's CRL (RSA-PSS SHA-384, signed by the ARK) must not list the ASK.
+function askRevoked(crlDer, ark, ask, at) {
+  const c = DER.crl(crlDer);
+  const ok = crypto.verify("sha384", c.tbs, { key: ark.publicKey, padding: crypto.constants.RSA_PKCS1_PSS_PADDING, saltLength: 48 }, c.signature);
+  if (!ok) throw new Error("AMD CRL not signed by the ARK");
+  if (c.nextUpdate && c.nextUpdate < at) throw new Error("AMD CRL expired — fetch a fresh one from AMD KDS");
+  return c.revoked.includes(BigInt("0x" + ask.serialNumber));
+}
+
 // Verify an SNP report; returns its parsed fields. Throws on any failure.
-function verifyReport(report, { vcek, chain, product = "Milan", at = new Date(), allowDebug = false }) {
+// minTcb: { bootloader, tee, snp, microcode } minimum SPLs (from AMD security bulletins); crl: AMD CRL (DER).
+function verifyReport(report, { vcek, chain, product = "Milan", at = new Date(), allowDebug = false, minTcb = null, crl = null }) {
   const r = parseReport(report);
   if (r.sigAlgo !== 1) throw new Error("report not signed with ECDSA P-384");
   const key = verifyChain(vcek, chain, product, at);
   const ok = crypto.verify("sha384", r.raw.subarray(0, SIGNED), { key: key.publicKey, dsaEncoding: "ieee-p1363" }, sigP1363(r.sig));
   if (!ok) throw new Error("report signature invalid");
   if (r.debugAllowed && !allowDebug) throw new Error("guest policy allows debugging — its owner could read it");
+  // The VCEK must be THIS chip's key at THIS TCB: otherwise an old, vulnerable firmware's key could sign.
+  const v = vcekTcb(vcek);
+  const reported = splitTcb(r.reportedTcb);
+  if (r.signingKey === 0) {
+    if (v.hwId && v.hwId !== r.chipId) throw new Error("VCEK belongs to another chip");
+    for (const k of ["bootloader", "tee", "snp", "microcode"])
+      if (v[k] !== null && v[k] !== reported[k]) throw new Error(`VCEK is for ${k} SPL ${v[k]}, report says ${reported[k]}`);
+  }
+  if (minTcb) for (const k of Object.keys(minTcb)) if (reported[k] < minTcb[k]) throw new Error(`${k} SPL ${reported[k]} is below the required ${minTcb[k]} — firmware patches missing`);
+  if (crl) {
+    const [ask, ark] = chain.match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g).map((p) => new crypto.X509Certificate(p));
+    if (askRevoked(crl, ark, ask, at)) throw new Error("AMD signing key (ASK) revoked");
+  }
   const { raw, sig, ...fields } = r;
-  return fields;
+  return { ...fields, tcb: reported };
 }
 
-module.exports = { AMD_ARK, productOf, parseReport, verifyChain, verifyReport, sigP1363 };
+module.exports = { AMD_ARK, productOf, parseReport, verifyChain, verifyReport, vcekTcb, splitTcb, askRevoked, sigP1363 };

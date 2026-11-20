@@ -109,8 +109,16 @@ async function main() {
   // it has a different image digest, so real boxes never trust it.
   const TEST_JWKS = path.join(ROOT, "tee", "test-jwks.json");
   const jwks = fs.existsSync(TEST_JWKS) ? (log("TEST IMAGE: using baked test JWKS"), JSON.parse(fs.readFileSync(TEST_JWKS, "utf8"))) : await T.fetchJwks().catch(() => null);
-  const verifyEv = (ev) => T.verifyEvidence(ev, { jwks, policy: POLICY });
-  const verifyToken = (r) => T.verifyAttestation(r, { jwks, policy: POLICY });
+  // Peers on Intel/AMD hardware are checked with fresh vendor collateral (patch level + revocation).
+  const C = require("../collateral.js");
+  const collateralCache = new Map();
+  const collateralFor = async (att) => {
+    const key = att.platform === "dstack-tdx" ? att.quote.slice(0, 2000) : att.platform === "azure-snp" ? att.certChain : "gcp";
+    if (!collateralCache.has(key)) collateralCache.set(key, await C.forAttestation(att).catch(() => ({})));
+    return collateralCache.get(key);
+  };
+  const verifyEv = (ev, collateral) => T.verifyEvidence(ev, { jwks, policy: POLICY, collateral });
+  const verifyToken = (r, collateral) => T.verifyAttestation(r, { jwks, policy: POLICY, collateral });
 
   // 1. Keys
   let master, record = null;
@@ -152,8 +160,11 @@ async function main() {
   if (!record && peers().length && jwks) {
     try {
       const peerEvidence = [];
-      for (const url of peers()) peerEvidence.push({ evidence: await getJson(`${url}/evidence`).catch(() => null) });
-      record = await E.makeEscrow({ master, myClaims: mine, peers: peerEvidence.filter((p) => p.evidence), verify: verifyEv });
+      for (const url of peers()) {
+        const ev = await getJson(`${url}/evidence`).catch(() => null);
+        if (ev) peerEvidence.push({ evidence: ev, collateral: await collateralFor(ev) });
+      }
+      record = await E.makeEscrow({ master, myClaims: mine, peers: peerEvidence, verify: (ev) => verifyEv(ev, peerEvidence.find((p) => p.evidence === ev).collateral) });
       log(`AGT_ESCROW ${JSON.stringify(record)}`);
       log(`keys escrowed with ${record.shares.length} attested peer boxes (any ${record.threshold} can restore them, only to this machine)`);
     } catch (e) {
@@ -170,12 +181,15 @@ async function main() {
       let b = "";
       req.on("data", (d) => (b += d));
       req.on("end", () => {
-        try {
-          const { record: r, request } = JSON.parse(b);
-          send(200, E.releaseShare({ myMaster: master, record: r, request, verifyToken }));
-        } catch (e) {
-          send(403, { error: e.message });
-        }
+        (async () => {
+          try {
+            const { record: r, request } = JSON.parse(b);
+            const collateral = await collateralFor(request);
+            send(200, E.releaseShare({ myMaster: master, record: r, request, verifyToken: (x) => verifyToken(x, collateral) }));
+          } catch (e) {
+            send(403, { error: e.message });
+          }
+        })();
       });
       return;
     }

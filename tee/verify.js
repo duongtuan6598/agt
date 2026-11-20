@@ -78,10 +78,13 @@ const tokenNonces = (c) => (Array.isArray(c.eat_nonce) ? c.eat_nonce : [c.eat_no
 // The quote is verified against Intel's root certificate; RTMR3 is replayed from the event log, which
 // proves the compose-hash (the docker-compose that pins the AGT box image) and the instance id.
 // Returns claims shaped like the Confidential Space ones, so licences and escrow treat both alike.
-function verifyDstack(att, { policy, at, qeIdentity, tdx = require("./tdx.js") }) {
+function verifyDstack(att, { policy, at, collateral, tdx = require("./tdx.js") }) {
   const fail = (m) => { throw new Error(m); };
   const d = policy.dstack || {};
-  const body = tdx.verifyQuote(att.quote, { at, qeIdentity });
+  // Patch level and revocation are not optional: without Intel's fresh signed collateral, refuse.
+  if (!collateral || !collateral.intel) fail("Intel collateral (TCB info, QE identity, CRL) is required — see tee/collateral.js");
+  const accept = (policy.tcb && policy.tcb.intelAccept) || undefined;
+  const body = tdx.verifyQuote(att.quote, { at, collateral: collateral.intel, acceptTcb: accept });
   const ev = tdx.checkRtmr3(att.eventLog, body.rtmr3);
   const os = (d.osImages || []).some((o) => ["mrTd", "rtmr0", "rtmr1", "rtmr2"].every((k) => String(o[k]).toLowerCase() === body[k]));
   if (!os) fail(`dstack OS image (MRTD ${body.mrTd.slice(0, 16)}…) is not an approved release`);
@@ -99,14 +102,16 @@ function verifyDstack(att, { policy, at, qeIdentity, tdx = require("./tdx.js") }
 // The SKR sidecar returns the raw SNP report (report_data = sha256(runtime_data), runtime_data = our nonce)
 // and the VCEK ← ASK ← ARK chain. HOST_DATA = sha256 of the container security policy (it pins the image
 // digest and forbids exec), so an approved HOST_DATA means: exactly the AGT box, nobody can look inside.
-function verifyAzureSnp(att, { policy, at, snp = require("./snp.js") }) {
+function verifyAzureSnp(att, { policy, at, collateral, snp = require("./snp.js") }) {
   const fail = (m) => { throw new Error(m); };
   const a = policy.azureAci || {};
+  if (!collateral || !collateral.amdCrl) fail("AMD CRL is required — see tee/collateral.js");
   const pems = String(att.certChain).match(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g) || [];
   if (pems.length < 3) fail("certificate chain must be VCEK, ASK, ARK");
   const product = snp.productOf(pems.slice(1).join("\n"));
   if (!product) fail("chain does not end at a pinned AMD root key");
-  const r = snp.verifyReport(att.report, { vcek: pems[0], chain: pems.slice(1).join("\n"), product, at });
+  const minTcb = policy.tcb && policy.tcb.amdMin ? policy.tcb.amdMin[product] : null;
+  const r = snp.verifyReport(att.report, { vcek: pems[0], chain: pems.slice(1).join("\n"), product, at, crl: collateral.amdCrl, minTcb });
   if (!(a.hostData || []).includes(r.hostData)) fail(`container policy ${r.hostData} is not an approved AGT box`);
   if (!(a.measurements || []).includes(r.measurement)) fail(`utility VM ${r.measurement.slice(0, 16)}… is not an approved release`);
   const nonce = nonceOf(att.manifest);

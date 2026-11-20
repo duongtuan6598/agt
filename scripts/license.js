@@ -152,7 +152,8 @@ async function main() {
       const ev = JSON.parse(fs.readFileSync(o.evidence, "utf8"));
       // The token may have expired since (they live 1 h); what matters is that it was issued while the
       // exam was running: then the key that signed the exam was provably inside the box at that time.
-      const v = T.verifyEvidence(ev, { jwks: await T.fetchJwks(), policy: T.loadPolicy(), checkExpiry: false });
+      const collateral = await require("../tee/collateral.js").forAttestation(ev); // fresh, vendor-signed TCB info + CRLs
+      const v = T.verifyEvidence(ev, { jwks: await T.fetchJwks(), policy: T.loadPolicy(), checkExpiry: false, collateral });
       if (ev.manifest.agent.toLowerCase() !== record.candidate.agent.toLowerCase())
         throw new Error("refusing: the sealed box's AI key is not the key that sat the exam");
       const iat = Number(v.claims.iat);

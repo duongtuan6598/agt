@@ -84,7 +84,7 @@ function box(instance = "22".repeat(20)) {
 
 test("dstack evidence: approved OS + approved compose + nonce = manifest → verified, with the instance id", () => {
   const b = box();
-  const r = T.verifyEvidence(b.evidence, { policy, tdx: fakeTdx(T.nonceOf(b.manifest), b.log) });
+  const r = T.verifyEvidence(b.evidence, { policy, collateral: { intel: {} }, tdx: fakeTdx(T.nonceOf(b.manifest), b.log) });
   assert.equal(r.claims.platform, "dstack-tdx");
   assert.equal(r.claims.submods.gce.instance_id, "22".repeat(20));
   assert.match(r.attestHash, /^0x[0-9a-f]{64}$/);
@@ -93,23 +93,23 @@ test("dstack evidence: approved OS + approved compose + nonce = manifest → ver
 test("dstack evidence is refused for an unapproved compose, an unapproved OS, or a swapped key", () => {
   const b = box();
   const other = [LOG[0], ev("compose-hash", "ee".repeat(32), 2), LOG[2], LOG[3]];
-  assert.throws(() => T.verifyEvidence({ ...b.evidence, eventLog: other }, { policy, tdx: fakeTdx(T.nonceOf(b.manifest), other) }), /not an approved AGT box/);
-  assert.throws(() => T.verifyEvidence(b.evidence, { policy, tdx: fakeTdx(T.nonceOf(b.manifest), b.log, { ...OS, mrTd: "00".repeat(48) }) }), /not an approved release/);
+  assert.throws(() => T.verifyEvidence({ ...b.evidence, eventLog: other }, { policy, collateral: { intel: {} }, tdx: fakeTdx(T.nonceOf(b.manifest), other) }), /not an approved AGT box/);
+  assert.throws(() => T.verifyEvidence(b.evidence, { policy, collateral: { intel: {} }, tdx: fakeTdx(T.nonceOf(b.manifest), b.log, { ...OS, mrTd: "00".repeat(48) }) }), /not an approved release/);
   const swapped = { ...b.evidence, manifest: { ...b.manifest, agent: ethers.Wallet.createRandom().address } };
-  assert.throws(() => T.verifyEvidence(swapped, { policy, tdx: fakeTdx(T.nonceOf(b.manifest), b.log) }), /nonce mismatch/);
+  assert.throws(() => T.verifyEvidence(swapped, { policy, collateral: { intel: {} }, tdx: fakeTdx(T.nonceOf(b.manifest), b.log) }), /nonce mismatch/);
 });
 
 test("escrow works across platforms: a dstack box gets its keys back only on the same dstack instance", async () => {
   const a = box("33".repeat(20));
   const peers = [box("44".repeat(20)), box("55".repeat(20))];
-  const verifyEv = (e) => T.verifyEvidence(e, { policy, tdx: fakeTdx(T.nonceOf(e.manifest), e.eventLog) });
-  const myClaims = T.verifyEvidence(a.evidence, { policy, tdx: fakeTdx(T.nonceOf(a.manifest), a.log) }).claims;
+  const verifyEv = (e) => T.verifyEvidence(e, { policy, collateral: { intel: {} }, tdx: fakeTdx(T.nonceOf(e.manifest), e.eventLog) });
+  const myClaims = T.verifyEvidence(a.evidence, { policy, collateral: { intel: {} }, tdx: fakeTdx(T.nonceOf(a.manifest), a.log) }).claims;
   const record = await E.makeEscrow({ master: a.master, myClaims, peers: peers.map((p) => ({ evidence: p.evidence })), verify: verifyEv });
   const ask = (instance) => {
     const req = E.releaseRequest(record);
     const log = [LOG[0], LOG[1], ev("instance-id", instance), LOG[3]];
     const request = { platform: "dstack-tdx", manifest: req.manifest, quote: "00", eventLog: log };
-    const verifyToken = (r) => T.verifyAttestation(r, { policy, tdx: fakeTdx(T.nonceOf(r.manifest), r.eventLog) });
+    const verifyToken = (r) => T.verifyAttestation(r, { policy, collateral: { intel: {} }, tdx: fakeTdx(T.nonceOf(r.manifest), r.eventLog) });
     const replies = [], errors = [];
     for (const p of peers) {
       try { replies.push(E.releaseShare({ myMaster: p.master, record, request, verifyToken })); } catch (e) { errors.push(e.message); }
