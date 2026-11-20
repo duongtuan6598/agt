@@ -34,7 +34,8 @@ test("memory: encrypted at rest, chained, readable again after a restart, export
   await m.append("decision", "Use FreeRTOS 11 with heap_4; tick 1 kHz", 1_700_000_000);
   await m.append("bug", "UART overrun at 921600 baud: DMA ring buffer too small", 1_700_100_000);
   for (const v of store.raw.values()) assert.ok(!v.includes("FreeRTOS") && !v.includes("UART")); // only ciphertext stored
-  assert.ok([...store.raw.keys()].every((k) => !k.includes("97") && !k.includes("0x1"))); // names reveal nothing
+  // names reveal nothing about the engagement (they are an HMAC under the memory key, then a sequence number)
+  assert.ok([...store.raw.keys()].every((k) => /^mem:[0-9a-f]{32}:\d{8}$/.test(k) && !k.includes("engagement") && !k.includes(ctx)));
   const again = new EngagementMemory(E.derive(master).memory, ctx, store); // after a restart
   const all = await again.entries();
   assert.deepStrictEqual(all.map((e) => e.kind), ["decision", "bug"]);
