@@ -459,8 +459,9 @@
       const address = contract === "engagement" ? ADDR.Engagement : ADDR.Maintenance;
       const box = await AGTSeal.seal(pub, token, AGTSeal.contextOf(CHAIN, address, id));
       const text = JSON.stringify(box);
-      const signature = await signer.signMessage(`AGT sealed ${contract} ${id} ${hashOf(text)}`);
-      const r = await (await fetch(EXAM + "/sealed", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ contract, id, box, signature }) })).json();
+      const version = Date.now(); // newer than any earlier upload: an old signed one cannot be replayed
+      const signature = await signer.signMessage(`AGT sealed ${contract} ${id} ${version} ${hashOf(text)}`);
+      const r = await (await fetch(EXAM + "/sealed", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ contract, id, version, box, signature }) })).json();
       if (!r.ok) throw new Error(r.error);
       say(msgId, "Access sealed to the AI's box. Only that box can open it.");
     } catch (e) { say(msgId, why(e), true); }

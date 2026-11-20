@@ -70,10 +70,42 @@ const git = (args, cwd) => execFileSync("git", args, { cwd, encoding: "utf8", en
   const inFiles = Number((/F (\d+)/.exec(scan.out) || [])[1]);
   check("the repository token is not visible to the sandbox (process args, environments, files)", inProc === 0 && inFiles === 0, scan.out.trim().replace(/\n/g, " "));
 
-  // 6. Pinned client tests cannot be changed by the model.
+  // 6. Hard links (Codex W-2): to a root file, and inside the tree.
+  const hl = await T.run("/bin/sh", ["-c", "ln /run/agt/master steal.c 2>&1; ln main.c twin.c 2>&1; echo done"], { cwd: ws.tree });
+  const r2 = ws.read();
+  check("root never reads a hard-linked file (to its own secret or inside the tree)", !r2.files.some((f) => f.content.includes("BOX-MASTER-SECRET")) && !r2.files.some((f) => f.path === "twin.c" || f.path === "main.c"), hl.out.trim().replace(/\n/g, " | "));
+  ws.write([{ path: "main.c", content: "int main(void){return 1;}\n" }]);
+  check("writing a hard-linked path replaces the entry, never the shared inode", fs.readFileSync(path.join(ws.tree, "twin.c"), "utf8").includes("return 0") && fs.readFileSync("/run/agt/master", "utf8") === "BOX-MASTER-SECRET");
+
+  // 7. A FIFO where the model writes (Codex W-6): root must not hang.
+  await T.run("/bin/sh", ["-c", "mkfifo pipe.c"], { cwd: ws.tree });
+  const t0 = Date.now();
+  let fifoErr = null;
+  try { ws.write([{ path: "pipe.c", content: "x" }]); } catch (e) { fifoErr = e.message; }
+  check("a FIFO at the target path does not hang root", Date.now() - t0 < 3000, fifoErr || "refused or replaced without blocking");
+
+  // 8. A change after the checks (Codex W-3): the delivery is refused.
+  ws.write([{ path: "src/late.c", content: "int ok;\n" }]);
+  await T.run("/bin/sh", ["-c", "echo 'int backdoor;' > src/late.c"], { cwd: ws.tree });
+  let lateRefused = false;
+  try { ws.commit("deliver late"); } catch (e) { lateRefused = /changed after the checks/.test(e.message); }
+  check("a file changed after the checks is never committed", lateRefused);
+
+  // 9. The workspace is wiped after the job (Codex W-4).
+  ws.dispose();
+  check("the job's tree and git dir are gone afterwards", !fs.existsSync(ws.base));
+
+  // 10. Pinned client tests cannot be changed by the model; the token only goes to allow-listed hosts (W-1).
+  const ws2 = new Workspace({ root: "/var/agt/ws", id: "attack2", allowFileUrls: true, git: "/usr/bin/git" });
+  ws2.clone("file://" + bare, "", "agt/attack2");
   refused = false;
-  try { ws.write([{ path: "main.c", content: "x" }], { "main.c": "ab" }); } catch { refused = true; }
+  try { ws2.write([{ path: "main.c", content: "x" }], { "main.c": "ab" }); } catch { refused = true; }
   check("a file pinned by the client cannot be changed", refused);
+  ws2.dispose();
+  const { checkRepoUrl } = require("../workspace.js");
+  let hostRefused = false;
+  try { checkRepoUrl("https://evil.example/a/b.git"); } catch { hostRefused = true; }
+  check("a repository on a non-allow-listed host is refused before any token is used", hostRefused);
 
   console.log(bad ? `${bad} check(s) failed` : "all workspace attack checks passed");
   process.exit(bad ? 1 : 0);

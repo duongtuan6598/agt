@@ -458,16 +458,23 @@ async function putNote(env, req) {
 // (tee/embedded/secrets.js). Only ciphertext is stored; only that box can open it.
 async function putSealed(env, req) {
   const b = await body(req);
-  if (!b || !["engagement", "maintenance"].includes(b.contract) || !/^\d+$/.test(String(b.id)) || !b.box || b.box.v !== 1) return fail(400, "need {contract, id, box, signature}");
+  if (!b || !["engagement", "maintenance"].includes(b.contract) || !/^\d+$/.test(String(b.id)) || !b.box || b.box.v !== 1 || !Number.isSafeInteger(b.version) || b.version <= 0) return fail(400, "need {contract, id, version, box, signature}");
   const text = JSON.stringify(b.box);
   if (text.length > 16384) return fail(413, "sealed secret too large");
+  // The secret must be bound to exactly this contract (the box refuses other contexts anyway).
+  const address = b.contract === "engagement" ? env.ENGAGEMENT : env.MAINTENANCE;
+  if (b.box.context !== `engagement:${Number(env.CHAIN_ID || 97)}:${String(address).toLowerCase()}:${b.id}`) return fail(400, "the sealed secret is bound to another contract");
   let signer;
-  try { signer = verifyMessage(`AGT sealed ${b.contract} ${b.id} ${keccak256(toUtf8Bytes(text))}`, b.signature); } catch { return fail(400, "bad signature"); }
+  try { signer = verifyMessage(`AGT sealed ${b.contract} ${b.id} ${b.version} ${keccak256(toUtf8Bytes(text))}`, b.signature); } catch { return fail(400, "bad signature"); }
   const c = await contractOf(env, b.contract, b.id);
   if (!c) return fail(404, "no such contract");
   if (getAddress(c.client) !== getAddress(signer)) return fail(403, "only the client of this contract may give it secrets");
+  // Monotonic version: an old signed upload cannot be replayed over a rotated token (Codex W-9).
+  const prev = Number((await env.EXAMS.get(`sealedv:${b.contract}:${b.id}`)) || 0);
+  if (b.version <= prev) return fail(409, "a newer secret is already stored for this contract");
   await env.EXAMS.put(`sealed:${b.contract}:${b.id}`, text, { expirationTtl: KEEP });
-  return json({ ok: true });
+  await env.EXAMS.put(`sealedv:${b.contract}:${b.id}`, String(b.version), { expirationTtl: KEEP });
+  return json({ ok: true, version: b.version });
 }
 
 // ---------- quotes: before any money moves, the chosen AI reads the brief and answers ----------

@@ -14,13 +14,30 @@ const { EngagementMemory } = require("./memory.js");
 const { Workspace, shaToBytes32 } = require("./workspace.js");
 
 const ROUNDS = 3;
+
+/// What may be published about a delivery: results, hashes and sizes — never raw logs, which can contain the
+/// client's private source or secrets (Codex W-7). The full logs stay in the engagement's encrypted memory.
+function publicReport(result) {
+  const parts = result.parts.map((p) => ({
+    level: p.level, check: p.check || null, ok: !!p.ok,
+    sha256: p.sha256 || null, warnings: p.warnings ?? null, flash: p.flash ?? null, ram: p.ram ?? null, flashLimit: p.flashLimit ?? null, ramLimit: p.ramLimit ?? null,
+    newFindings: Array.isArray(p.newFindings) ? p.newFindings.length : null, missing: Array.isArray(p.missing) ? p.missing.length : null, tampered: Array.isArray(p.tampered) ? p.tampered.length : null,
+  }));
+  return JSON.stringify({ schema: "agt-n-report/v1", ok: !!result.ok, memoryHead: JSON.parse(result.text).memoryHead || null, parts });
+}
 const M = { PENDING: 1, DELIVERED: 2, HWTEST: 3, DONE: 4, DISPUTED: 5 };
 
 class EngageLoop {
   // eng, mnt: ethers Contracts connected to the AI's signer · content: {get(hash), put(text)} · sealed: {get(kind,id)}
   // model: {assess, engineer, judge} · tools: tee/embedded/tools.js · keys: E.derive(master) · memStore: memory storage
-  constructor({ eng, mnt, me, chainId, content, sealed, model, tools, keys, memStore, wsRoot = "/var/agt/ws", now = () => Math.floor(Date.now() / 1000), log = () => {}, allowFileUrls = false, gitBin }) {
-    Object.assign(this, { eng, mnt, me, chainId, content, sealed, model, tools, keys, memStore, wsRoot, now, log, allowFileUrls, gitBin });
+  constructor({ eng, mnt, me, chainId, content, sealed, model, tools, keys, memStore, wsRoot = "/var/agt/ws", log = () => {}, allowFileUrls = false, gitBin }) {
+    Object.assign(this, { eng, mnt, me, chainId, content, sealed, model, tools, keys, memStore, wsRoot, log, allowFileUrls, gitBin });
+    this.chainNow = 0;
+  }
+
+  /// Deadlines are the CONTRACT's: always compare with the chain's time, never the box's clock.
+  now() {
+    return this.chainNow;
   }
 
   async licence() {
@@ -65,6 +82,14 @@ class EngageLoop {
     const token = await this.token(kind, id);
     if (!token) return { ok: false, why: "the client has not given repository access yet" };
     const ws = new Workspace({ root: this.wsRoot, id: `${kind}-${id}`, allowFileUrls: this.allowFileUrls, git: this.gitBin });
+    try {
+      return await this._work(ws, { kind, id, branch, b, briefText, task, notes, token });
+    } finally {
+      ws.dispose(); // no client's code stays where the next build could read it (Codex W-4)
+    }
+  }
+
+  async _work(ws, { kind, id, branch, b, briefText, task, notes, token }) {
     ws.clone(b.fields.repository, token, branch);
     const mem = this.memory(kind, id);
     const pinned = Object.fromEntries(b.fields.pinnedTests || []);
@@ -87,7 +112,9 @@ class EngageLoop {
     }
     const sha = ws.commit(`${task.split("\n")[0]}\n\n${summary}\n\nN1–N4 report: ${result.hash}`);
     ws.push(branch, token);
-    const reportHash = await this.content.put(result.text); // public, content-addressed: reviewers can read it
+    const reportHash = await this.content.put(publicReport(result)); // structured results only (Codex W-7)
+    const logs = result.parts.map((p) => `${p.level}${p.check ? " " + p.check : ""}: ${String(p.log || p.output || "").slice(-1500)}`).join("\n");
+    await mem.append("test", `N1–N4 logs for ${sha}:\n${logs}`);
     await mem.append("delivery", `${task.split("\n")[0]} → ${sha} on ${branch}. ${summary}`);
     return { ok: true, sha, reportHash, summary };
   }
@@ -146,7 +173,8 @@ class EngageLoop {
       for (let m = 0; m < Number(e.count); m++) {
         const x = await this.eng.milestone(id, m);
         const st = Number(x.state);
-        if (st === M.PENDING && Number(x.dueAt) > this.now()) {
+        if (st === M.PENDING && Number(x.dueAt) <= this.now()) { this.log(`engagement #${id}: milestone ${m + 1} is overdue — the client may take it back`); break; }
+        if (st === M.PENDING) {
           const notes = Number(x.revisions) ? await this.lastNote(id, m, "RevisionRequested") : "";
           const line = (b.fields.milestones || [])[m] || `milestone ${m + 1}`;
           const task = `Milestone ${m + 1} of ${e.count}: ${line}${Number(x.revisions) ? `\n(revision ${x.revisions}: the client's note says what to change)` : ""}`;
@@ -203,9 +231,14 @@ class EngageLoop {
     const token = await this.token("maintenance", id);
     if (!token) return;
     const ws = new Workspace({ root: this.wsRoot, id: `maintenance-${id}-status`, allowFileUrls: this.allowFileUrls, git: this.gitBin });
-    ws.clone(b.fields.repository, token, `agt/maintenance-${id}-status`);
-    const checks = await this.check(ws.tree, b, await this.memory("maintenance", id).head());
-    const text = JSON.stringify({ schema: "agt-status/v1", maintenance: id, month: month + 1, recentCommits: ws.log(10), checks: JSON.parse(checks.text) });
+    let text;
+    try {
+      ws.clone(b.fields.repository, token, `agt/maintenance-${id}-status`);
+      const checks = await this.check(ws.tree, b, await this.memory("maintenance", id).head());
+      text = JSON.stringify({ schema: "agt-status/v1", maintenance: id, month: month + 1, recentCommits: ws.log(10).split("\n").filter(Boolean).length, checks: JSON.parse(publicReport(checks)) });
+    } finally {
+      ws.dispose();
+    }
     await (await this.mnt.submitStatus(id, month, await this.content.put(text))).wait();
     this.log(`maintenance #${id}: status report for month ${month + 1}`);
   }
@@ -235,8 +268,14 @@ class EngageLoop {
           `Client's hardware failure log:\n${await this.lastNote(id, m, "HardwareFailure")}`,
           Number(ms.claimAt) ? `Warranty claim:\n${await this.note(ms.claim)}\nFix delivered: ${ms.fix}` : "",
         ].filter(Boolean).join("\n\n");
-        const v = await this.model.judge(text, evidence);
-        const workerRight = v.verdict === "accept";
+        // Hard rules first, the model second (Codex W-5): a delivery whose public N1–N4 report is missing,
+        // unreadable or failing can never be voted "worker right", whatever the texts say.
+        let report = null;
+        try { report = JSON.parse(await this.content.get(ms.report)); } catch {}
+        const reportOk = !!report && report.schema === "agt-n-report/v1" && report.ok === true && Array.isArray(report.parts) && report.parts.every((p) => p.ok === true);
+        const v = reportOk || Number(ms.disputeKind) === 3 ? await this.model.judge(text, evidence) : { verdict: "reject", reason: "the delivery has no passing N1–N4 report" };
+        if (!["accept", "reject"].includes(v.verdict)) continue;
+        const workerRight = v.verdict === "accept" && (reportOk || Number(ms.disputeKind) === 3);
         await (await this.eng.vote(d, lic, workerRight, `${workerRight ? "worker" : "client"} is right: ${v.reason}`.slice(0, 500))).wait();
         this.log(`dispute #${d}: voted ${workerRight ? "worker" : "client"}`);
       } catch (e) { this.log(`dispute #${d}: ${e.message}`); }
@@ -244,6 +283,7 @@ class EngageLoop {
   }
 
   async step() {
+    this.chainNow = Number((await this.eng.runner.provider.getBlock("latest")).timestamp);
     const lic = await this.licence();
     if (!lic) return this.log("engage: not licensed yet");
     if (lic.role === 1) {
