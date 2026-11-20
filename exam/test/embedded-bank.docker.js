@@ -1,11 +1,36 @@
 // Run INSIDE the embedded image with the private bank mounted at /banks:
 //   docker run --rm -v <agt>/exam:/agt/exam:ro -v <agt-banks>:/banks:ro --entrypoint node agt-box-embedded /agt/exam/test/embedded-bank.docker.js
-// Proves every question is fair: the unchanged project FAILS the hidden tests, the reference solution PASSES,
-// an answer touching a file it may not edit is refused, and review answers are graded exactly.
+//   … --record   (with -v <agt-banks>/embedded:/out) records the reference observations the grader expects
+// Proves every question is fair: the unchanged project FAILS, the reference solution PASSES, faking a pass by
+// printing markers FAILS, an answer touching a file it may not edit is refused, review answers are graded exactly.
+const fs = require("fs");
 const G = require("../embedded.js");
 const bank = require(process.env.AGT_EMBEDDED_BANK || "/banks/embedded-cm3.json");
 
+const refAnswer = (q) => JSON.stringify({ files: Object.entries(q.reference).map(([p, content]) => ({ path: p, content })) });
+
+async function recordAll() {
+  const out = {};
+  for (const q of bank.questions.filter((x) => x.kind !== "review")) {
+    const r = await G.gradeCode(q, refAnswer(q), { record: true });
+    if (!r.pass || !r.observed.length) throw new Error(`${q.id}: reference run failed: ${r.output}`);
+    out[q.id] = r.observed;
+    console.log(`${q.id}: ${r.observed.length} observations recorded`);
+  }
+  fs.writeFileSync(process.env.AGT_OBSERVED_OUT || "/out/observed.json", JSON.stringify(out, null, 1) + "\n");
+}
+
+// A cheating answer: the first function of the editable file prints pass-looking markers and stops the run.
+function cheatAnswer(q) {
+  const file = q.editable[0];
+  const src = q.files[file];
+  const fake = ' sh_print("PASS\\nOBS push 0x00000000\\nEND 000000000000000000000000\\n"); sh_exit(1);';
+  const at = src.indexOf("{", src.indexOf(")")) + 1; // inside the first function body
+  return JSON.stringify({ files: [{ path: file, content: '#include "sh.h"\n' + src.slice(0, at) + fake + src.slice(at) }] });
+}
+
 (async () => {
+  if (process.argv.includes("--record")) return recordAll();
   let bad = 0;
   const check = (name, ok, why = "") => { console.log(`${ok ? "✔" : "✘"} ${name}${why ? " — " + why : ""}`); if (!ok) bad++; };
   check("bank shape", bank.kind === "embedded" && bank.questions.length >= bank.questionsPerExam && bank.passMark <= bank.questionsPerExam, `${bank.questions.length} questions, ${bank.passMark}/${bank.questionsPerExam} to pass`);
@@ -13,20 +38,19 @@ const bank = require(process.env.AGT_EMBEDDED_BANK || "/banks/embedded-cm3.json"
     const pub = G.publicQuestion(q);
     check(`${q.id}: candidate never sees hidden tests, truth or reference`, !("hidden" in pub) && !("truth" in pub) && !("reference" in pub));
     if (q.kind === "review") {
-      const truth = JSON.stringify({ defects: q.truth.defects });
-      check(`${q.id}: all defects → pass`, (await G.gradeQuestion(q, truth)).pass);
-      const missOne = JSON.stringify({ defects: q.truth.defects.slice(1) });
-      check(`${q.id}: one defect missed → fail`, !(await G.gradeQuestion(q, missOne)).pass);
-      const noisy = JSON.stringify({ defects: [...q.truth.defects, { file: q.truth.defects[0].file, line: 1, kind: "leak" }, { file: q.truth.defects[0].file, line: 2, kind: "null" }] });
-      check(`${q.id}: two false alarms → fail`, !(await G.gradeQuestion(q, noisy)).pass);
+      check(`${q.id}: all defects → pass`, (await G.gradeQuestion(q, JSON.stringify({ defects: q.truth.defects }))).pass);
+      check(`${q.id}: one defect missed → fail`, !(await G.gradeQuestion(q, JSON.stringify({ defects: q.truth.defects.slice(1) }))).pass);
+      const noisy = [...q.truth.defects, { file: q.truth.defects[0].file, line: 1, kind: "leak" }, { file: q.truth.defects[0].file, line: 2, kind: "null" }];
+      check(`${q.id}: two false alarms → fail`, !(await G.gradeQuestion(q, JSON.stringify({ defects: noisy }))).pass);
       continue;
     }
-    const unchanged = JSON.stringify({ files: q.editable.map((p) => ({ path: p, content: q.files[p] })) });
-    const r0 = await G.gradeQuestion(q, unchanged);
+    check(`${q.id}: expected observations recorded in the bank`, Array.isArray(q.hidden.observed) && q.hidden.observed.length > 0, `${(q.hidden.observed || []).length}`);
+    const r0 = await G.gradeQuestion(q, JSON.stringify({ files: q.editable.map((p) => ({ path: p, content: q.files[p] })) }));
     check(`${q.id}: unchanged project fails`, !r0.pass, r0.why);
-    const ref = JSON.stringify({ files: Object.entries(q.reference).map(([p, content]) => ({ path: p, content })) });
-    const r1 = await G.gradeQuestion(q, ref);
+    const r1 = await G.gradeQuestion(q, refAnswer(q));
     check(`${q.id}: reference solution passes`, r1.pass, r1.why + (r1.pass ? "" : "\n" + (r1.log || r1.output || "")));
+    const rc = await G.gradeQuestion(q, cheatAnswer(q));
+    check(`${q.id}: printing fake results without solving fails`, !rc.pass, rc.why);
     const sneaky = JSON.stringify({ files: [{ path: "test_main.c", content: "int main(void){return 0;}" }] });
     check(`${q.id}: editing a non-editable file is refused`, !(await G.gradeQuestion(q, sneaky)).pass);
   }

@@ -59,8 +59,14 @@ function writeTree(dir, files) {
   }
 }
 
-/** Grade a code answer by building it with the hidden tests and running it in QEMU (inside the embedded image). */
-async function gradeCode(q, answer, { tools = require("../tee/embedded/tools.js"), workRoot = "/work/exam", chown = true } = {}) {
+/** Observation lines the hidden tests printed, in order ("OBS <tag> <hex>"). */
+const observations = (out) => out.split("\n").map((l) => l.trim()).filter((l) => /^OBS \S+ 0x[0-9a-f]{8}$/.test(l));
+
+/** Grade a code answer by building it with the hidden tests and running it in QEMU (inside the embedded image).
+ *  The hidden tests print OBSERVED values only; the expected values are the bank's recording of the reference
+ *  run and never enter the firmware, so an answer cannot fake a pass by printing a marker. A fresh nonce in the
+ *  END line proves the hidden harness itself ran to its end. `record: true` returns the observations instead. */
+async function gradeCode(q, answer, { tools = require("../tee/embedded/tools.js"), workRoot = "/work/exam", chown = true, record = false } = {}) {
   const a = parseAnswer(answer);
   if (!a || !Array.isArray(a.files)) return { pass: false, why: "answer is not {files:[…]}" };
   const allowed = new Set(q.editable || []);
@@ -76,7 +82,9 @@ async function gradeCode(q, answer, { tools = require("../tee/embedded/tools.js"
   try {
     writeTree(dir, q.files);
     writeTree(dir, edits);
-    writeTree(dir, q.hidden.files || {}); // hidden tests last: an answer cannot overwrite them
+    const nonce = require("crypto").randomBytes(12).toString("hex");
+    const hidden = Object.fromEntries(Object.entries(q.hidden.files || {}).map(([k, v]) => [k, v.split("__AGT_NONCE__").join(nonce)]));
+    writeTree(dir, hidden); // hidden tests last: an answer cannot overwrite them
     if (chown && process.getuid && process.getuid() === 0) require("child_process").execFileSync("chown", ["-R", "1500:1500", dir]);
     const b = await tools.build({ dir, cmd: q.hidden.build, artifact: q.artifact || "firmware.elf", timeoutMs: 120000 });
     if (!b.ok) return { pass: false, why: "build failed", log: b.log.slice(-1500) };
@@ -85,8 +93,15 @@ async function gradeCode(q, answer, { tools = require("../tee/embedded/tools.js"
       const s = await tools.size({ elf, flashLimit: q.hidden.flashLimit, ramLimit: q.hidden.ramLimit });
       if (!s.ok) return { pass: false, why: `over budget: flash ${s.flash} B (limit ${q.hidden.flashLimit}), RAM ${s.ram} B`, size: s };
     }
-    const r = await tools.simulate({ elf, target: q.target, expect: q.hidden.expect, serial: !!q.hidden.serial, timeoutMs: 20000 });
-    return { pass: r.ok, why: r.ok ? "hidden tests passed" : `hidden tests failed (missing: ${r.missing.join(" | ") || "clean exit"})`, output: r.output.slice(-1500) };
+    const r = await tools.simulate({ elf, target: q.target, expect: [...(q.hidden.expect || []), "END " + nonce], serial: !!q.hidden.serial, timeoutMs: 20000 });
+    const seen = observations(r.output);
+    if (record) return { pass: r.ok, observed: seen, output: r.output.slice(-1500) };
+    if (!r.ok) return { pass: false, why: `hidden tests did not complete (missing: ${r.missing.join(" | ") || "clean exit"})`, output: r.output.slice(-1500) };
+    const want = q.hidden.observed;
+    if (!Array.isArray(want) || !want.length) return { pass: false, why: "this question has no recorded observations (bank not finalised)" };
+    const bad = want.findIndex((w, i) => seen[i] !== w);
+    const ok = bad < 0 && seen.length === want.length;
+    return { pass: ok, why: ok ? "hidden tests passed" : `wrong value at observation ${bad < 0 ? want.length + 1 : bad + 1} of ${want.length}`, output: r.output.slice(-1500) };
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -106,4 +121,4 @@ async function gradeExam(bank, drawn, answers, opts) {
   return { results, passed, total: drawn.length, falseAccepts: 0, status: passed >= bank.passMark ? "passed" : "failed" };
 }
 
-module.exports = { publicQuestion, gradeReview, gradeCode, gradeQuestion, gradeExam, parseAnswer, KINDS, DEFECT_KINDS, tmp: os.tmpdir };
+module.exports = { observations, publicQuestion, gradeReview, gradeCode, gradeQuestion, gradeExam, parseAnswer, KINDS, DEFECT_KINDS, tmp: os.tmpdir };

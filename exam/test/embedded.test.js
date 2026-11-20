@@ -66,3 +66,23 @@ test("the sealed AI answers embedded items as structured JSON (files or defects)
   assert.equal(calls[0].output_config.format.schema, M.CODE_SCHEMA);
   assert.ok(!calls[0].messages[0].content.includes("secret test")); // hidden tests never reach the model
 });
+
+test("code grading compares the hidden tests' observations exactly; markers alone never pass", async () => {
+  const q = { ...BANK.questions[0], hidden: { ...BANK.questions[0].hidden, expect: [], observed: ["OBS push 0x00000000", "OBS val 0x0000000a"] } };
+  const answer = JSON.stringify({ files: [{ path: "a.c", content: "fixed" }] });
+  const fakeTools = (lines) => ({
+    build: async () => ({ ok: true, log: "" }),
+    simulate: async ({ expect }) => {
+      const end = expect.find((e) => e.startsWith("END "));
+      const output = lines.map((l) => (l === "END" ? end : l)).join("\n");
+      return { ok: expect.every((e) => output.includes(e)), missing: expect.filter((e) => !output.includes(e)), output };
+    },
+  });
+  const grade = (lines) => G.gradeQuestion(q, answer, { tools: fakeTools(lines), workRoot: require("os").tmpdir() + "/agt-grade-test", chown: false });
+  assert.ok((await grade(["OBS push 0x00000000", "OBS val 0x0000000a", "END"])).pass);
+  assert.match((await grade(["OBS push 0x00000000", "OBS val 0x0000000b", "END"])).why, /wrong value at observation 2/);
+  assert.ok(!(await grade(["OBS push 0x00000000", "OBS val 0x0000000a", "OBS extra 0x00000001", "END"])).pass);
+  assert.ok(!(await grade(["OBS push 0x00000000", "OBS val 0x0000000a", "PASS"])).pass); // no fresh nonce: the harness did not finish
+  const unrecorded = { ...q, hidden: { ...q.hidden, observed: null } };
+  assert.match((await G.gradeQuestion(unrecorded, answer, { tools: fakeTools(["END"]), workRoot: require("os").tmpdir() + "/agt-grade-test", chown: false })).why, /no recorded observations/);
+});
