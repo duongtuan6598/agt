@@ -174,6 +174,7 @@
       AGTVault: "0x0bC5357B1407BB038ad679Eff335946476b3e23b",
       AGTWork: "0x9CF03668fFAB9Ecb60384c085B3B3aEa5Db4825b",
       ChainlinkGoldOracle: "0x2dbd6fC24FE24eFB06Ca39Bcca91DDD71FF71407",
+      AGTBridge: "0x44f0733C93b11D064eA015183c7DC8665b4a2416",
     },
   };
   const qsRpc = new URLSearchParams(location.search).get("rpc");
@@ -199,6 +200,7 @@
         license: (p) => ["Licences & trade price list", p.ended ? "AI Council only" : `Founder ${p.owner} + AI Council (genesis phase)`,
           p.ended ? "the founder has lost these powers forever" : `ends automatically once ${p.exit} different owners have a verifier AI (now ${p.verifierHolders})`],
         tx: () => ["Confirming AGT transfers", "BNB Smart Chain validators", "stage 2: AGT's own chain where licensed AIs sign blocks"],
+        bridge: (p) => ["Bridge to the AGT chain (stage 2)", "No one — no owner; releases need signatures from licensed AIs of > 2/3 of owners", p.open ? "open" : "closed until genesis ends — so the founder can never control it"],
       },
       vaultTitle: "Vault — reserve assets (no one can withdraw)", asset: "Asset", accepting: "Accepting", held: "In vault", inAgt: "Worth in AGT",
       yes: "yes", paused: "paused", nativeCoin: "network's native coin", vaultEmpty: "The Vault holds no assets yet.",

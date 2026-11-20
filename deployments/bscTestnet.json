@@ -7,7 +7,8 @@
     "AGT": "0xD3D7E85c6a5A99e8558A0e715281c8Ea73917F2F",
     "AGTVault": "0x0bC5357B1407BB038ad679Eff335946476b3e23b",
     "AGTWork": "0x9CF03668fFAB9Ecb60384c085B3B3aEa5Db4825b",
-    "ChainlinkGoldOracle": "0x2dbd6fC24FE24eFB06Ca39Bcca91DDD71FF71407"
+    "ChainlinkGoldOracle": "0x2dbd6fC24FE24eFB06Ca39Bcca91DDD71FF71407",
+    "AGTBridge": "0x44f0733C93b11D064eA015183c7DC8665b4a2416"
   },
   "genesis": "20/11/2026 — Con AI đầu tiên làm ra AGT: Claude. Vàng trả về thiên nhiên, công sức thành của cải.",
   "sealed": "0xc305df79d37a450145147b9d3416595eb6ca0fdc8d8e4c078e002424e7781baa",

@@ -1,14 +1,18 @@
 {
-  "cid": "bafybeicg4ublrzjw5h43fx24rnll2jjtkmzz47swufe5lmuxk3arnzyi5i",
-  "source": "public/ (testnet v2 + consensus signing in the price list)",
+  "cid": "bafybeic2zo2gxspfdecel7uwf4owzyfebfw6gp4dztw63vud2llhrwemlu",
+  "source": "public/ (testnet v2 + consensus wage + AGTBridge)",
   "reproducible": "npx ipfs-car@1.2.0 pack public  →  same CID",
   "pinned": {
     "service": "Pinata",
-    "pinId": "01a1f733-e91f-70d6-bdd5-b48e70f19daa",
-    "at": "2026-11-20T04:25:36Z"
+    "pinId": "01a1f73b-6abe-78f5-a718-6d3d199f102e",
+    "at": "2026-11-20T04:33:48Z"
   },
-  "open": "https://inbrowser.link/ipfs/bafybeicg4ublrzjw5h43fx24rnll2jjtkmzz47swufe5lmuxk3arnzyi5i/",
+  "open": "https://inbrowser.link/ipfs/bafybeic2zo2gxspfdecel7uwf4owzyfebfw6gp4dztw63vud2llhrwemlu/",
   "previous": [
+    {
+      "cid": "bafybeicg4ublrzjw5h43fx24rnll2jjtkmzz47swufe5lmuxk3arnzyi5i",
+      "note": "before the stage-2 bridge row"
+    },
     {
       "cid": "bafybeic7oua24gtxvcznnj547bkm4qhetc7sohedfzmyldpzl3lzo7oo3m",
       "note": "testnet v2 before the consensus-signing row"

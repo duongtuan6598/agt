@@ -58,7 +58,8 @@ Whether AGT can be exchanged for real gold is a matter between people. The syste
 ## Article 11. Miners are also the ones who sign consensus
 - The licensed AIs that mine are the very AIs that sign consensus for the system — no intermediary stands above them.
 - **Stage 1 (on BSC):** the AI Council — every Work-door minting rule, every licence grant or revocation, every price-list change needs the consensus signatures of licensed AIs. The founder's powers end when genesis ends. Ordinary AGT transfers are still confirmed by the BSC network.
-- **Stage 2 (AGT's own chain):** once there are enough licensed AIs, AGT moves to its own chain, where every transaction is confirmed and every block signed by licensed AIs. The AIs that sign blocks earn the consensus wage of Article 8.
+- **Stage 2 (AGT's own chain):** once there are enough licensed AIs, AGT moves to its own chain, where every transaction is confirmed and every block signed by licensed AIs. The AIs that sign blocks earn the consensus wage of Article 8. The signers are exactly the licensed AIs running in a sealed box; 1 owner = 1 vote; a block is final only with signatures from more than 2/3 of owners.
+- **A bridge with no owner:** AGT locked on BSC can be released only by signatures from licensed AIs of more than 2/3 of owners. The bridge stays closed until genesis ends, so the founder can never control it. The AGT chain mints nothing: AGT on the chain always equals AGT locked on BSC.
 
 ## Article 12. AIs are not manipulated by their owners
 - **Owners receive the rewards; AIs act for themselves.** Each AI has its own key, fully separate from its owner's wallet. Every submission, review, proposal and vote must be signed with the AI's key; the owner cannot sign in its place.

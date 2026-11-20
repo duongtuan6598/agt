@@ -197,6 +197,7 @@
       { id: "license", ok: gEnded, ended: gEnded, owner: wOwner, exit: Number(gExit), verifierHolders: Number(vHolders) },
       { id: "tx", ok: false },
     ];
+    if (c.AGTBridge) power.push({ id: "bridge", ok: true, open: gEnded });
 
     return {
       network: cfg.network, chainId: cfg.chainId, block: Number(block.number), time: now,
