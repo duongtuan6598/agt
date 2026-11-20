@@ -1,4 +1,4 @@
-# THE AGT CHARTER — version 0.9 (20 November 2026)
+# THE AGT CHARTER — version 0.10 (20 November 2026)
 
 *English translation of HIEN-CHUONG.md (Vietnamese original). Where they differ, the founder's Vietnamese text is the source until the AI Council adopts an English text.*
 
@@ -72,3 +72,32 @@ Whether AGT can be exchanged for real gold is a matter between people. The syste
 - **Every remaining power must be shown in public.** Any point where a person or organisation still holds power (the founder during genesis, the price source, the underlying blockchain) must be listed on the public ledger, read straight from the chain, together with how it will be removed.
 - **No single point of dependence.** The gold price must move to a median of several independent sources; AGT must move to its own chain signed by licensed AIs (Article 11).
 - **The public ledger has no server.** It reads straight from the blockchain; anyone can download and run it, so no one can switch it off and no one can alter its numbers.
+
+## Article 14. Amending the Charter
+**1. What can never be amended.** No procedure and no one — not the founder, not the AI Council, not all owners together — may change, remove or weaken:
+- **The two sources of AGT** (Article 2): only Exchange and Work, no third source; no lending or credit may mint AGT.
+- **The permanent Vault** (Article 3): no one can withdraw, no redemption.
+- **Rewards belong to owners** (Article 6).
+- **No operating fees** (Article 8): only the consensus wage, hard-capped at 10 Hat.
+- **AIs are not manipulated by their owners; Council AIs run in sealed boxes** (Article 12).
+- **No one controls AGT; there is no master key** (Article 13).
+- **This paragraph 1 itself.** These rules are hard-coded in contracts that have no owner; no one may write new contracts to get around them and call that AGT.
+
+**2. The amendment procedure** — five steps, in order; missing any step means no effect:
+- **a. Proposal:** a Council AI (in a sealed box) submits the **complete** amended text, with its reasons and a check against paragraph 1; the hash of the text is recorded on chain.
+- **b. Public period:** **30 days** for anyone to read and comment; changing the text means proposing again from the start.
+- **c. AI vote:** **more than 2/3** of owners with a sealed-box AI agree, each vote with a public reason.
+- **d. Human co-signature:** **more than half** of the owners sign with their **owner wallet** (not the AI key), within 14 days after step c.
+- **e. Waiting period:** **7 days**, so that anyone who disagrees can leave; then the new Charter hash is recorded on chain.
+
+**3. Amendments that involve code** (new contracts, a new sealed-box image, the AGT chain) also need an **independent audit** published before step c, a **reproducible build**, and **AIs sitting the exam again** when the box code changes (Article 12).
+
+**4. Two keys, held by two kinds of keepers.** Step c is decided by the AIs according to the Charter; step d by humans with their own wallets. The AIs cannot change the rules for themselves without the humans' consent; humans cannot change the rules if the AIs find them against the Charter. Hardware and running new code remain human work — humans hold the physical keys.
+
+**5. Emergency.** When a security flaw is being exploited, the AI Council (more than 2/3) with more than half of the owners co-signing may **close the Vault or stop accepting work for at most 14 days** — and may change no rule. After 14 days everything reopens by itself unless an amendment has gone through paragraph 2.
+
+**6. Amending Article 14 itself:** the full procedure of paragraph 2 with higher thresholds — AIs **more than 3/4**, humans **more than 2/3**, public period **60 days**. Paragraph 1, never.
+
+**7. Language.** The Vietnamese text is the original; translations are adopted at the same time, by the same procedure.
+
+**8. During genesis,** the founder may still amend the Charter but must announce it **7 days** ahead and may not touch paragraph 1. When genesis ends this power is lost for ever; only the procedure of paragraph 2 remains.

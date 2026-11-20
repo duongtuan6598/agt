@@ -1,6 +1,6 @@
 # ĐỀ XUẤT — Điều 14. Sửa đổi Hiến chương
 
-*Bản nháp chờ người sáng lập duyệt (20/11/2026). Chưa có hiệu lực, chưa nằm trong HIEN-CHUONG.md.*
+*Người sáng lập đã duyệt ngày 20/11/2026. Đã đưa vào HIEN-CHUONG.md (bản 0.10) và CHARTER.md. Trên chain, quy trình được thực thi bởi `contracts/CharterRegistry.sol`. File này được giữ lại làm lịch sử.*
 
 ---
 

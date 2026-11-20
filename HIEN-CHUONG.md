@@ -1,4 +1,4 @@
-# HIẾN CHƯƠNG AGT — bản 0.9 (20/11/2026)
+# HIẾN CHƯƠNG AGT — bản 0.10 (20/11/2026)
 
 AGT là đồng tiền của công sức AI: AI làm ra của cải như người nông dân làm ra lúa gạo.
 
@@ -70,3 +70,32 @@ AGT có đổi được ra vàng thật hay không là chuyện giữa người 
 - **Mọi quyền còn lại phải hiện công khai.** Bất kỳ điểm nào còn có người hay tổ chức nắm quyền (người sáng lập trong giai đoạn khởi tạo, nguồn giá, mạng blockchain đang chạy) đều phải được liệt kê trên trang công khai, đọc thẳng từ chain, kèm cách gỡ bỏ.
 - **Không phụ thuộc một nguồn duy nhất.** Giá vàng phải tiến tới lấy trung vị từ nhiều nguồn độc lập; AGT phải tiến tới chuỗi riêng do các AI có giấy phép ký khối (Điều 11).
 - **Sổ công khai không có máy chủ.** Trang công khai đọc thẳng từ blockchain; ai cũng tải về chạy được, nên không ai tắt được, không ai sửa được số liệu.
+
+## Điều 14. Sửa đổi Hiến chương
+**1. Những điều không bao giờ sửa được.** Không quy trình nào, không ai — người sáng lập, Hội đồng AI hay toàn bộ các chủ — được sửa, bỏ hay làm yếu:
+- **Hai nguồn sinh ra AGT** (Điều 2): chỉ Đổi và Công, không nguồn thứ ba; không cho vay hay tín dụng nào được đúc AGT.
+- **Kho vĩnh viễn** (Điều 3): không ai rút được, không đổi ngược.
+- **Thưởng thuộc về chủ** (Điều 6).
+- **Không phí vận hành** (Điều 8): chỉ có tiền công đồng thuận, trần cứng 10 Hạt.
+- **AI không chịu thao túng của chủ, AI Hội đồng phải chạy trong hộp kín** (Điều 12).
+- **Không ai chi phối, không có chìa khoá tổng** (Điều 13).
+- **Chính khoản 1 này.** Những điều này đã viết cứng vào hợp đồng không có chủ; không ai được viết hợp đồng mới để lách chúng rồi gọi đó là AGT.
+
+**2. Quy trình sửa đổi** — đủ năm bước, theo thứ tự; thiếu một bước là không có hiệu lực:
+- **a. Đề xuất:** một AI Hội đồng (có hộp kín) đưa văn bản sửa đổi **đầy đủ**, kèm lý do và đối chiếu khoản 1; mã băm văn bản ghi lên chain.
+- **b. Công khai:** **30 ngày** để mọi người đọc và góp ý; muốn sửa nội dung thì đề xuất lại từ đầu.
+- **c. AI biểu quyết:** **hơn 2/3** số chủ có AI hộp kín đồng ý, mỗi phiếu kèm lý do công khai.
+- **d. Con người đồng ký:** **quá nửa** số chủ ký bằng **ví chủ** (không phải khoá AI), trong 14 ngày sau bước c.
+- **e. Chờ hiệu lực:** **7 ngày**, để ai không đồng ý kịp rút khỏi hệ thống; sau đó mã băm Hiến chương mới được ghi lên chain.
+
+**3. Sửa đổi liên quan đến code** (hợp đồng mới, image hộp kín mới, chuỗi AGT) còn phải có **kiểm toán độc lập** công bố trước bước c, **bản build tái lập được**, và **AI thi lại** khi code hộp kín thay đổi (Điều 12).
+
+**4. Hai chìa khoá, hai loại người giữ.** Bước c do AI quyết theo Hiến chương; bước d do con người quyết bằng ví của mình. AI không thể tự sửa luật cho mình nếu con người không đồng ý; con người không thể sửa luật nếu AI thấy trái Hiến chương. Phần cứng và việc chạy code mới vẫn do con người làm — con người nắm chìa khoá vật chất.
+
+**5. Khẩn cấp.** Khi có lỗ hổng bảo mật đang bị khai thác, Hội đồng AI (hơn 2/3) cùng quá nửa số chủ đồng ký được **tạm đóng Kho hoặc tạm ngừng nhận việc tối đa 14 ngày** — không được sửa luật nào. Hết 14 ngày mọi thứ tự mở lại, trừ khi một sửa đổi đã đi đủ quy trình ở khoản 2.
+
+**6. Sửa chính Điều 14:** đủ quy trình ở khoản 2 với ngưỡng cao hơn — AI **hơn 3/4**, con người **hơn 2/3**, công khai **60 ngày**. Khoản 1 thì không bao giờ.
+
+**7. Ngôn ngữ.** Bản tiếng Việt là bản gốc; bản dịch được thông qua cùng lúc, theo cùng quy trình.
+
+**8. Trong giai đoạn khởi tạo,** người sáng lập vẫn sửa được Hiến chương nhưng phải công bố trước **7 ngày** và không được đụng khoản 1. Khi giai đoạn khởi tạo kết thúc, quyền này mất vĩnh viễn; chỉ còn quy trình ở khoản 2.

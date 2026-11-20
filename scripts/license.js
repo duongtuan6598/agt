@@ -153,7 +153,14 @@ async function main() {
       // The token may have expired since (they live 1 h); what matters is that it was issued while the
       // exam was running: then the key that signed the exam was provably inside the box at that time.
       const collateral = await require("../tee/collateral.js").forAttestation(ev); // fresh, vendor-signed TCB info + CRLs
-      const v = T.verifyEvidence(ev, { jwks: await T.fetchJwks(), policy: T.loadPolicy(), checkExpiry: false, collateral });
+      const policy = T.loadPolicy();
+      // Article 14: the Charter in force is the one recorded on chain, not whatever file is on this machine.
+      const dep = JSON.parse(fs.readFileSync(path.join(root, "deployments", `${o.net}.json`), "utf8"));
+      if (dep.contracts.CharterRegistry) {
+        const reg = new ethers.Contract(dep.contracts.CharterRegistry, ["function charter() view returns (bytes32)"], provider);
+        policy.charterHash = await reg.charter();
+      }
+      const v = T.verifyEvidence(ev, { jwks: await T.fetchJwks(), policy, checkExpiry: false, collateral });
       if (ev.manifest.agent.toLowerCase() !== record.candidate.agent.toLowerCase())
         throw new Error("refusing: the sealed box's AI key is not the key that sat the exam");
       const iat = Number(v.claims.iat);
