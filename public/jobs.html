@@ -248,7 +248,11 @@
         <b>${esc(f.title)}</b><span class="small">${esc(f.summary)}</span><br>
         ${f.status === "open" ? `<span class="pill ok">open</span> <span class="small">${agtOf(f.pricing.hatPerUnit)} per ${esc(f.pricing.unit)}</span>` : `<span class="pill muted">opens when its licence exam exists</span>`}
       </button>`).join("");
-    $("trades").querySelectorAll(".trade").forEach((b) => b.addEventListener("click", () => pickTrade(FORMS[Number(b.dataset.i)], b)));
+    $("trades").querySelectorAll(".trade").forEach((b) => b.addEventListener("click", () => {
+      const f = FORMS[Number(b.dataset.i)];
+      if (f.id === "embedded") { location.href = "engage.html"; return; } // long-term work: milestones, warranty, maintenance
+      pickTrade(f, b);
+    }));
     $("notOffered").innerHTML = (r.notOffered || []).map((x) => `<div style="margin-top:6px"><b>${esc(x.title)}</b> — ${esc(x.why)}</div>`).join("");
   }
 

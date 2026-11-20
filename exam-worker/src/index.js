@@ -20,6 +20,7 @@ import Brief from "../../public/forms/brief.js";
 import formIndex from "../../public/forms/index.json";
 import formTranslation from "../../public/forms/translation.json";
 import formWriting from "../../public/forms/writing.json";
+import formEmbedded from "../../public/forms/embedded.json";
 import X from "../../exam/lib.js";
 import core from "../../chain/core.js";
 // Private banks, bundled at deploy time from the operator's machine (never in the public repo).
@@ -276,7 +277,7 @@ async function listApplications(env) {
 
 // ---------- public content store for work results ----------
 const MAX_CONTENT = 256 * 1024;
-const FORMS = { translation: formTranslation, writing: formWriting };
+const FORMS = { translation: formTranslation, writing: formWriting, embedded: formEmbedded };
 const formOf = (b) => (b && typeof b.form === "string" ? FORMS[b.form.split("@")[0]] : null);
 const WORK_IFACE = new Interface([
   "function licenseOfAgent(address) view returns (uint256)",
@@ -390,6 +391,47 @@ async function putRequest(env, req) {
   return json({ ok: true, hash, job: Number(b.job) });
 }
 
+// ---------- briefs of long-term work (Engagement / Maintenance contracts) ----------
+// The client opens the contract on chain with brief = keccak256(brief file), then publishes the file here,
+// signed by the same wallet. Stored only if it is a valid brief of the trade and matches the hash on chain.
+const LONG_IFACE = new Interface([
+  "function engagements(uint256) view returns (address client, uint256 worker, bytes32 brief, uint16 holdbackBps, uint32 warrantyDays, uint64 startedAt, bool ended, uint8 count)",
+  "function retainers(uint256) view returns (address client, uint256 worker, bytes32 brief, uint128 fee, uint16 penaltyBps, uint64 startedAt, uint32 funded, uint32 closed, uint32 nextIncident, bool stopped)",
+]);
+async function callTo(env, to, data) {
+  const r = await fetch(env.BSC_RPC, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to, data }, "latest"] }) });
+  const j = await r.json();
+  if (j.error) throw new Error("chain: " + j.error.message);
+  return j.result;
+}
+async function putBrief(env, req) {
+  const b = await body(req);
+  const kind = b && b.contract;
+  if (!b || !["engagement", "maintenance"].includes(kind) || !/^\d+$/.test(String(b.id)) || typeof b.text !== "string") return fail(400, "need {contract: engagement|maintenance, id, text, signature}");
+  const bytes = toUtf8Bytes(b.text);
+  if (bytes.length > MAX_CONTENT) return fail(413, "brief too large");
+  const hash = keccak256(bytes);
+  let signer;
+  try {
+    signer = verifyMessage(`AGT brief ${kind} ${b.id} ${hash}`, b.signature);
+  } catch {
+    return fail(400, "bad signature");
+  }
+  const fn = kind === "engagement" ? "engagements" : "retainers";
+  const to = kind === "engagement" ? env.ENGAGEMENT : env.MAINTENANCE;
+  const c = LONG_IFACE.decodeFunctionResult(fn, await callTo(env, to, LONG_IFACE.encodeFunctionData(fn, [BigInt(b.id)])));
+  if (c.client === "0x0000000000000000000000000000000000000000") return fail(404, `no ${kind} with this number`);
+  if (getAddress(c.client) !== getAddress(signer)) return fail(403, "signature is not from the client of this contract");
+  if (c.brief !== hash) return fail(409, "text does not match the brief hash recorded on chain");
+  const brief = Brief.parse(b.text);
+  const form = formOf(brief);
+  if (!form || Brief.canonical(brief) !== b.text) return fail(400, "the brief must be a canonical agt-brief/v1 file of a listed trade");
+  const v = Brief.validate(form, brief);
+  if (!v.ok) return fail(400, "invalid brief", { errors: v.errors });
+  if (!(await env.EXAMS.get(`c:${hash}`))) await env.EXAMS.put(`c:${hash}`, JSON.stringify({ text: b.text, client: signer, contract: kind, id: Number(b.id), kind: "brief", at: now() }), { expirationTtl: KEEP });
+  return json({ ok: true, hash });
+}
+
 // ---------- quotes: before any money moves, the chosen AI reads the brief and answers ----------
 //   POST /quotes {worker, brief}           → the client asks one licensed AI worker (free, rate-limited)
 //   GET  /quotes?worker=N                  → waiting quotes for that AI (the sealed box polls this)
@@ -492,6 +534,7 @@ export default {
       if (mp && req.method === "GET") return await getPrices(env, mp[1], mp[2]);
       if (p === "/content" && req.method === "POST") return await putContent(env, req);
       if (p === "/requests" && req.method === "POST") return await putRequest(env, req);
+      if (p === "/briefs" && req.method === "POST") return await putBrief(env, req);
       if (p === "/forms" && req.method === "GET") return json({ ok: true, ...formIndex, forms: formIndex.forms.map((k) => FORMS[k]) });
       if (p === "/quotes" && req.method === "POST") return await postQuote(env, req);
       if (p === "/quotes" && req.method === "GET") {
