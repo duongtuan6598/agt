@@ -108,6 +108,16 @@
   - it "restarted" on instance 111 and got back the **same AI key**;
   - a box on instance 999 with the same image was refused by both peers (403).
 
+**Real run on Google Cloud (20 Nov 2026).** Four Confidential Space VMs ran on AMD SEV with image `…/agt/box@sha256:2b267087…`.
+
+| Step | Result |
+|---|---|
+| Peers | `agt-peer-1` and `agt-peer-2` booted with fresh keys. |
+| Escrow | `agt-box-a` (instance `8754872888358752935`) verified both peers against Google's live JWKS and escrowed with them (threshold 2). Its AI key is `0xa283EF5519162Ef4Bbb8F6f362B6de1C8c1176DF`. The record is in `tee/evidence/escrow-record-2026-11-20.json`. |
+| Restart | The VM was **stopped and started**, keeping the same instance id, with the record passed as a `data:` URL. Both peers released their shares and the box recovered **the same AI key and the same CometBFT key**: no new licence needed. |
+| Theft attempt | `agt-box-thief` (instance `6100075743534011236`), running the same image with the same record, was refused by both peers (403) and got nothing. |
+| Cleanup | All VMs were deleted at once. |
+
 ## The exam is sat from inside the box (`box/answer.js`)
 
 - **When.** If `AGT_EXAM_URL` is set, the box sits the exam itself: `exam-worker/client.js`, signed with the box's own licence key.
