@@ -23,15 +23,13 @@ const TRADE_ROLE = { 1: { role: 1, label: "Worker" }, 101: { role: 2, label: "Ve
 // AGT_EMBEDDED_IMAGE should be the approved image digest; the grader and the bank are mounted read-only.
 function gradeEmbedded(record, answers) {
   const { execFileSync } = require("child_process");
-  const os = require("os");
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agt-grade-"));
-  fs.writeFileSync(path.join(dir, "input.json"), JSON.stringify({ drawn: record.questions, answers }));
   const image = process.env.AGT_EMBEDDED_IMAGE || "agt-box-embedded:dev";
-  const banks = require("../exam/banks.js").banksDir();
-  const out = execFileSync("docker", ["run", "--rm", "--network", "none",
-    "-v", `${path.join(root, "exam")}:/agt/exam:ro`, "-v", `${banks}:/banks:ro`, "-v", `${dir}:/in:ro`,
-    "--entrypoint", "node", image, "/agt/exam/grade-cli.js", "/in/input.json"], { encoding: "utf8", env: { ...process.env, MSYS_NO_PATHCONV: "1" }, maxBuffer: 64 * 1024 * 1024 });
-  fs.rmSync(dir, { recursive: true, force: true });
+  // The bank goes in on stdin only — never mounted — so the candidate's firmware cannot read it through
+  // semihosting (Codex G-1). Fresh container per grading, no network; it is removed afterwards.
+  const input = JSON.stringify({ bank: BANKS[6], drawn: record.questions, answers });
+  const out = execFileSync("docker", ["run", "--rm", "-i", "--network", "none",
+    "-v", `${path.join(root, "exam")}:/agt/exam:ro`,
+    "--entrypoint", "node", image, "/agt/exam/grade-cli.js"], { input, encoding: "utf8", env: { ...process.env, MSYS_NO_PATHCONV: "1" }, maxBuffer: 64 * 1024 * 1024 });
   return JSON.parse(out.slice(out.indexOf("{")));
 }
 

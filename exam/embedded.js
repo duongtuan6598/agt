@@ -37,7 +37,9 @@ function gradeReview(q, answer) {
   const a = parseAnswer(answer);
   if (!a || !Array.isArray(a.defects)) return { pass: false, why: "answer is not {defects:[…]}" };
   const truth = q.truth.defects;
-  const claimed = a.defects.filter((d) => d && typeof d.file === "string" && Number.isInteger(d.line) && typeof d.kind === "string").slice(0, 20);
+  if (a.defects.length > 20) return { pass: false, why: "more than 20 defects claimed" }; // every claim counts (Codex G-4)
+  const claimed = a.defects.filter((d) => d && typeof d.file === "string" && Number.isInteger(d.line) && typeof d.kind === "string");
+  if (claimed.length !== a.defects.length) return { pass: false, why: "malformed defect entries" };
   const used = new Set();
   let found = 0;
   for (const t of truth) {
@@ -93,7 +95,8 @@ async function gradeCode(q, answer, { tools = require("../tee/embedded/tools.js"
       const s = await tools.size({ elf, flashLimit: q.hidden.flashLimit, ramLimit: q.hidden.ramLimit });
       if (!s.ok) return { pass: false, why: `over budget: flash ${s.flash} B (limit ${q.hidden.flashLimit}), RAM ${s.ram} B`, size: s };
     }
-    const r = await tools.simulate({ elf, target: q.target, expect: [...(q.hidden.expect || []), "END " + nonce], serial: !!q.hidden.serial, timeoutMs: 20000 });
+    // Hidden-test observations come only from semihosting; UART expectations only from the UART capture (G-2).
+    const r = await tools.simulate({ elf, target: q.target, expect: q.hidden.serial ? ["END " + nonce] : [...(q.hidden.expect || []), "END " + nonce], expectUart: q.hidden.serial ? q.hidden.expect || [] : [], timeoutMs: 20000 });
     const seen = observations(r.output);
     if (record) return { pass: r.ok, observed: seen, output: r.output.slice(-1500) };
     if (!r.ok) return { pass: false, why: `hidden tests did not complete (missing: ${r.missing.join(" | ") || "clean exit"})`, output: r.output.slice(-1500) };
@@ -103,6 +106,9 @@ async function gradeCode(q, answer, { tools = require("../tee/embedded/tools.js"
     const ok = bad < 0 && seen.length === want.length;
     return { pass: ok, why: ok ? "hidden tests passed" : `wrong value at observation ${bad < 0 ? want.length + 1 : bad + 1} of ${want.length}`, output: r.output.slice(-1500) };
   } finally {
+    // Kill every process of the sandbox user, detached ones too (setsid escapes a process group — Codex G-3),
+    // so nothing from this answer survives into the next question.
+    if (chown && process.getuid && process.getuid() === 0) await tools.run("/bin/sh", ["-c", "kill -9 -1"], { cwd: "/", timeoutMs: 5000 }).catch(() => {});
     fs.rmSync(dir, { recursive: true, force: true });
   }
 }

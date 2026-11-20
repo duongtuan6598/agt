@@ -37,6 +37,11 @@
 | S-7 (Codex) | Medium | Engagement memory could be rolled back to an older prefix. | **Fixed**: the memory head goes into each delivery report (on chain); loading with that anchor fails if it is missing. Appends are serialised. |
 | S-8 (Codex) | — | A sealed secret can be opened more than once within its engagement. | **Not a bug**: it is the same credential for the same engagement; cross-engagement replay is already blocked. |
 | S-9 (Codex) | Low | Memory storage names were a plain hash of the context (linkable). | **Fixed**: names are keyed with the memory key. |
+| G-1 (Codex) | Critical | **Embedded exam: the candidate's firmware could read the private bank** through QEMU semihosting (host file access as the sandbox user) because the licence tool mounted the bank into the grading container — and print the expected observations. | **Fixed** (2026-11-20): the bank reaches the grader only on stdin and stays in the root process's memory; no bank file exists in the container. Proven by an attack test: SYS_OPEN of the bank, of the grader's stdin and environment all return -1, and the attack fails. |
+| G-2 (Codex) | High | UART output (candidate-controlled) was merged with the hidden tests' output. | **Fixed**: UART goes to its own capture file; observations are read only from semihosting, UART expectations only from the UART capture. |
+| G-3 (Codex) | High | The build/simulation sandbox does not confine the filesystem; a detached process could outlive a question. | **Partly fixed**: every grading runs in a fresh container with no network and nothing secret on disk; after each question every sandbox-user process is killed (`kill -9 -1` as that user), proven by test. **Open** (with S-2): a per-run filesystem/namespace sandbox. |
+| G-4 (Codex) | Medium | Review answers were truncated to 20 claims before counting false alarms. | **Fixed**: more than 20 claims, or any malformed entry, fails. |
+| G-5 (Codex) | Medium | Artifact containment used a plain prefix check (a sibling directory could match). | **Fixed**: the resolved artifact must be inside the work directory (`dir + path.sep`). |
 
 ### Slither results
 

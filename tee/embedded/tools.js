@@ -69,7 +69,7 @@ function checkPinned(dir, pinned = {}) {
 async function build({ dir, cmd, artifact, timeoutMs = 600000 }) {
   const r = await sh(cmd, { cwd: dir, timeoutMs });
   const elf = path.join(dir, artifact);
-  const ok = r.code === 0 && !r.timedOut && fs.existsSync(elf) && fs.realpathSync(elf).startsWith(fs.realpathSync(dir));
+  const ok = r.code === 0 && !r.timedOut && fs.existsSync(elf) && fs.realpathSync(elf).startsWith(fs.realpathSync(dir) + path.sep); // inside, not a sibling (Codex G-5)
   const warnings = (r.out.match(/warning:/g) || []).length;
   return { level: "N1", ok, warnings, sha256: ok ? sha256File(elf) : null, log: r.out.slice(-4000) };
 }
@@ -90,15 +90,19 @@ const QEMU = {
 
 /// N3: run the firmware in QEMU; pass when every expected line from the BRIEF appears and it exits 0.
 /// Semihosting runs as `builder` (the firmware's host file access is the sandbox's, inside its own work dir).
-async function simulate({ elf, target = "cortex-m3", expect = [], serial = false, timeoutMs = 20000 }) {
+/// Two separate channels (Codex G-2): `expect` is checked against the semihosting/console output only;
+/// `expectUart` against what the firmware sent on its first UART, captured to its own file.
+async function simulate({ elf, target = "cortex-m3", expect = [], expectUart = [], timeoutMs = 20000 }) {
   const q = QEMU[target];
   if (!q) throw new Error(`no simulator for ${target}`);
-  // serial: the first UART goes to the captured output (driver checks); otherwise only semihosting output counts
-  const args = ["-M", q.machine, "-nographic", "-semihosting-config", "enable=on,target=native", "-kernel", elf, "-monitor", "none", "-serial", serial ? "stdio" : "null", "-nic", "none"];
+  const uartFile = path.join(path.dirname(elf), `uart-${crypto.randomBytes(6).toString("hex")}.log`);
+  const args = ["-M", q.machine, "-nographic", "-semihosting-config", "enable=on,target=native", "-kernel", elf, "-monitor", "none", "-serial", expectUart.length ? `file:${uartFile}` : "null", "-nic", "none"];
   if (q.bios) args.push("-bios", q.bios);
   const r = await run(q.bin, args, { cwd: path.dirname(elf), timeoutMs });
-  const missing = expect.filter((e) => !r.out.includes(e));
-  return { level: "N3", ok: r.code === 0 && !r.timedOut && missing.length === 0 && expect.length > 0, exitCode: r.code, timedOut: r.timedOut, missing, output: r.out.slice(-4000) };
+  let uart = "";
+  try { uart = fs.readFileSync(uartFile, "utf8").slice(0, MAX_OUTPUT); fs.rmSync(uartFile, { force: true }); } catch {}
+  const missing = [...expect.filter((e) => !r.out.includes(e)), ...expectUart.filter((e) => !uart.includes(e)).map((e) => "uart: " + e)];
+  return { level: "N3", ok: r.code === 0 && !r.timedOut && missing.length === 0 && expect.length + expectUart.length > 0, exitCode: r.code, timedOut: r.timedOut, missing, output: r.out.slice(-4000), uart: uart.slice(-4000) };
 }
 
 /// N4a: flash and RAM from EVERY allocated section (readelf flags; fail closed on parse errors).

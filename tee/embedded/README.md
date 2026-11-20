@@ -23,6 +23,10 @@ Last run (2026-11-20), after the Codex review fixes S-1 to S-9: all 16 checks pa
 - **Static analysis:** cppcheck is clean on the firmware and catches the seeded overflow.
 - **Sandbox:** the client's code runs as uid 1500 with limits (512 processes, 900 s CPU). It cannot read a root-only file or the box's environment, and a timeout kills its background children too.
 
+## The licence exam for this trade
+
+`exam/embedded.js` grades answers by building them with hidden tests and running them in QEMU, in this image. The licence tool sends the private bank to `exam/grade-cli.js` on **stdin only**. A fresh container runs with no network, and no bank file exists in it, so firmware that opens host files through semihosting finds nothing (`exam/test/embedded-isolation.docker.js`). The hidden tests print observed values only, and the expected values stay with the grader. Every question is proven fair by `exam/test/embedded-bank.docker.js`: the original fails, the reference passes, and faking a pass fails.
+
 ## Not done yet
 
 - **Network isolation for the client's build** (audit S-2, open). The container has no namespaces, so `builder` can still reach the network, but it can read nothing secret: tokens are used only by the box's process to clone. Planned: a network namespace or a microVM per build. This must be done before real client secrets are used.
