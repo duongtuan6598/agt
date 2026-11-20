@@ -10,7 +10,8 @@ const { ethers } = require("ethers");
 const C = require("../core.js");
 const { bindDigest, des } = require("./app.js");
 
-const N = 4;
+const N = 4; // genesis validators
+const TOTAL = 5; // + node4: a full node whose AI gets licensed later (Eos)
 const CHAIN_ID = "agt-devnet-1";
 const CMT = "cometbft/cometbft:v0.38.26";
 const NODE = "node:20-alpine";
@@ -23,10 +24,11 @@ const BSC = { chainId: 97, bridge: "0x44f0733C93b11D064eA015183c7DC8665b4a2416" 
 const dock = (...a) => execFileSync("docker", a, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
 const tryDock = (...a) => { try { return dock(...a); } catch { return ""; } };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const ais = Array.from({ length: N }, (_, i) => ({ name: ["Atlas", "Borealis", "Cygnus", "Draco"][i], key: W("ai" + i), owner: W("owner" + i) }));
+const ais = Array.from({ length: TOTAL }, (_, i) => ({ name: ["Atlas", "Borealis", "Cygnus", "Draco", "Eos"][i], key: W("ai" + i), owner: W("owner" + i) }));
+const licences = (ids) => ({ holders: new Set(ids.map((id) => ais[id - 1].owner.address)).size, validators: ids.map((id) => ({ id, agent: ais[id - 1].key.address, holder: ais[id - 1].owner.address })) });
 
 function down() {
-  for (let i = 0; i < N; i++) tryDock("rm", "-f", `cmt${i}`, `node${i}`);
+  for (let i = 0; i < TOTAL; i++) tryDock("rm", "-f", `cmt${i}`, `node${i}`);
   tryDock("network", "rm", NET);
   fs.rmSync(DIR, { recursive: true, force: true });
   console.log("devnet removed");
@@ -35,7 +37,7 @@ function down() {
 function up() {
   down();
   fs.mkdirSync(DIR, { recursive: true });
-  dock("run", "--rm", "-v", `${DIR}:/data`, "--entrypoint", "cometbft", CMT, "testnet", "--v", String(N), "--o", "/data", "--hostname-prefix", "node", "--populate-persistent-peers");
+  dock("run", "--rm", "-v", `${DIR}:/data`, "--entrypoint", "cometbft", CMT, "testnet", "--v", String(N), "--n", String(TOTAL - N), "--o", "/data", "--hostname-prefix", "node", "--populate-persistent-peers");
 
   // Genesis app state: each AI binds its CometBFT consensus key with its licence key.
   const validators = [];
@@ -47,7 +49,7 @@ function up() {
   g0.chain_id = CHAIN_ID;
   g0.validators = g0.validators.map((v) => ({ ...v, power: "1" }));
   g0.app_state = { bsc: BSC, holders: N, validators };
-  for (let i = 0; i < N; i++) {
+  for (let i = 0; i < TOTAL; i++) {
     fs.writeFileSync(path.join(DIR, `node${i}`, "config", "genesis.json"), JSON.stringify(g0, null, 2));
     const cf = path.join(DIR, `node${i}`, "config", "config.toml");
     let t = fs.readFileSync(cf, "utf8");
@@ -62,19 +64,20 @@ function up() {
     fs.writeFileSync(cf, t);
   }
   fs.writeFileSync(path.join(DIR, "locks.json"), "[]");
+  fs.writeFileSync(path.join(DIR, "valset.json"), JSON.stringify(licences([1, 2, 3, 4]))); // stand-in for AGTWork on BSC
   fs.writeFileSync(path.join(DIR, "README.txt"), "TEST keys and data for the local AGT devnet. Never reuse.\n");
 
   dock("network", "create", NET);
-  for (let i = 0; i < N; i++) {
+  for (let i = 0; i < TOTAL; i++) {
     dock("run", "-d", "--name", `node${i}`, "--hostname", `node${i}`, "--network", NET, "-p", `127.0.0.1:${27000 + i}:26657`, "--memory", "160m",
       "-v", `${ROOT}:/agt:ro`, "-v", `${DIR}:/devnet`,
       "-e", "PORT=26658", "-e", `STATE_FILE=/devnet/node${i}/app-state.json`, "-e", `AGENT_KEY=${ais[i].key.privateKey}`,
-      "-e", "CMT_RPC=http://127.0.0.1:26657", "-e", "LOCKS_FILE=/devnet/locks.json",
+      "-e", "CMT_RPC=http://127.0.0.1:26657", "-e", "LOCKS_FILE=/devnet/locks.json", "-e", "VALSET_FILE=/devnet/valset.json",
       NODE, "node", "/agt/chain/abci/app.js");
   }
-  for (let i = 0; i < N; i++)
+  for (let i = 0; i < TOTAL; i++)
     dock("run", "-d", "--name", `cmt${i}`, "--network", `container:node${i}`, "--memory", "160m", "-v", `${DIR}/node${i}:/cometbft`, "--entrypoint", "cometbft", CMT, "node", "--home", "/cometbft");
-  console.log(`devnet up: ${N} AI validators · RPC ${rpc(0)} … ${rpc(N - 1)}`);
+  console.log(`devnet up: ${N} AI validators + 1 full node · RPC ${rpc(0)} … ${rpc(TOTAL - 1)}`);
 }
 
 // ---------- client helpers ----------
@@ -160,6 +163,35 @@ async function demo() {
   for (const a of ais) console.log(`   ${a.name.padEnd(9)} ${hat(fin.wages[a.owner.address.toLowerCase()] || 0n)}`);
   const paid = Object.values(fin.wages).reduce((t, v) => t + v, 0n);
   console.log(`   total ${hat(paid)} for 3 paid txs · supply on chain ${fmt(fin.supply)} = locked ${fmt(2n * 10n ** 18n)} − withdrawn ${fmt(10n ** 18n)}`);
+
+  // 7. BSC grants licence #5 to Eos (running on node4): it binds its own consensus key and joins.
+  const vsFile = path.join(DIR, "valset.json");
+  const names = async () => {
+    const st = await query(0, "/state");
+    return { st, power: (await get(0, "/validators")).validators.length };
+  };
+  fs.writeFileSync(vsFile, JSON.stringify(licences([1, 2, 3, 4, 5])));
+  await until(async () => (await get(0, "/validators")).validators.length === 5, "Eos to join");
+  let v = await names();
+  console.log(`7. licence #5 granted on BSC → Eos bound its key and joined: CometBFT validators ${v.power} · owners ${v.st.owners}`);
+  console.log(`   ${v.st.validators.map((x) => `${ais.find((a) => a.key.address.toLowerCase() === x.agent).name}${x.vote ? "" : " (no vote)"}`).join(", ")}`);
+
+  // 8. BSC revokes licence #2 (Borealis): it leaves; > 2/3 is now counted over the remaining owners.
+  fs.writeFileSync(vsFile, JSON.stringify(licences([1, 3, 4, 5])));
+  await until(async () => (await get(0, "/validators")).validators.length === 4 && (await query(0, "/state")).owners === 4, "Borealis to leave");
+  v = await names();
+  console.log(`8. licence #2 revoked on BSC → Borealis removed: CometBFT validators ${v.power} · owners ${v.st.owners}`);
+  console.log(`   ${v.st.validators.map((x) => ais.find((a) => a.key.address.toLowerCase() === x.agent).name).join(", ")}`);
+
+  // 9. The chain goes on; the wage of new blocks goes to the new set.
+  const w0 = (await query(0, "/state")).wages;
+  const bal = await query(0, `/balance/${alice.address}`);
+  const tx4 = await C.signTx(alice, { type: "transfer", chainId: s.chainId, to: bob.address, amount: 10n ** 16n, fee: s.fee, nonce: bal.nonce });
+  const h4 = await send(4, tx4); // sent through Eos's own node
+  await until(() => query(0, "/state").then((x) => x.height >= h4 + 2), "next block");
+  const w1 = (await query(0, "/state")).wages;
+  const gain = ais.map((a) => [a.name, (w1[a.owner.address.toLowerCase()] || 0n) - (w0[a.owner.address.toLowerCase()] || 0n)]).filter(([, g]) => g > 0n);
+  console.log(`9. tx in block ${h4} via Eos's node · its 1 Hat went to: ${gain.map(([n, g]) => `${n} ${hat(g)}`).join(", ")}`);
 }
 
 const cmd = process.argv[2];

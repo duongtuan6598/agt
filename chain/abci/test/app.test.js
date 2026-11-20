@@ -94,3 +94,67 @@ test("withdrawal → each validator's attestation is checked; the release packag
   const owners = pkg.sigs.map((s) => ais.find((a) => a.key.address === ethers.verifyMessage(ethers.getBytes(d), s)).owner.address);
   assert.deepEqual(owners, [...owners].sort((a, b) => (BigInt(a) < BigInt(b) ? -1 : 1)));
 });
+
+// ---------- validator set follows BSC licences ----------
+function setupVs() {
+  const ctx = setup();
+  const dir = path.dirname(ctx.lockFile);
+  const vsFile = path.join(dir, "valset.json");
+  const app = new AGTApp({ STATE_FILE: path.join(dir, "state2.json"), LOCKS_FILE: ctx.lockFile, VALSET_FILE: vsFile });
+  init(app, ctx.appState);
+  const lic = ctx.ais.map((a, i) => ({ id: i + 1, agent: a.key.address, holder: a.owner.address }));
+  const writeVs = (holders, validators) => fs.writeFileSync(vsFile, JSON.stringify({ holders, validators }));
+  return { ...ctx, app, lic, writeVs };
+}
+const bindTx = (ai, pub = ai.pub, signer = ai.key) => B({ type: "bind", agent: ai.key.address, pubKey: pub, sig: signer.signMessageSync(ethers.getBytes(bindDigest(CHAIN, pub))) });
+const newAi = (n) => ({ key: W("ai" + n), owner: W("o" + n), pub: crypto.randomBytes(32).toString("base64") });
+async function round(app, txs = []) {
+  const p = await app.PrepareProposal({ txs, max_tx_bytes: "1048576", height: "1" });
+  assert.equal((await app.ProcessProposal({ txs: p.txs, height: "1" })).status, "ACCEPT");
+  return block(app, p.txs);
+}
+const powerOf = (r) => r.validator_updates.map((u) => [u.pub_key.ed25519.toString("base64"), u.power]);
+
+test("a newly licensed AI joins after binding its consensus key; until then it has no vote", async () => {
+  const { app, lic, writeVs } = setupVs();
+  const ai5 = newAi(5);
+  writeVs(5, [...lic, { id: 5, agent: ai5.key.address, holder: ai5.owner.address }]);
+  let r = await round(app);
+  assert.equal(app.state.valset.holders, 5);
+  assert.deepEqual(r.validator_updates, [], "licensed but not bound yet: no CometBFT power");
+  assert.equal(app.CheckTx({ tx: bindTx(ai5, ai5.pub, W("intruder")) }).code, 1, "binding must be signed by the AI's licence key");
+  r = await round(app, [bindTx(ai5)]);
+  assert.deepEqual(powerOf(r), [[ai5.pub, "1"]]);
+});
+
+test("a revoked licence removes the AI (power 0) and it can no longer attest", async () => {
+  const { app, lic, writeVs, ais } = setupVs();
+  writeVs(3, lic.filter((l) => l.id !== 2));
+  const r = await round(app);
+  assert.deepEqual(powerOf(r), [[ais[1].pub, "0"]]);
+  assert.equal(app.state.valset.holders, 3);
+  assert.ok(!app.state.valset.validators.some((v) => v.agent === ais[1].key.address.toLowerCase()));
+});
+
+test("an owner with two AIs keeps ONE vote; if that licence is revoked, the other AI takes it over", async () => {
+  const { app, lic, writeVs, ais } = setupVs();
+  const second = { key: W("ai0b"), owner: ais[0].owner, pub: crypto.randomBytes(32).toString("base64") };
+  writeVs(4, [...lic, { id: 5, agent: second.key.address, holder: second.owner.address }]);
+  await round(app);
+  let r = await round(app, [bindTx(second)]);
+  assert.deepEqual(r.validator_updates, [], "owner 0 already votes with licence #1");
+  writeVs(4, [...lic.filter((l) => l.id !== 1), { id: 5, agent: second.key.address, holder: second.owner.address }]);
+  r = await round(app);
+  assert.deepEqual(powerOf(r).sort(), [[ais[0].pub, "0"], [second.pub, "1"]].sort());
+});
+
+test("a forged licence snapshot is rejected; strangers and stolen keys cannot bind", async () => {
+  const { app, lic, writeVs, ais } = setupVs();
+  writeVs(4, lic);
+  const ghost = newAi(9);
+  const forged = B({ type: "valset", bscBlock: 0, holders: 5, validators: [...lic, { id: 9, agent: ghost.key.address, holder: ghost.owner.address }] });
+  assert.equal((await app.ProcessProposal({ txs: [forged], height: "1" })).status, "REJECT");
+  assert.equal(app.CheckTx({ tx: forged }).code, 1, "snapshots cannot come through the mempool");
+  assert.equal(app.CheckTx({ tx: bindTx(ghost) }).code, 1, "an AI without a licence cannot bind");
+  assert.equal(app.CheckTx({ tx: bindTx(ais[1], ais[0].pub) }).code, 1, "cannot take over another AI's consensus key");
+});

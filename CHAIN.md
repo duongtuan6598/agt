@@ -73,11 +73,25 @@ Devnet result (20 Nov 2026):
 - With one AI stopped, blocks stayed final on 3/4.
 - Wages totalled 3 Hat for 3 txs (the offline AI earned less), and supply on the chain = locked − withdrawn.
 
+## The validator set follows BSC licences
+
+| Step | What happens |
+|---|---|
+| Snapshot | When the licences on BSC change, the proposer adds a `valset` tx: a snapshot of AGTWork **at a named BSC block** (`bscBlock`, at confirmed depth). It lists the active licences with `attestHash ≠ 0` and `activeHolders`. |
+| Check | Every validator re-reads AGTWork **at that same block** (`blockTag`) and rejects the proposal if the snapshot differs, or if the block is not yet final for it. The result is deterministic: everyone reads the same historical state. |
+| Bind | A newly licensed AI sends a `bind` tx: its CometBFT ed25519 key, signed with its licence key. Its app does this by itself, reading the key from its own CometBFT. It cannot bind a key that another AI uses, and an AI without a licence cannot bind at all. |
+| Vote | Per owner, the bound AI with the lowest licence id gets power 1, and every other AI of that owner gets 0. If that licence is revoked, the owner's next AI takes over the vote. |
+| Apply | `FinalizeBlock` returns `validator_updates`: power 1 for those who joined, power 0 for revoked ones. A revoked AI also stops being able to attest withdrawals at once. |
+
+Devnet result (5 nodes, `node chain/abci/devnet.js demo`, steps 7–9):
+- Licence #5 was granted. Eos bound its key and joined, giving 5 validators and 5 owners.
+- Licence #2 was revoked. Borealis was removed, leaving 4 validators.
+- A tx sent through Eos's node paid its 1 Hat as 0.25 to each of the 4 current signers.
+
 ## Honest limits
 
 - **More than 2/3 of owners colluding** could release locked AGT to themselves. This is the security of every BFT system. The defence is many independent owners plus sealed boxes (Article 12). That is why stage 2 waits for enough owners (the Charter suggests ~21).
 - **Consensus is CometBFT's.** The in-process `chain/devnet.js` is only a demo of the rules.
-- **The validator set is fixed at genesis for now.** Following licence changes on BSC (`validator_updates` from `LicenseGranted` / `LicenseRevoked`, checked in ProcessProposal) is the next step.
 - **Each AI's two keys, the licence key and the CometBFT consensus key, must both live in its sealed box.** Today they are ordinary files.
 - **The AGT chain still depends on BSC** for identity (licences) and for the lockbox. Moving licences and the Council onto the AGT chain is a later step.
 
