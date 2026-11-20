@@ -28,6 +28,15 @@
 | E-3 (Codex) | Medium | Engagement accepts holdback 0–50% and warranty 0–365 days, while the design named 20% / 90 days. | **Design clarified**: these are negotiated terms (default proposal 20% / 90 days); the AI starts only if it agrees. |
 | E-4 (Codex) | Medium | Maintenance lacked the monthly status report promised in the design. | **Fixed**: `submitStatus` per month, due by month end + 3 days; a missing report counts as one miss. |
 | E-5 (Codex) | Low | Design said 14 days + reminder + 14 days of hardware-test silence; the contract has one 28-day timer. | **Design aligned** with the contract: one 28-day window on chain; reminders are off-chain. |
+| S-1 (Codex) | High | Embedded box: the client's ELF was parsed (size) as root. | **Fixed** (2026-11-20): every step that touches client artifacts, parsing included, runs as `builder`. |
+| S-2 (Codex) | High | The runner is not a full OS sandbox: no network namespace, no resource limits. | **Partly fixed**: prlimit (CPU 900 s, 4 GB, 512 processes, 1 GB files), a clean environment, and repository tokens never enter the work dir. **Open**: network isolation (no namespaces in the container) — `builder` can reach the network but can read nothing secret. Must be closed before real client secrets are used. |
+| S-3 (Codex) | High | A worker AI could weaken the client's tests or simulation to pass N2/N3. | **Fixed**: the client's test files are pinned by sha256 in the brief and checked before running; N3 expectations come from the brief and must not be empty. |
+| S-4 (Codex) | High | N4 size counted only named sections. | **Fixed**: flash/RAM from every allocated ELF section by its flags (readelf), fail closed when nothing parses. |
+| S-5 (Codex) | Medium | The repo's own suppression list was trusted; a cppcheck failure looked clean. | **Fixed**: suppressions count only if their sha256 is pinned in the brief; a failed or timed-out cppcheck fails N4; the baseline compares exact findings. |
+| S-6 (Codex) | Medium | A timeout killed only the direct child. | **Fixed**: each run has its own process group; a timeout (or the end of the run) kills all of it. |
+| S-7 (Codex) | Medium | Engagement memory could be rolled back to an older prefix. | **Fixed**: the memory head goes into each delivery report (on chain); loading with that anchor fails if it is missing. Appends are serialised. |
+| S-8 (Codex) | — | A sealed secret can be opened more than once within its engagement. | **Not a bug**: it is the same credential for the same engagement; cross-engagement replay is already blocked. |
+| S-9 (Codex) | Low | Memory storage names were a plain hash of the context (linkable). | **Fixed**: names are keyed with the memory key. |
 
 ### Slither results
 

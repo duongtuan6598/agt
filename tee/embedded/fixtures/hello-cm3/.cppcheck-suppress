@@ -1,0 +1,2 @@
+# Linker-script symbols (_sdata/_edata, _sbss/_ebss) are compared on purpose in the startup copy loops.
+comparePointers:startup.c

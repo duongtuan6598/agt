@@ -76,7 +76,11 @@ function derive(master) {
   const cmtPriv = crypto.createPrivateKey({ key: Buffer.concat([PKCS8_ED25519, cmtSeed]), format: "der", type: "pkcs8" });
   const cmtPub = rawPub(cmtPriv);
   const seal = x25519FromSeed(tag(master, "agt/seal"));
-  return { agent, cmtSeed, cmtPub, seal };
+  // Long-term work (tee/embedded): clients encrypt their secrets to `client` (never to `seal`, which is for escrow);
+  // the per-engagement memory is encrypted with keys derived from `memory`. Both come back with the master.
+  const client = x25519FromSeed(tag(master, "agt/client"));
+  const memory = tag(master, "agt/memory");
+  return { agent, cmtSeed, cmtPub, seal, client, memory };
 }
 
 // ---------- hybrid encryption to an x25519 public key (ECIES: X25519 + HKDF-SHA256 + AES-256-GCM) ----------

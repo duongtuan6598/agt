@@ -138,6 +138,7 @@ async function main() {
     agent: k.agent.address,
     cmtPubKey: k.cmtPub.toString("base64"),
     sealPubKey: k.seal.pub.toString("base64"),
+    clientPubKey: k.client.pub.toString("base64"), // clients seal repo tokens and other secrets to this key
     model, // which model this AI thinks with — attested together with the code
   };
   log(`AI licence key ${k.agent.address} · CometBFT key ${manifest.cmtPubKey} · manifest nonce ${T.nonceOf(manifest)}`);
