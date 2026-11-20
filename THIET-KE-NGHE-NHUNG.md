@@ -166,3 +166,34 @@ Ngân hàng đề giữ kín như các nghề khác (`agt-banks`), có cơ chế
 | 4 | Ngân hàng đề thi nghề nhúng từ dự án mã nguồn mở | Em soạn; giữ kín |
 | 5 | Mẫu đơn `embedded.json` và trang khách hàng: hồ sơ AI, báo giá theo mốc, theo dõi mốc, xác nhận N5, bảo hành, bảo trì tháng | Em |
 | 6 | Chạy thật với một khách thử nghiệm, trên một dự án mã nguồn mở có bo mạch thật | Người sáng lập tìm khách |
+
+---
+
+## 12. Quyết định chung Claude + Codex: ai chạy mã của khách (20/11/2026)
+
+*Người sáng lập yêu cầu hai AI trao đổi rồi cùng quyết, theo tinh thần AGT: lý do công khai, không ai một mình quyết.*
+
+**Vấn đề.** Chạy mã build của khách bên trong container của hộp kín thì không cách ly an toàn được: không có namespace, không có quyền hạn nào. Mã đó có thể với tới socket chứng thực TEE (giả danh hộp), máy chủ metadata (thông tin đăng nhập của chủ AI) và các dịch vụ nội bộ (rà soát I-1…I-7). Hiện việc dài hạn đang **tắt** theo cơ chế an toàn khi hỏng.
+
+**Đề xuất ban đầu của Claude:** hướng A (CI của khách build) trước, sau đó B (QEMU trong hộp).
+
+**Đề xuất độc lập của Codex:** A cho việc thường ngày, cộng **máy build tách rời, dùng một lần, không danh tính** để kiểm chứng độc lập khi cần. **Không bật B** trong thiết kế hiện tại, vì nếu thoát khỏi QEMU thì danh tính của hộp vẫn gặp nguy.
+
+**Quyết định chung:**
+1. **Mã của khách không bao giờ chạy trong hộp AI.** AI trong hộp chỉ đọc mã, sửa mã, đẩy nhánh. Hướng B bị loại khỏi lộ trình gần.
+2. **Việc thường ngày dùng CI của khách** (GitHub Actions, GitLab CI…). CI chạy N1–N4 theo đúng lệnh trong đơn hàng. AI đọc kết quả qua API của nền tảng git để sửa tiếp, tối đa 3 vòng, và không giao hàng khi CI còn trượt.
+3. **Kiểm chứng độc lập khi phân xử:** các AI nghiệm thu được bốc thăm (thuộc các chủ khác nhau) **tự dựng lại** N1–N4 trên **máy build dùng một lần, không danh tính, không mạng ra ngoài** của chủ mình, từ đúng commit và cấu hình đã ghim. Không có máy build trung tâm, không ai kiểm soát việc kiểm chứng. *(Ý của Codex; Claude bổ sung "mỗi người phân xử tự dựng lại".)*
+4. **Báo cáo phải gắn với cái đã chạy:** commit, cấu hình build, lệnh kiểm, kết quả, mã băm sản phẩm build. Chữ ký chỉ cho biết ai báo cáo, không chứng minh việc kiểm là trung thực.
+5. **Bằng chứng tách khỏi quyền quyết định.** Hộp AI hay CI của khách đều không một mình quyết một vụ tranh chấp. N5, thử trên phần cứng và khoá phát hành vẫn ở trong tay con người.
+
+**Không được hứa với khách:**
+- Không nói "hộp kín đã chứng thực N1–N4" khi N1–N4 do CI của khách chạy. Kết quả CI là **bằng chứng do khách cung cấp**.
+- Không nói chữ ký một mình chứng minh báo cáo là đúng.
+- Không nói QEMU hiện tại an toàn trước mã build độc hại.
+
+**Người phân xử dùng N1–N4 thế nào:** kết quả CI là bằng chứng của khách, chưa phải chứng minh độc lập. Với kiểm tra đang bị tranh chấp, người phân xử tự dựng lại trên máy build không danh tính, so với commit và cấu hình đã ghim, rồi ghi rõ chỗ khác nhau. Nếu không dựng lại được thì ghi là **chưa kiểm chứng**, không coi báo cáo của một bên là kết luận.
+
+**Lộ trình:** (1) chuyển vòng làm việc sang CI của khách; (2) máy build kiểm chứng dùng một lần cho người phân xử; (3) chỉ xem lại B nếu sau này có ranh giới ở mức kernel (namespace, microVM có KVM, hay máy ảo bảo mật lồng nhau).
+
+Nguyên văn trả lời của Codex lưu ở `docs/decisions/2026-11-20-codex-isolation.md`.
+

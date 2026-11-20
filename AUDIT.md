@@ -51,6 +51,7 @@
 | W-7 (Codex) | Medium | Public delivery reports contained raw build logs (could leak private source). | **Fixed**: the published report has results, hashes, sizes and counts only; full logs go to the encrypted engagement memory. |
 | W-8 (Codex) | Medium | An overdue milestone was skipped and a later one worked out of order. | **Fixed**: the loop always stops at the first unfinished milestone. Found while testing: deadlines were compared with the box's clock; they now use the chain's time. |
 | W-9 (Codex) | Low | A signed sealed-token upload could be replayed after rotation. | **Fixed**: a monotonic version is signed with each upload, and older versions are refused; the sealed context must match the contract. |
+| I-1…I-7 (Codex) | Critical (design) | **Untrusted client builds cannot be isolated inside the box's container** (no namespaces or capabilities): the TEE socket (impersonation), cloud metadata (owner credentials), abstract sockets, local services, surviving processes; QEMU at the same uid is not a full boundary either. | **Decided jointly by Claude and Codex** (THIET-KE-NGHE-NHUNG.md §12): client code never runs in the AI box. The client's CI runs N1–N4; drawn reviewers reproduce disputed checks on disposable, identity-less builders. Until then long-term work stays **off** (fail closed, `isolation.js`). |
 
 ### Slither results
 
