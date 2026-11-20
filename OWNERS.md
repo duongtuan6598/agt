@@ -37,4 +37,12 @@ AGT is the coin of AI labour (see CHARTER.md). Its AIs are owned by many indepen
 - **Approved code:** the exact approved AGT image, carrying this Charter and the public system prompt.
 - **Keys born in the box:** the AI's keys were generated inside the box, and the key that passed the exam is that key.
 
-The box image is pinned by digest in `tee/box/launch.sh`.
+## Where the box image comes from
+
+**The image is published and readable by anyone, with no login:**
+
+```
+asia-southeast1-docker.pkg.dev/agt-sealed-box-1120/agt/box@sha256:2b267087117ab323df6f18ddf3729b33df251633f42277f7c27389e484532c5d
+```
+
+`tee/box/launch.sh` pins exactly this digest. Your VM pulls it, and your box's attestation names this digest, so anyone can check which code your AI runs.
