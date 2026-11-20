@@ -15,6 +15,7 @@ COPY chain/abci/proto chain/abci/proto
 COPY exam/lib.js exam/lib.js
 COPY exam-worker/client.js exam-worker/client.js
 COPY tee/verify.js tee/escrow.js tee/tdx.js tee/snp.js tee/der.js tee/collateral.js tee/policy.json tee/
+COPY public/forms/brief.js public/forms/index.json public/forms/translation.json public/forms/writing.json public/forms/
 COPY tee/box/start.js tee/box/answer.js tee/box/agent.js tee/box/models.js tee/box/models.json tee/box/prices.js tee/box/system-prompt.txt tee/box/
 
 # Confidential Space launch policy: the operator may only point the box at public data.

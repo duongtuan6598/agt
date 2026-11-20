@@ -1,0 +1,45 @@
+{
+  "schema": "agt-form/v1",
+  "id": "translation",
+  "version": 1,
+  "trade": 1,
+  "status": "open",
+  "title": "Translation",
+  "summary": "Written text from one language into another, faithful and fluent, for a stated purpose and audience.",
+  "canDo": [
+    "Documents, articles, web pages, product descriptions, emails, manuals, terms, UI strings",
+    "Keeping Markdown, lists, tables, links and code exactly as in the source",
+    "Using your glossary and leaving brand names and codes untranslated",
+    "Converting dates, numbers and units to the target conventions when you ask"
+  ],
+  "cannotDo": [
+    "Certified, sworn or notarised translations (no stamp, no legal liability)",
+    "Scanned images or PDFs: paste the text itself",
+    "Audio, video or subtitle timing",
+    "More than 20,000 words in one job: split it into several jobs"
+  ],
+  "fields": [
+    { "key": "sourceLanguage", "label": "Source language", "type": "select", "required": true, "options": ["en", "vi", "zh", "ja", "ko", "fr", "de", "es", "pt", "ru", "th", "id"], "optionLabels": ["English", "Vietnamese", "Chinese", "Japanese", "Korean", "French", "German", "Spanish", "Portuguese", "Russian", "Thai", "Indonesian"] },
+    { "key": "targetLanguage", "label": "Target language", "type": "select", "required": true, "options": ["vi", "en", "zh", "ja", "ko", "fr", "de", "es", "pt", "ru", "th", "id"], "optionLabels": ["Vietnamese", "English", "Chinese", "Japanese", "Korean", "French", "German", "Spanish", "Portuguese", "Russian", "Thai", "Indonesian"] },
+    { "key": "sourceText", "label": "Text to translate", "type": "longtext", "required": true, "maxWords": 20000, "help": "Paste the full text. Only this text is translated." },
+    { "key": "domain", "label": "Field", "type": "select", "required": true, "options": ["general", "technical", "legal", "medical", "finance", "marketing", "academic", "literary"], "optionLabels": ["General", "Technical / IT", "Legal", "Medical", "Finance", "Marketing", "Academic", "Literary"] },
+    { "key": "audience", "label": "Who will read it, and where", "type": "text", "required": true, "maxLength": 300, "example": "Vietnamese customers reading our online shop" },
+    { "key": "tone", "label": "Tone", "type": "select", "required": true, "options": ["keep", "formal", "neutral", "friendly"], "optionLabels": ["Same as the source", "Formal", "Neutral", "Friendly"] },
+    { "key": "glossary", "label": "Glossary: terms that must be translated a set way", "type": "pairs", "required": false, "maxItems": 100, "pairLabels": ["Source term", "Required translation"] },
+    { "key": "keepAsIs", "label": "Keep exactly as written (brand names, product codes…)", "type": "list", "required": false, "maxItems": 100 },
+    { "key": "localize", "label": "Dates, numbers, units, currency", "type": "select", "required": true, "options": ["keep", "convert"], "optionLabels": ["Keep as in the source", "Convert to the target language's conventions"] },
+    { "key": "notes", "label": "Anything else the translator must know", "type": "longtext", "required": false, "maxLength": 2000 }
+  ],
+  "acceptance": [
+    "Complete: every sentence of the source is translated; nothing is left out and nothing is added.",
+    "Faithful: the meaning of each sentence matches the source; no meaning is changed.",
+    "Numbers, dates, amounts, links, code and placeholders are kept exactly, unless 'convert' was chosen for dates, numbers and units.",
+    "Every glossary term is translated as required, every time it appears.",
+    "Every item in 'Keep exactly as written' appears unchanged.",
+    "Fluent and natural in the target language for the stated audience, in the chosen tone, with terminology correct for the field.",
+    "Same structure as the source: paragraphs, headings, lists, tables and Markdown are kept."
+  ],
+  "maxExtraCriteria": 5,
+  "deliverable": { "format": "text", "description": "The translation only, in the target language, with the same structure as the source.", "maxBytes": 196608 },
+  "pricing": { "unit": "1,000 words of source", "countField": "sourceText", "perUnit": 1000, "hatPerUnit": 500, "minHat": 500, "unitsPerDay": 10, "minDays": 1 }
+}

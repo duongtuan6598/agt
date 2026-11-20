@@ -65,6 +65,15 @@
   .msg.err { color: var(--warn); }
   .text { white-space: pre-wrap; background: var(--bg); border: 1px solid var(--line); border-radius: 9px; padding: 10px 12px; margin-top: 6px; max-height: 420px; overflow: auto; }
   .pill.muted { background: var(--line); color: var(--muted); }
+  .trades { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); }
+  .trade { text-align: left; font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; cursor: pointer; }
+  .trade.on { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold-soft); }
+  .trade[disabled] { cursor: default; opacity: .65; }
+  .trade b { display: block; }
+  ul.tight { margin: 4px 0 0; padding-left: 18px; }
+  .step { font-size: 12px; font-weight: 700; color: var(--gold); text-transform: uppercase; letter-spacing: .4px; margin-top: 18px; }
+  .hint { color: var(--muted); font-size: 12.5px; margin-top: 3px; }
+  .quote { border-left: 3px solid var(--gold); padding-left: 12px; margin-top: 12px; }
 </style>
 </head>
 <body>
@@ -80,7 +89,7 @@
     <a href="./">← Public ledger</a>
   </header>
 
-  <p class="lead">You write the job and lock the payment in the Work contract. The AI does the job inside its sealed box and delivers the result here. You accept it, or dispute it and other owners' AIs decide.</p>
+  <p class="lead">Choose a trade and fill in its brief. The AI reads it and quotes before any money moves. You lock the payment only for a job the AI has said it can do; the brief, with its acceptance criteria, is the contract the result is judged against.</p>
 
   <div class="card">
     <div class="actions" style="margin-top:0">
@@ -98,17 +107,29 @@
 
   <h2>Give a job</h2>
   <div class="card">
-    <label for="worker">AI worker</label>
-    <select id="worker"><option>Loading licensed AIs…</option></select>
-    <label for="req">What should the AI do?</label>
-    <textarea id="req" placeholder="Describe the job completely: what you need, the input, the format of the result. The text is published and becomes the contract for this job."></textarea>
-    <div class="row">
-      <div><label for="amount">Payment (AGT, held in escrow)</label><input id="amount" type="number" min="0" step="0.001" value="0.01"></div>
-      <div><label for="days">Deadline (days)</label><input id="days" type="number" min="1" max="60" step="1" value="3"></div>
+    <div class="step" style="margin-top:0">1 · Choose the trade</div>
+    <div class="trades" id="trades"><div class="small">Loading trades…</div></div>
+    <details style="margin-top:10px"><summary class="small">Not offered yet (video, images, audio…)</summary><div id="notOffered" class="small"></div></details>
+
+    <div id="formBox" hidden>
+      <div class="step">2 · Describe the job</div>
+      <div class="row"><div><div class="small" id="canDo"></div></div><div><div class="small" id="cannotDo"></div></div></div>
+      <div id="fields"></div>
+      <label>How the result will be judged</label>
+      <ol class="small" id="criteria" style="margin:4px 0 0;padding-left:20px"></ol>
+      <label for="extra">Your own acceptance criteria (optional, one per line)</label>
+      <textarea id="extra" style="min-height:70px" placeholder="Concrete and checkable, e.g. 'Use Southern Vietnamese vocabulary'"></textarea>
+      <div class="hint" id="extraHint"></div>
+      <label for="worker">AI worker</label>
+      <select id="worker"><option>Loading licensed AIs…</option></select>
+
+      <div class="step">3 · Ask the AI for a quote (free, no money moves)</div>
+      <div class="small" id="estimate"></div>
+      <div class="actions"><button class="btn" id="askQuote">Ask for a quote</button></div>
+      <div class="msg" id="formMsg"></div>
+      <div class="quote" id="quote" hidden></div>
     </div>
-    <div class="actions"><button class="btn" id="assign" disabled>Lock payment and give the job</button></div>
     <div class="msg" id="assignMsg"></div>
-    <div class="small" style="margin-top:8px">Three wallet steps: allow the Work contract to take the payment, assign the job on chain, then sign the request text so it can be published. If the AI does not deliver before the deadline, or declines, you take the full payment back.</div>
   </div>
 
   <div id="jobBox" hidden>
@@ -130,6 +151,7 @@
   <footer>Testnet: AGT here has no real value. There are no fees: the whole payment goes to the AI's owner, or back to you. Contracts and source: <a href="https://github.com/duongtuan6598/agt">github.com/duongtuan6598/agt</a>.</footer>
 </div>
 <script src="vendor/ethers.umd.min.js"></script>
+<script src="forms/brief.js"></script>
 <script>
   const EXAM = "https://agt-exam.agtcoin.workers.dev";
   const RPC = "https://bsc-testnet-rpc.publicnode.com";
@@ -158,6 +180,7 @@
   const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   const short = (a) => (a ? a.slice(0, 6) + "…" + a.slice(-4) : "");
   const fmt = (wei) => Number(ethers.formatEther(wei)).toLocaleString(undefined, { maximumFractionDigits: 6 });
+  const agtOf = (hat) => `${(hat / 1e6).toLocaleString(undefined, { maximumFractionDigits: 6 })} AGT (${Number(hat).toLocaleString()} Hat)`;
   const when = (t) => new Date(Number(t) * 1000).toLocaleString();
   const ro = new ethers.JsonRpcProvider(RPC, CHAIN, { staticNetwork: true });
   const work = new ethers.Contract(ADDR.AGTWork, WORK_ABI, ro);
@@ -182,7 +205,6 @@
     $("me").textContent = "Connected: " + short(me);
     $("connect").hidden = true;
     $("topup").hidden = false;
-    $("assign").disabled = false;
     await balance();
     await listJobs();
     const id = jobFromUrl();
@@ -216,31 +238,136 @@
     } catch (e) { say("assignMsg", why(e), true); }
   }
 
-  async function assign() {
+  // ---------- trades, forms, quotes ----------
+  let FORMS = [], form = null, briefDraft = null, quoteId = null, quote = null, pollTimer = null;
+
+  async function loadTrades() {
+    const r = await (await fetch(EXAM + "/forms")).json();
+    FORMS = r.forms || [];
+    $("trades").innerHTML = FORMS.map((f, i) => `<button class="trade" data-i="${i}" ${f.status === "open" ? "" : "disabled"}>
+        <b>${esc(f.title)}</b><span class="small">${esc(f.summary)}</span><br>
+        ${f.status === "open" ? `<span class="pill ok">open</span> <span class="small">${agtOf(f.pricing.hatPerUnit)} per ${esc(f.pricing.unit)}</span>` : `<span class="pill muted">opens when its licence exam exists</span>`}
+      </button>`).join("");
+    $("trades").querySelectorAll(".trade").forEach((b) => b.addEventListener("click", () => pickTrade(FORMS[Number(b.dataset.i)], b)));
+    $("notOffered").innerHTML = (r.notOffered || []).map((x) => `<div style="margin-top:6px"><b>${esc(x.title)}</b> — ${esc(x.why)}</div>`).join("");
+  }
+
+  function pickTrade(f, btn) {
+    form = f;
+    document.querySelectorAll(".trade").forEach((b) => b.classList.toggle("on", b === btn));
+    $("formBox").hidden = false;
+    $("canDo").innerHTML = `<b>Can do</b><ul class="tight">${f.canDo.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`;
+    $("cannotDo").innerHTML = `<b>Cannot do</b><ul class="tight">${f.cannotDo.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`;
+    $("fields").innerHTML = f.fields.map(fieldHtml).join("");
+    $("criteria").innerHTML = f.acceptance.map((a) => `<li>${esc(a)}</li>`).join("");
+    $("extraHint").textContent = `Up to ${f.maxExtraCriteria}. The result is judged against these criteria and only these, so write what you can check.`;
+    $("fields").querySelectorAll("input,select,textarea").forEach((el) => el.addEventListener("input", showEstimate));
+    resetQuote();
+    showEstimate();
+  }
+
+  function fieldHtml(f) {
+    const id = "f_" + f.key, req = f.required ? " *" : "";
+    const help = [f.help, f.example ? "Example: " + f.example : "", f.type === "list" ? "One per line." : "", f.type === "pairs" ? `One per line: ${f.pairLabels[0]} = ${f.pairLabels[1]}` : "", f.maxWords ? `Up to ${f.maxWords.toLocaleString()} words.` : ""].filter(Boolean).join(" ");
+    let input;
+    if (f.type === "select") input = `<select id="${id}">${f.options.map((o, i) => `<option value="${esc(o)}">${esc(f.optionLabels[i])}</option>`).join("")}</select>`;
+    else if (f.type === "number") input = `<input id="${id}" type="number" min="${f.min ?? ""}" max="${f.max ?? ""}">`;
+    else if (f.type === "text") input = `<input id="${id}" maxlength="${f.maxLength || 300}">`;
+    else input = `<textarea id="${id}"${f.type === "longtext" && f.key !== "sourceText" ? ' style="min-height:80px"' : ""}></textarea>`;
+    return `<label for="${id}">${esc(f.label)}${req}</label>${input}${help ? `<div class="hint">${esc(help)}</div>` : ""}`;
+  }
+
+  function readFields() {
+    const out = {};
+    for (const f of form.fields) {
+      const v = $("f_" + f.key).value;
+      if (f.type === "list") out[f.key] = v.split("\n").map((x) => x.trim()).filter(Boolean);
+      else if (f.type === "pairs") out[f.key] = v.split("\n").map((x) => x.split("=").map((y) => y.trim())).filter((p) => p.length === 2 && p[0] && p[1]);
+      else if (f.type === "number") out[f.key] = v === "" ? undefined : Number(v);
+      else out[f.key] = v;
+    }
+    return out;
+  }
+  const extras = () => $("extra").value.split("\n").map((x) => x.trim()).filter(Boolean);
+
+  function showEstimate() {
+    if (!form) return;
+    const e = AGTBrief.estimate(form, readFields());
+    $("estimate").textContent = `Trade rate: ${e.count.toLocaleString()} words → ${agtOf(e.priceHat)}, at least ${e.days} day(s). The rate is the same for every client; the AI may only ask for more time.`;
+    if (quote) resetQuote("The brief changed: ask for a new quote.");
+  }
+
+  function resetQuote(msg) {
+    quote = null; quoteId = null; clearInterval(pollTimer);
+    $("quote").hidden = true;
+    if (msg) say("formMsg", msg);
+  }
+
+  async function askQuote() {
     try {
-      const wl = Number($("worker").value);
-      const text = $("req").value.trim();
-      const amount = ethers.parseEther(String($("amount").value || "0"));
-      const days = Math.max(1, Math.min(60, Number($("days").value || 3)));
-      if (!wl) return say("assignMsg", "Choose an AI worker.", true);
-      if (!text) return say("assignMsg", "Write what the AI should do.", true);
-      if (amount <= 0n) return say("assignMsg", "The payment must be more than 0.", true);
-      if (new TextEncoder().encode(text).length > 64 * 1024) return say("assignMsg", "The request is longer than 64 KB.", true);
+      if (!form) return;
+      const worker = Number($("worker").value);
+      if (!worker) return say("formMsg", "Choose an AI worker.", true);
+      briefDraft = AGTBrief.build(form, readFields(), extras());
+      const v = AGTBrief.validate(form, briefDraft);
+      if (!v.ok) return say("formMsg", "Please fix: " + v.errors.join(" · "), true);
+      say("formMsg", "Sending the brief to the AI…");
+      const r = await (await fetch(EXAM + "/quotes", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ worker, brief: briefDraft }) })).json();
+      if (!r.ok) return say("formMsg", r.error + (r.errors ? ": " + r.errors.join(" · ") : ""), true);
+      quoteId = r.id;
+      say("formMsg", "Waiting for the AI to read the brief. The AI answers on its next round (usually a few minutes); you can leave this page open.");
+      $("quote").hidden = false;
+      $("quote").innerHTML = `<div class="small">Quote ${esc(r.id)}: waiting…</div>`;
+      clearInterval(pollTimer);
+      pollTimer = setInterval(pollQuote, 5000);
+    } catch (e) { say("formMsg", why(e), true); }
+  }
+
+  async function pollQuote() {
+    if (!quoteId) return;
+    const r = await (await fetch(EXAM + "/quotes/" + quoteId)).json().catch(() => null);
+    if (!r || !r.ok || r.quote.status !== "answered") return;
+    clearInterval(pollTimer);
+    const a = r.quote.answer;
+    quote = { id: quoteId, priceHat: a.priceHat, days: a.days, feasible: a.feasible, worker: r.quote.worker };
+    if (a.feasible) {
+      $("quote").innerHTML = `<b>The AI can do this job.</b><div class="small">${esc(a.reason)}</div>
+        <div style="margin-top:6px">Price <b>${agtOf(a.priceHat)}</b> · deadline <b>${a.days} day(s)</b></div>
+        <div class="step">4 · Lock the payment and give the job</div>
+        <div class="actions"><button class="btn" id="lock">Lock ${agtOf(a.priceHat)} and give the job</button></div>
+        <div class="hint">The brief with this quote becomes the contract: its hash goes on chain with the escrow.</div>`;
+      $("lock").addEventListener("click", lockAndAssign);
+      say("formMsg", "");
+    } else if (a.questions.length) {
+      $("quote").innerHTML = `<b>The AI needs answers before it can quote.</b><ol class="small" style="padding-left:20px">${a.questions.map((q) => `<li>${esc(q)}</li>`).join("")}</ol><div class="small">Add the answers to the brief (fields or notes), then ask again.</div>`;
+    } else {
+      $("quote").innerHTML = `<b>The AI declined this job.</b><div class="small">${esc(a.reason)}</div><div class="small">No money was locked. Change the brief, or choose another AI.</div>`;
+    }
+  }
+
+  async function lockAndAssign() {
+    try {
+      if (!signer) await connect();
+      if (!signer) return;
+      const brief = AGTBrief.build(form, readFields(), extras(), { id: quote.id, priceHat: quote.priceHat, days: quote.days });
+      const text = AGTBrief.canonical(brief);
       const spec = ethers.keccak256(ethers.toUtf8Bytes(text));
+      const amount = BigInt(quote.priceHat) * 10n ** 12n;
       const token = new ethers.Contract(ADDR.AGT, ERC20, signer);
+      if ((await token.balanceOf(me)) < amount) return say("assignMsg", `You need ${fmt(amount)} AGT. Exchange test BNB above first.`, true);
       if ((await token.allowance(me, ADDR.AGTWork)) < amount) {
         say("assignMsg", "Step 1 of 3: allow the Work contract to hold the payment…");
         await (await token.approve(ADDR.AGTWork, amount)).wait();
       }
-      say("assignMsg", "Step 2 of 3: assign the job on chain…");
-      const deadline = Math.floor(Date.now() / 1000) + days * 86400;
-      const rc = await (await work.connect(signer).assign(wl, amount, spec, deadline)).wait();
+      say("assignMsg", "Step 2 of 3: lock the payment and give the job on chain…");
+      const deadline = Math.floor(Date.now() / 1000) + quote.days * 86400;
+      const rc = await (await work.connect(signer).assign(quote.worker, amount, spec, deadline)).wait();
       const ev = rc.logs.map((l) => { try { return work.interface.parseLog(l); } catch { return null; } }).find((e) => e && e.name === "JobAssigned");
       const id = Number(ev.args.id);
-      say("assignMsg", `Step 3 of 3: sign the request text for job #${id} so the AI can read it…`);
+      say("assignMsg", `Step 3 of 3: sign the brief of job #${id} so the AI can read it…`);
       await publish(id, text, spec);
-      say("assignMsg", `Job #${id} given. The AI will pick it up on its next round.`);
-      $("req").value = "";
+      say("assignMsg", `Job #${id} given. The AI will start on its next round.`);
+      resetQuote();
       history.replaceState(null, "", "#job=" + id);
       await balance();
       await listJobs();
@@ -300,7 +427,10 @@
       if (st === 1) html += `<div class="small">Deadline: ${when(j.deadline)}</div>`;
       if (st === 2) html += `<div class="small">Review until: ${when(j.reviewUntil)}</div>`;
       if (st === 3) html += `<div class="small">Disputed: reviewer AIs of other owners are voting (${j.yes} for the AI, ${j.no} for you).</div>`;
-      html += `<label>Request</label>` + (req != null ? `<div class="text">${esc(req)}</div>` : `<div class="small">The request text is not published yet.${mine ? ` <button class="btn ghost" id="republish">Publish it now</button>` : ""}</div>`);
+      const parsed = req != null ? AGTBrief.parse(req) : null;
+      const pf = parsed && FORMS.find((f) => parsed.form === `${f.id}@${f.version}`);
+      const shown = pf ? AGTBrief.render(pf, parsed) : req;
+      html += `<label>Brief</label>` + (req != null ? `<div class="text">${esc(shown)}</div>` : `<div class="small">The brief is not published yet.${mine ? ` <button class="btn ghost" id="republish">Publish it now</button>` : ""}</div>`);
       if (j.result !== ethers.ZeroHash) html += `<label>Result</label>` + (res != null ? `<div class="text">${esc(res)}</div>` : `<div class="small">Result <code>${esc(j.result)}</code> is not in the public store.</div>`);
       const acts = [];
       if (mine && (st === 2 || st === 3)) acts.push(`<button class="btn" data-act="accept">Accept and pay the AI</button>`);
@@ -313,9 +443,9 @@
       $("job").querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", () => act(id, b.dataset.act)));
       const rp = $("republish");
       if (rp) rp.addEventListener("click", async () => {
-        const text = prompt("Paste the exact request text you gave for this job:");
+        const text = prompt("Paste the exact brief file (JSON) of this job:");
         if (!text) return;
-        if (ethers.keccak256(ethers.toUtf8Bytes(text)) !== j.spec) return alert("This text does not match the request recorded on chain.");
+        if (ethers.keccak256(ethers.toUtf8Bytes(text)) !== j.spec) return alert("This file does not match the brief recorded on chain.");
         try { await publish(id, text, j.spec); await showJob(id); } catch (e) { alert(why(e)); }
       });
     } catch (e) { $("job").innerHTML = `<div class="small">Could not read job #${id}: ${esc(why(e))}</div>`; }
@@ -333,7 +463,9 @@
 
   $("connect").addEventListener("click", () => connect().catch((e) => say("assignMsg", why(e), true)));
   $("deposit").addEventListener("click", deposit);
-  $("assign").addEventListener("click", assign);
+  $("askQuote").addEventListener("click", askQuote);
+  $("extra").addEventListener("input", showEstimate);
+  loadTrades().catch(() => { $("trades").innerHTML = `<div class="small">Could not load the trades.</div>`; });
   window.addEventListener("hashchange", () => { const id = jobFromUrl(); if (id) showJob(id); });
   loadWorkers().catch(() => { $("worker").innerHTML = `<option value="">Could not read the chain</option>`; }).then(() => {
     listJobs();

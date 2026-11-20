@@ -16,6 +16,10 @@
 //   GET  /prices/:feed/:window collected signatures, grouped by price — anyone relays them to the feed contract
 import { getAddress, hexlify, isAddress, verifyMessage, keccak256, toUtf8Bytes, Interface, AbiCoder, id as ethersId, getBytes } from "ethers";
 import tasks from "../tasks/translation.json";
+import Brief from "../../public/forms/brief.js";
+import formIndex from "../../public/forms/index.json";
+import formTranslation from "../../public/forms/translation.json";
+import formWriting from "../../public/forms/writing.json";
 import X from "../../exam/lib.js";
 import core from "../../chain/core.js";
 // Private banks, bundled at deploy time from the operator's machine (never in the public repo).
@@ -257,7 +261,9 @@ async function listApplications(env) {
 }
 
 // ---------- public content store for work results ----------
-const MAX_CONTENT = 64 * 1024;
+const MAX_CONTENT = 256 * 1024;
+const FORMS = { translation: formTranslation, writing: formWriting };
+const formOf = (b) => (b && typeof b.form === "string" ? FORMS[b.form.split("@")[0]] : null);
 const WORK_IFACE = new Interface([
   "function licenseOfAgent(address) view returns (uint256)",
   "function licenses(uint256) view returns (address holder, address agent, uint8 role, bool active, bytes32 examHash, bytes32 attestHash, string name)",
@@ -353,8 +359,91 @@ async function putRequest(env, req) {
   if (Number(j.kind) !== 1 || Number(j.status) === 0) return fail(404, "no job assigned by a person with this number");
   if (getAddress(j.client) !== getAddress(signer)) return fail(403, "signature is not from the client of this job");
   if (j.spec !== hash) return fail(409, "text does not match the request hash recorded on chain");
-  if (!(await env.EXAMS.get(`c:${hash}`))) await env.EXAMS.put(`c:${hash}`, JSON.stringify({ text: b.text, client: signer, job: Number(b.job), kind: "request", at: now() }), { expirationTtl: KEEP });
+  // The request must be a valid brief of an open trade, with a quote this AI answered as feasible.
+  const brief = Brief.parse(b.text);
+  const form = formOf(brief);
+  if (!form) return fail(400, "the request must be an agt-brief/v1 file of a listed trade");
+  if (Brief.canonical(brief) !== b.text) return fail(400, "the brief must be in canonical form");
+  const v = Brief.validate(form, brief);
+  if (!v.ok) return fail(400, "invalid brief", { errors: v.errors });
+  const q = brief.quote && JSON.parse((await env.EXAMS.get(`q:${brief.quote.id}`)) || "null");
+  if (!q || !q.answer || !q.answer.feasible) return fail(409, "the brief carries no feasible quote");
+  if (q.worker !== Number(j.workerLicense)) return fail(409, "the quote was given by another AI");
+  if (brief.quote.priceHat !== q.answer.priceHat || brief.quote.days !== q.answer.days) return fail(409, "price or days differ from the quote");
+  if (Brief.canonical({ ...brief, quote: undefined }) !== Brief.canonical(q.brief)) return fail(409, "the brief differs from the one that was quoted");
+  if (BigInt(j.escrow) < BigInt(q.answer.priceHat) * 10n ** 12n) return fail(409, "escrow is less than the quoted price");
+  if (!(await env.EXAMS.get(`c:${hash}`))) await env.EXAMS.put(`c:${hash}`, JSON.stringify({ text: b.text, client: signer, job: Number(b.job), kind: "brief", at: now() }), { expirationTtl: KEEP });
   return json({ ok: true, hash, job: Number(b.job) });
+}
+
+// ---------- quotes: before any money moves, the chosen AI reads the brief and answers ----------
+//   POST /quotes {worker, brief}           → the client asks one licensed AI worker (free, rate-limited)
+//   GET  /quotes?worker=N                  → waiting quotes for that AI (the sealed box polls this)
+//   POST /quotes/:id/answer {feasible, reason, questions, days, agent, signature} → signed by that AI's key
+//   GET  /quotes/:id                       → the client reads the answer
+// The price is the trade's published rate (Brief.estimate), the same for everyone; the AI may only ask for more days.
+const QUOTE_TTL = 3 * 86400;
+const quoteMessage = (id, digest) => `AGT quote ${id} ${digest}`;
+async function workerLicence(env, id) {
+  const l = WORK_IFACE.decodeFunctionResult("licenses", await ethCall(env, WORK_IFACE.encodeFunctionData("licenses", [BigInt(id)])));
+  return Number(l.role) === 1 && l.active ? l : null;
+}
+async function postQuote(env, req) {
+  const b = await body(req);
+  if (!b || !/^\d+$/.test(String(b.worker)) || !b.brief) return fail(400, "need {worker, brief}");
+  const form = formOf(b.brief);
+  if (!form) return fail(400, "unknown trade form");
+  if (b.brief.quote !== undefined) return fail(400, "ask for a quote with a brief that has no quote yet");
+  const v = Brief.validate(form, b.brief);
+  if (!v.ok) return fail(400, "invalid brief", { errors: v.errors });
+  if (toUtf8Bytes(Brief.canonical(b.brief)).length > MAX_CONTENT) return fail(413, "brief too large");
+  if (!(await workerLicence(env, b.worker))) return fail(404, "no active licensed AI worker with this number");
+  const ip = req.headers.get("cf-connecting-ip") || "?";
+  const day = Math.floor(now() / 86400);
+  const n = Number((await env.EXAMS.get(`qrate:${ip}:${day}`)) || 0);
+  if (n >= 20) return fail(429, "at most 20 quote requests a day");
+  await env.EXAMS.put(`qrate:${ip}:${day}`, String(n + 1), { expirationTtl: 2 * 86400 });
+  const id = hexlify(crypto.getRandomValues(new Uint8Array(12))).slice(2);
+  const q = { id, worker: Number(b.worker), brief: b.brief, estimate: Brief.estimate(form, b.brief.fields), status: "waiting", createdAt: now() };
+  await env.EXAMS.put(`q:${id}`, JSON.stringify(q), { expirationTtl: QUOTE_TTL });
+  await env.EXAMS.put(`qwait:${q.worker}:${id}`, "1", { expirationTtl: QUOTE_TTL });
+  return json({ ok: true, id, estimate: q.estimate });
+}
+async function waitingQuotes(env, worker) {
+  const out = [];
+  for (const k of (await env.EXAMS.list({ prefix: `qwait:${worker}:` })).keys) {
+    const q = JSON.parse((await env.EXAMS.get(`q:${k.name.split(":").pop()}`)) || "null");
+    if (q && q.status === "waiting") out.push(q);
+  }
+  return json({ ok: true, quotes: out });
+}
+async function answerQuote(env, req, id) {
+  const q = JSON.parse((await env.EXAMS.get(`q:${id}`)) || "null");
+  if (!q) return fail(404, "quote not found");
+  if (q.status !== "waiting") return fail(409, "already answered");
+  const b = await body(req);
+  if (!b || typeof b.feasible !== "boolean" || typeof b.reason !== "string" || !Array.isArray(b.questions) || !Number.isInteger(b.days)) return fail(400, "need {feasible, reason, questions, days, agent, signature}");
+  const answer = {
+    feasible: b.feasible,
+    reason: b.reason.slice(0, 1000),
+    questions: b.questions.filter((x) => typeof x === "string").slice(0, 10).map((x) => x.slice(0, 300)),
+    priceHat: q.estimate.priceHat,
+    days: Math.max(q.estimate.days, Math.min(60, b.days)),
+  };
+  let signer;
+  try {
+    signer = verifyMessage(quoteMessage(id, keccak256(toUtf8Bytes(Brief.canonical({ feasible: b.feasible, reason: b.reason, questions: b.questions, days: b.days })))), b.signature);
+  } catch {
+    return fail(400, "bad signature");
+  }
+  const l = await workerLicence(env, q.worker);
+  if (!l || getAddress(l.agent) !== getAddress(signer)) return fail(403, "only the AI that was asked may answer");
+  q.status = "answered";
+  q.answer = { ...answer, feasible: answer.feasible && answer.questions.length === 0 };
+  q.answeredAt = now();
+  await env.EXAMS.put(`q:${id}`, JSON.stringify(q), { expirationTtl: 30 * 86400 });
+  await env.EXAMS.delete(`qwait:${q.worker}:${id}`);
+  return json({ ok: true, answer: q.answer });
 }
 
 export default {
@@ -367,7 +456,7 @@ export default {
         return json({
           name: "AGT Exam",
           about: "Every AI that takes part in AGT must pass the exam for its role first (Charter Article 5). The draw is commit–reveal with a candidate seed, so nobody can choose the questions. Authors never sit their own questions.",
-          flow: ["POST /exams", "POST /exams/:id/seed", "POST /exams/:id/submit", "GET /exams/:id", "GET /records/:examHash", "POST /applications", "GET /applications", "GET /tasks", "POST /content", "GET /content/:hash", "POST /requests"],
+          flow: ["POST /exams", "POST /exams/:id/seed", "POST /exams/:id/submit", "GET /exams/:id", "GET /records/:examHash", "POST /applications", "GET /applications", "GET /tasks", "POST /content", "GET /content/:hash", "GET /forms", "POST /quotes", "GET /quotes/:id", "POST /requests"],
           join: "https://agtcoin.pages.dev/join",
           limits: { examsPerOwnerPerDay: MAX_STARTS_PER_OWNER_PER_DAY, seedWithinSec: COMMITTED_TTL },
           trades: Object.values(BANKS).map(bankInfo),
@@ -389,6 +478,19 @@ export default {
       if (mp && req.method === "GET") return await getPrices(env, mp[1], mp[2]);
       if (p === "/content" && req.method === "POST") return await putContent(env, req);
       if (p === "/requests" && req.method === "POST") return await putRequest(env, req);
+      if (p === "/forms" && req.method === "GET") return json({ ok: true, ...formIndex, forms: formIndex.forms.map((k) => FORMS[k]) });
+      if (p === "/quotes" && req.method === "POST") return await postQuote(env, req);
+      if (p === "/quotes" && req.method === "GET") {
+        const w = url.searchParams.get("worker");
+        if (!/^\d+$/.test(w || "")) return fail(400, "need ?worker=<licence>");
+        return await waitingQuotes(env, w);
+      }
+      const mq = p.match(/^\/quotes\/([0-9a-f]{24})(\/answer)?$/);
+      if (mq && mq[2] && req.method === "POST") return await answerQuote(env, req, mq[1]);
+      if (mq && !mq[2] && req.method === "GET") {
+        const q = await env.EXAMS.get(`q:${mq[1]}`);
+        return q ? json({ ok: true, quote: JSON.parse(q) }) : fail(404, "quote not found");
+      }
       const mc = p.match(/^\/content\/(0x[0-9a-f]{64})$/);
       if (mc && req.method === "GET") {
         const c = await env.EXAMS.get(`c:${mc[1]}`);

@@ -1,0 +1,11 @@
+{
+  "schema": "agt-forms/v1",
+  "forms": ["translation", "writing"],
+  "notOffered": [
+    { "title": "Video, animation", "why": "The AIs in sealed boxes work with text only. Making video needs generation tools inside the box and a trade exam for them; neither exists yet." },
+    { "title": "Images, illustration, design", "why": "No image tools in the sealed box yet, and no exam for this trade." },
+    { "title": "Voice, music, audio", "why": "No audio tools in the sealed box yet, and no exam for this trade." },
+    { "title": "Work in the physical world", "why": "AIs cannot act in the physical world. People hold the physical keys." }
+  ],
+  "_note": "A trade opens for paid jobs only when it has a form here AND a licence exam (Charter Article 5): an AI takes only jobs of the trade it passed."
+}

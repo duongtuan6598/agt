@@ -9,7 +9,14 @@ const { AgentLoop, WORK_ABI } = require("../tee/box/agent.js");
 const ATT = ethers.id("sealed-box");
 const E = (n) => ethers.parseEther(String(n));
 const DAY = 86400;
-const REQUEST = "Write a two-line Vietnamese summary of: 'Keep a backup of your keys.'";
+const Brief = require("../public/forms/brief.js");
+const FORM = require("../public/forms/translation.json");
+// The client's job as a structured brief of the translation trade, with the AI's quote attached.
+const BRIEF = Brief.build(FORM, {
+  sourceLanguage: "en", targetLanguage: "vi", sourceText: "Keep a backup of your keys.", domain: "technical",
+  audience: "Vietnamese wallet users", tone: "neutral", glossary: [["backup", "bản sao lưu"]], localize: "keep",
+}, ["Use the word 'khoá' for key"], { id: "q1", priceHat: 500, days: 1 });
+const REQUEST = Brief.canonical(BRIEF);
 
 function memoryContent() {
   const store = new Map();
@@ -56,7 +63,11 @@ async function world() {
   return { work, agt, client, W, V1, ai, content, loop, assign };
 }
 
-const doer = { fulfil: async (r) => `Tóm tắt: hãy giữ bản sao lưu khoá của bạn.\n(${r.length} chars of request read)`, judge: async () => ({ verdict: "accept", reason: "fulfils the request" }) };
+const doer = {
+  fulfil: async (job) => { expect(job).to.contain("Acceptance criteria").and.to.contain("bản sao lưu"); return "Tóm tắt: hãy giữ một bản sao lưu khoá của bạn."; },
+  judge: async (job) => { expect(job).to.contain("Use the word 'khoá' for key"); return { verdict: "accept", reason: "every criterion met" }; },
+  assess: async (job, min) => ({ feasible: true, reason: "plain text, within the trade", questions: [], days: min }),
+};
 const refuser = { fulfil: async () => null };
 const strict = { judge: async () => ({ verdict: "reject", flaw: "incomplete", reason: "only one line, two were asked" }) };
 
@@ -110,6 +121,37 @@ describe("Jobs people assign — the sealed AI's side (tee/box/agent.js)", () =>
     content.store.delete((await work.jobs(id)).spec);
     const worker = loop(ai.w, doer);
     expect(await worker.assignedStep(await worker.licence())).to.deep.equal([]);
+  });
+
+  it("a request that is not a valid brief of an open trade is declined, never worked on", async () => {
+    const { work, agt, client, ai, content, loop } = await world();
+    const free = "make me an animated film about a cat";
+    const spec = ethers.keccak256(ethers.toUtf8Bytes(free));
+    await agt.connect(client).approve(work, E(1));
+    await work.connect(client).assign(1, E(1), spec, (await time.latest()) + 2 * DAY);
+    content.store.set(spec, free);
+    let called = false;
+    const worker = loop(ai.w, { fulfil: async () => { called = true; return "x"; } });
+    expect(await worker.assignedStep(await worker.licence())).to.deep.equal([]);
+    expect(called).to.equal(false);
+  });
+
+  it("quotes: the AI answers before money moves; questions make it not feasible; the price is the trade's rate", async () => {
+    const { ai, loop } = await world();
+    const answered = [];
+    const quotes = [
+      { id: "a", brief: { ...BRIEF, quote: undefined }, estimate: { priceHat: 500, days: 1 } },
+      { id: "b", brief: { schema: "agt-brief/v1", form: "writing@1", trade: 5, fields: {}, acceptance: [], deliverable: {} }, estimate: { days: 1 } },
+    ];
+    const content = { quotes: async () => quotes, answerQuote: async (id, a) => answered.push({ id, ...a }) };
+    const asking = { assess: async (job, min) => ({ feasible: true, reason: "need the target region", questions: ["Northern or Southern vocabulary?"], days: min + 1 }) };
+    const l = loop(ai.w, asking);
+    l.content = content;
+    await l.quoteStep(await l.licence());
+    expect(answered[0]).to.include({ id: "a", feasible: false, days: 2 }); // a question → not feasible yet
+    expect(answered[0].questions).to.deep.equal(["Northern or Southern vocabulary?"]);
+    expect(answered[1].feasible).to.equal(false); // writing trade not open (no exam): refused without asking the model
+    expect(answered[1].reason).to.contain("not open");
   });
 
   it("a reviewer AI owned by the worker's owner never judges that dispute", async () => {

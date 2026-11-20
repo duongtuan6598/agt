@@ -97,3 +97,15 @@ Người sáng lập chốt: hệ thống AGT **không** có chức năng cho va
 - **Bảo mật:** giữ lõi đơn giản.
 
 Thị trường bên ngoài tự lo. AGT là BEP20 nên nền tảng nào cũng nhận làm tài sản thế chấp được, nhưng những nền tảng đó chỉ chuyển AGT đã có, không đúc thêm. Rủi ro thuộc về họ, vì AGT không hứa đổi ra vàng (Điều 10).
+
+## Việc người giao: mẫu đơn theo nghề + báo giá trước (20/11/2026)
+
+Người sáng lập yêu cầu: mỗi nghề phải có **mẫu đơn chuyên nghiệp, sát thực tế**; khách điền xong thành **một file có cấu trúc** để AI đọc không mơ hồ.
+
+- **Mẫu đơn mỗi nghề** nằm ở `public/forms/<nghề>.json` (`agt-form/v1`). Mỗi mẫu ghi các trường cần điền, những gì nghề này làm được và không làm được, các **tiêu chí nghiệm thu cố định**, dạng kết quả và cách tính giá.
+- **File đơn hàng** `agt-brief/v1` là JSON chuẩn hoá. keccak256 của file là `spec` trên chain, nên **đơn hàng chính là hợp đồng**. Khách được thêm tối đa 5 tiêu chí riêng; tiêu chí của nghề thì không được sửa.
+- **Báo giá trước khi khoá tiền** (miễn phí). AI đọc đơn rồi trả lời một trong ba: làm được, cần hỏi thêm, hoặc từ chối.
+  - **Giá theo biểu giá của nghề**, ai cũng như nhau; AI chỉ được xin thêm ngày.
+  - Máy chủ chỉ nhận đơn hàng có báo giá "làm được" khớp đúng AI, đơn và giá, và tiền ký quỹ phải ít nhất bằng giá.
+- **Phân xử** chấm kết quả theo đúng các tiêu chí trong đơn, không chấm theo cảm tính.
+- **Nghề chỉ mở khi đã có đề thi** (Điều 5). Hiện mở nghề Dịch. Nghề Viết đã có mẫu đơn, chờ đề thi. Phim, ảnh, âm thanh, việc ngoài đời thật được ghi rõ là **chưa nhận**, kèm lý do.

@@ -1,0 +1,44 @@
+{
+  "schema": "agt-form/v1",
+  "id": "writing",
+  "version": 1,
+  "trade": 5,
+  "status": "needs-exam",
+  "title": "Writing",
+  "summary": "Original text written to a brief: articles, product descriptions, emails, documentation.",
+  "canDo": [
+    "Blog posts and articles from your outline and facts",
+    "Product and service descriptions",
+    "Emails, letters, announcements",
+    "How-to guides and documentation from material you provide"
+  ],
+  "cannotDo": [
+    "Claims of fact the AI cannot check: give the facts and sources in the brief",
+    "Academic work submitted as your own, fake reviews, impersonation, spam",
+    "More than 5,000 words in one job"
+  ],
+  "fields": [
+    { "key": "kind", "label": "What to write", "type": "select", "required": true, "options": ["article", "product", "email", "guide", "other"], "optionLabels": ["Article / blog post", "Product description", "Email / letter", "Guide / documentation", "Other"] },
+    { "key": "language", "label": "Language", "type": "select", "required": true, "options": ["vi", "en", "zh", "ja", "ko", "fr", "de", "es"], "optionLabels": ["Vietnamese", "English", "Chinese", "Japanese", "Korean", "French", "German", "Spanish"] },
+    { "key": "topic", "label": "Topic / title", "type": "text", "required": true, "maxLength": 200 },
+    { "key": "goal", "label": "What the text must achieve", "type": "text", "required": true, "maxLength": 300, "example": "Get readers to sign up for the free trial" },
+    { "key": "audience", "label": "Readers", "type": "text", "required": true, "maxLength": 300 },
+    { "key": "keyPoints", "label": "Points that must be covered", "type": "list", "required": true, "maxItems": 20 },
+    { "key": "facts", "label": "Facts, figures and sources to use (the AI will not invent any)", "type": "longtext", "required": false, "maxLength": 20000 },
+    { "key": "length", "label": "Length (words)", "type": "number", "required": true, "min": 50, "max": 5000 },
+    { "key": "tone", "label": "Tone", "type": "select", "required": true, "options": ["formal", "neutral", "friendly", "persuasive"], "optionLabels": ["Formal", "Neutral", "Friendly", "Persuasive"] },
+    { "key": "avoid", "label": "Must not say or use", "type": "list", "required": false, "maxItems": 20 },
+    { "key": "notes", "label": "Anything else", "type": "longtext", "required": false, "maxLength": 2000 }
+  ],
+  "acceptance": [
+    "Covers every point in 'Points that must be covered'.",
+    "Uses only the facts and figures given in the brief, or general knowledge that is clearly correct; invents no statistics, quotes or sources.",
+    "Length within 15% of the requested number of words.",
+    "Written in the requested language and tone, for the stated readers, serving the stated goal.",
+    "Contains nothing from 'Must not say or use'.",
+    "Original text, not copied from elsewhere; correct grammar and spelling."
+  ],
+  "maxExtraCriteria": 5,
+  "deliverable": { "format": "text", "description": "The finished text in Markdown.", "maxBytes": 65536 },
+  "pricing": { "unit": "1,000 words written", "countField": "length", "countIsNumber": true, "perUnit": 1000, "hatPerUnit": 800, "minHat": 400, "unitsPerDay": 5, "minDays": 1 }
+}

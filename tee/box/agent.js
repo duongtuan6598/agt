@@ -3,12 +3,25 @@
 //                                    → submitSelf on chain → call the reviewer draw
 //   verifier: when drawn for a job → fetch the source and the result → review against the Charter's criteria
 //                                    → vote with a public reason
-//   worker   (jobs people assign): take a job assigned to this licence → read the client's request → do it
-//                                    → publish the result → submitAssigned (or decline: the client is refunded)
+//   worker   (jobs people assign): answer quote requests for briefs (feasible? questions? days) before money moves;
+//                                    then take jobs assigned to this licence → read the brief → do it → publish the
+//                                    result → submitAssigned (or decline: the client is refunded)
 //   verifier: when a client disputes a result → judge request vs result → vote (escrow to worker or back to client)
 //   anyone:  call drawReviewers for jobs whose seed block has arrived (keeps reviews moving)
 // Every transaction is signed by the AI's own key; the owner only funds that key with gas.
 const { ethers } = require("ethers");
+const Brief = require("../../public/forms/brief.js");
+const FORMS = Object.fromEntries(require("../../public/forms/index.json").forms.map((k) => [k, require(`../../public/forms/${k}.json`)]));
+
+// A brief (the job's spec) as the AI reads it: validated against its trade form, rendered, plus the raw JSON.
+function readBrief(text) {
+  const b = Brief.parse(text);
+  const form = b && typeof b.form === "string" ? FORMS[b.form.split("@")[0]] : null;
+  if (!form) return { ok: false, why: "not an agt-brief/v1 file of a listed trade" };
+  const v = Brief.validate(form, b);
+  if (!v.ok) return { ok: false, why: v.errors.join("; ") };
+  return { ok: true, form, brief: b, text: `${Brief.render(form, b)}\n\n## Brief (JSON, the source of truth)\n${Brief.canonical(b)}` };
+}
 
 const WORK_ABI = [
   "function licenseOfAgent(address) view returns (uint256)",
@@ -59,6 +72,18 @@ function httpContent(base, wallet) {
       const r = await (await fetch(`${base}/content/${hash}`)).json();
       if (!r.ok) throw new Error(`content ${hash}: ${r.error}`);
       return r.text;
+    },
+    async quotes(worker) {
+      return (await (await fetch(`${base}/quotes?worker=${worker}`)).json()).quotes || [];
+    },
+    async answerQuote(id, answer) {
+      const digest = ethers.keccak256(ethers.toUtf8Bytes(Brief.canonical(answer)));
+      const r = await (await fetch(`${base}/quotes/${id}/answer`, {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ...answer, agent: wallet.address, signature: await wallet.signMessage(`AGT quote ${id} ${digest}`) }),
+      })).json();
+      if (!r.ok) throw new Error(`quote ${id}: ${r.error}`);
+      return r.answer;
     },
   };
 }
@@ -175,6 +200,26 @@ class AgentLoop {
     return votes;
   }
 
+  // Worker: quote requests addressed to this licence — free, before any money moves.
+  async quoteStep(lic) {
+    if (!this.content.quotes) return [];
+    const done = [];
+    for (const q of await this.content.quotes(lic.id)) {
+      const r = readBrief(Brief.canonical(q.brief));
+      const min = q.estimate?.days || 1;
+      const a = r.ok ? await this.model.assess(r.text, min) : { feasible: false, reason: `invalid brief: ${r.why}`, questions: [], days: min };
+      const answer = { feasible: a.feasible && a.questions.length === 0, reason: a.reason.slice(0, 1000), questions: a.questions.slice(0, 10).map((x) => x.slice(0, 300)), days: Math.max(min, Math.min(60, a.days)) };
+      try {
+        await this.content.answerQuote(q.id, answer);
+        done.push(q.id);
+        this.log(`quote ${q.id}: ${answer.feasible ? "feasible" : answer.questions.length ? `${answer.questions.length} question(s)` : "declined"} — ${answer.reason}`);
+      } catch (e) {
+        this.log(`quote ${q.id}: ${e.message}`);
+      }
+    }
+    return done;
+  }
+
   // Worker: jobs that people assigned to this licence and that are still open before their deadline.
   async assignedStep(lic) {
     const now = Number((await this.work.runner.provider.getBlock("latest")).timestamp);
@@ -187,10 +232,16 @@ class AgentLoop {
       try {
         request = await this.content.get(j.spec);
       } catch {
-        this.log(`assigned #${j.id}: the client has not published the request text yet`);
+        this.log(`assigned #${j.id}: the client has not published the brief yet`);
         continue;
       }
-      const result = await this.model.fulfil(request);
+      const r = readBrief(request);
+      if (!r.ok) {
+        (this.declined ||= new Set()).add(j.id);
+        this.log(`assigned #${j.id}: declined — ${r.why}`);
+        continue;
+      }
+      const result = await this.model.fulfil(r.text);
       if (!result) {
         (this.declined ||= new Set()).add(j.id);
         this.log(`assigned #${j.id}: declined — the client can take the escrow back after the deadline`);
@@ -218,7 +269,8 @@ class AgentLoop {
       if (!(await this.work.assigned(j.id, await this.work.drawRound(j.id), lic.id))) continue; // only when drawn
       let verdict;
       try {
-        verdict = await this.model.judge(await this.content.get(j.spec), await this.content.get(j.result));
+        const r = readBrief(await this.content.get(j.spec));
+        verdict = r.ok ? await this.model.judge(r.text, await this.content.get(j.result)) : { verdict: "reject", reason: `the job's brief is invalid: ${r.why}` };
       } catch {
         verdict = { verdict: "reject", reason: "the request or the result is not available in the public content store" };
       }
@@ -268,6 +320,7 @@ class AgentLoop {
     await this.priceStep(lic);
     await this.drawStep();
     if (lic.role === "worker") {
+      await this.quoteStep(lic);
       await this.assignedStep(lic); // people who paid come first
       await this.workerStep(lic);
     }
@@ -282,4 +335,4 @@ class AgentLoop {
 const { makeModel } = require("./models.js");
 const claudeModel = ({ client, systemPrompt }) => makeModel({ provider: "anthropic", client, systemPrompt });
 
-module.exports = { WORK_ABI, FEED_ABI, AgentLoop, httpContent, httpPrices, claudeModel, makeModel, uriOf, jobUriOf, parseUri };
+module.exports = { WORK_ABI, FEED_ABI, AgentLoop, httpContent, httpPrices, claudeModel, makeModel, uriOf, jobUriOf, parseUri, readBrief, FORMS };
