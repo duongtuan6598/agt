@@ -93,7 +93,7 @@ class EngageLoop {
       const e = await this.eng.engagements(id);
       for (let m = 0; m < Number(e.count); m++) {
         const x = await this.eng.milestone(id, m);
-        if (x.report && x.report !== ethers.ZeroHash) reports.push({ at: Number(x.deliveredAt), hash: x.report });
+        if (x.report && x.report !== ethers.ZeroHash) reports.push({ at: Number(x.deliveredAt) * 1000 + m, hash: x.report }); // ties: later milestone first (Codex M-4)
       }
     } else {
       const r = await this.mnt.retainers(id);
@@ -236,8 +236,10 @@ class EngageLoop {
         const { b, text } = await this.brief(e.brief);
         const a = await this.model.assess(text, 7);
         if (!a.feasible) { this.log(`engagement #${id}: not accepted — ${a.reason}`); continue; }
+        // Codex M-1: if the client already gave access, the memory branch must open cleanly BEFORE accepting.
+        const token = await this.token("engagement", id);
+        const mem = token ? await this.openMemory("engagement", id, b.fields.repository, token) : null;
         await (await this.eng.start(id)).wait();
-        const mem = this.memory("engagement", id, { repository: b.fields.repository, token: await this.token("engagement", id) });
         if (mem) await mem.append("decision", `Accepted the engagement. ${a.reason}`);
         this.log(`engagement #${id}: accepted`);
       } catch (e) { this.log(`engagement #${id}: ${e.message}`); }

@@ -12,6 +12,10 @@ const { execFileSync } = require("child_process");
 const { Workspace, checkRepoUrl } = require("./workspace.js");
 
 const BRANCH = "agt/memory";
+// Bounds (Codex M-2): the branch is written only by AI boxes, so anything bigger or stranger is tampering.
+const MAX_ENTRIES = 50000;
+const MAX_ENTRY_BYTES = 64 * 1024;
+const FILE_RE = /^mem_[0-9a-f]{32}_[0-9]{8}$/;
 const REF = "refs/agt/memory";
 const fileOf = (name) => name.replace(/:/g, "_"); // file names portable everywhere (no ':' on Windows)
 const nameOf = (file) => file.replace(/^mem_([0-9a-f]{32})_/, "mem:$1:");
@@ -43,7 +47,8 @@ class RepoMemoryStore {
   _fetch() {
     this._init();
     try {
-      this._git(["fetch", "-q", "--no-tags", this.ws.url, `+refs/heads/${BRANCH}:${REF}`]);
+      // only the newest commit (its tree is the whole memory), no big blobs, and a hard time limit
+      this._git(["fetch", "-q", "--no-tags", "--depth=1", `--filter=blob:limit=${MAX_ENTRY_BYTES}`, this.ws.url, `+refs/heads/${BRANCH}:${REF}`]);
     } catch (e) {
       if (!/couldn't find remote ref|could not find remote ref/i.test(String(e.stderr || e.message))) throw e;
       try { this._git(["update-ref", "-d", REF]); } catch {}
@@ -57,11 +62,18 @@ class RepoMemoryStore {
 
   _files(head) {
     if (!head) return [];
-    return this._git(["ls-tree", "--full-tree", "-z", head]).split("\0").filter(Boolean).map((l) => {
+    const out = this._git(["ls-tree", "--full-tree", "-z", "-l", head]).split("\0").filter(Boolean).map((l) => {
       const [meta, file] = l.split("\t");
-      const [mode, type, sha] = meta.split(" ");
-      return { mode, type, sha, file };
+      const [mode, type, sha, size] = meta.trim().split(/\s+/);
+      return { mode, type, sha, size: Number(size), file };
     });
+    if (out.length > MAX_ENTRIES) throw new Error(`memory branch has ${out.length} entries — more than any box writes`);
+    for (const f of out) {
+      if (f.mode !== "100644" || f.type !== "blob" || !FILE_RE.test(f.file) || !(f.size > 0 && f.size <= MAX_ENTRY_BYTES)) {
+        throw new Error(`memory branch has unexpected content (${f.mode} ${f.type} ${f.file.slice(0, 60)}) — not written by an AGT box`);
+      }
+    }
+    return out;
   }
 
   async list(prefix) {

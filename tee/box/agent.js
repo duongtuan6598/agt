@@ -71,6 +71,8 @@ function httpContent(base, wallet) {
     async get(hash) {
       const r = await (await fetch(`${base}/content/${hash}`)).json();
       if (!r.ok) throw new Error(`content ${hash}: ${r.error}`);
+      // content-addressed: the store cannot substitute other text for an on-chain hash (Codex M-3)
+      if (typeof r.text !== "string" || ethers.keccak256(ethers.toUtf8Bytes(r.text)) !== String(hash).toLowerCase()) throw new Error(`content ${hash}: the store returned text that does not match its hash`);
       return r.text;
     },
     async quotes(worker) {

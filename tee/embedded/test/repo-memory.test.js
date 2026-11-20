@@ -67,3 +67,22 @@ test("another engagement's key cannot read or extend this memory", async () => {
   const other = new EngagementMemory(master, "engagement:97:0xabc:8", box(url));
   assert.deepStrictEqual(await other.entries(), [], "different HMAC names: not even listed");
 });
+
+test("anything an AGT box would not write on the branch (big blob, symlink, stray file) fails closed (Codex M-2)", async () => {
+  const cases = [
+    ["a huge blob", (w) => fs.writeFileSync(path.join(w, "mem_" + "a".repeat(32) + "_00000000"), "x".repeat(200 * 1024))],
+    ["a stray file", (w) => fs.writeFileSync(path.join(w, "README.md"), "hello")],
+    ["a symlink", (w) => { execFileSync(GIT, ["-C", w, "update-index", "--add", "--cacheinfo", `120000,${execFileSync(GIT, ["-C", w, "hash-object", "-w", "--stdin"], { input: "/etc/passwd", encoding: "utf8" }).trim()},mem_${"c".repeat(32)}_00000000`]); }],
+  ];
+  for (const [what, plant] of cases) {
+    const { url, bare } = clientRepo();
+    const w = tmp();
+    execFileSync(GIT, ["init", "-q", w]);
+    plant(w);
+    if (what !== "a symlink") execFileSync(GIT, ["-C", w, "add", "-A"]); // the symlink is staged directly (no worktree file)
+    execFileSync(GIT, ["-C", w, "-c", "user.name=c", "-c", "user.email=c@c", "commit", "-q", "-m", "x"]);
+    execFileSync(GIT, ["-C", w, "push", "-q", bare, "HEAD:refs/heads/agt/memory"]);
+    await assert.rejects(new EngagementMemory(master, CTX, box(url)).entries(), /unexpected content|entries/, what);
+    await assert.rejects(new EngagementMemory(master, CTX, box(url)).append("note", "x"), /unexpected content|entries/, `${what}: no write on top of it either`);
+  }
+});

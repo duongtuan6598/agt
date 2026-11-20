@@ -75,6 +75,11 @@
 | L-4 (Codex) | Medium | Expiry checks off: freshness relies on replay protection. | **Documented**: single-use nonce, one job per nonce, one result per job, and results count only with that job's key — replay gains nothing. |
 | L-5 (Codex) | Medium | Token container command and environment were not checked. | **Fixed**: the image's own command only; no AGT_ override except AGT_BUCKET. Tests added. |
 | L-6 (Codex) | Low | The project-level IAM binding was left behind. | **Fixed**: removed during cleanup. |
+| M-1 (Codex) | High | An engagement could be accepted while its memory branch could not be opened. | **Fixed** (2026-11-21): when access is already given, the memory must open cleanly before the AI accepts. |
+| M-2 (Codex) | High | Fetching the memory branch had no resource bounds; anything could be placed on it. | **Fixed**: depth 1, blob filter, time limit; at most 50,000 entries of at most 64 KB; only plain files with the box's naming. Anything else fails closed (tests: big blob, stray file, symlink). |
+| M-3 (Codex) | Medium | The content store's text was trusted for an on-chain hash. | **Fixed at the source**: every read checks keccak256(text) against the hash. |
+| M-4 (Codex) | Medium | Equal delivery times could pick an older memory anchor. | **Fixed**: ties go to the later milestone. |
+| M-5 (Codex) | Medium | A memory error in the monthly status could stop other work. | **Not a bug**: each maintenance contract is already handled in its own try/catch; the status for that contract waits, the rest go on. |
 
 ### Slither results
 
