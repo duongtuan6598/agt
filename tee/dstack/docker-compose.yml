@@ -3,7 +3,7 @@
 # every setting below is public. Only AGT_MODEL_KEY is secret: pass it as a dstack ENCRYPTED env var.
 services:
   agt-box:
-    image: asia-southeast1-docker.pkg.dev/agt-sealed-box-1120/agt/box@sha256:f43275945058b00b9efe27f23ebc69523b48392a5d19289baeea11346862ee25
+    image: asia-southeast1-docker.pkg.dev/agt-sealed-box-1120/agt/box@sha256:8441f8622f7a6ec6f02f35a32ae63b90438db65b6973825130725a61a1dac6d3
     restart: "no" # a restart means a fresh attestation; keys come back through peer escrow
     volumes:
       - /var/run/dstack.sock:/var/run/dstack.sock # attestation (GetQuote) from the dstack guest agent

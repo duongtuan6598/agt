@@ -8,7 +8,8 @@
     "sha256:2b267087117ab323df6f18ddf3729b33df251633f42277f7c27389e484532c5d",
     "sha256:9c1bd7820b6875821d4d89aeb2c386114b0a5ee8826eb82f2e093c5df1ccd90e",
     "sha256:4431e6ef4d6e09e23aa549e90599442fb35e5b8f151c0959ad94f95da7102acb",
-    "sha256:f43275945058b00b9efe27f23ebc69523b48392a5d19289baeea11346862ee25"
+    "sha256:f43275945058b00b9efe27f23ebc69523b48392a5d19289baeea11346862ee25",
+    "sha256:8441f8622f7a6ec6f02f35a32ae63b90438db65b6973825130725a61a1dac6d3"
   ],
   "charterHash": "current",
   "promptHashes": null,
@@ -40,6 +41,13 @@
       "by": "founder (genesis phase, Charter Art. 5) — approved in chat 2026-11-20",
       "at": "2026-11-20",
       "note": "v4 + dstack/Intel TDX path (tee/tdx.js); same Charter and system prompt. Testnet only; the Council must re-approve from a reproducible build"
+    },
+    {
+      "digest": "sha256:8441f8622f7a6ec6f02f35a32ae63b90438db65b6973825130725a61a1dac6d3",
+      "image": "asia-southeast1-docker.pkg.dev/agt-sealed-box-1120/agt/box:v6",
+      "by": "founder (genesis phase, Charter Art. 5) — approved in chat 2026-11-20",
+      "at": "2026-11-20",
+      "note": "v5 + AMD SEV-SNP / Azure Confidential Containers path (tee/snp.js); same Charter and system prompt. Testnet only; the Council must re-approve from a reproducible build"
     }
   ],
   "dstack": {
