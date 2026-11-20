@@ -12,8 +12,8 @@ const X = require("../exam/lib.js");
 
 const root = path.join(__dirname, "..");
 const BANKS = {
-  1: require(path.join(root, "exam", "bank", "translation-en-vi.json")),
-  101: require(path.join(root, "exam", "bank", "review-translation-en-vi.json")),
+  get 1() { return require("../exam/banks.js").requireBank(1); },
+  get 101() { return require("../exam/banks.js").requireBank(101); },
 };
 // Which licence role each exam grants.
 const TRADE_ROLE = { 1: { role: 1, label: "Worker" }, 101: { role: 2, label: "Verifier" } };

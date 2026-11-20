@@ -1,0 +1,16 @@
+{
+  "trade": 1,
+  "name": "Example only — not a real bank",
+  "questionsPerExam": 1,
+  "passMark": 1,
+  "timeLimitSec": 3600,
+  "license": "CC0",
+  "questions": [
+    {
+      "id": "ex-001",
+      "author": { "owner": "0x0000000000000000000000000000000000000001" },
+      "source": "Back up your files every week. A backup you have never restored is only a hope.",
+      "glossary": [["backup", "bản sao lưu"]]
+    }
+  ]
+}

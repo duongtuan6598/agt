@@ -10,8 +10,9 @@
 import { getAddress, hexlify, isAddress, verifyMessage } from "ethers";
 import X from "../../exam/lib.js";
 import core from "../../chain/core.js";
-import translation from "../../exam/bank/translation-en-vi.json";
-import review from "../../exam/bank/review-translation-en-vi.json";
+// Private banks, bundled at deploy time from the operator's machine (never in the public repo).
+import translation from "../../../agt-banks/translation-en-vi.json";
+import review from "../../../agt-banks/review-translation-en-vi.json";
 
 const BANKS = { 1: translation, 101: review };
 const MAX_STARTS_PER_OWNER_PER_DAY = 3;

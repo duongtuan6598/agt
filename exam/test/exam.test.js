@@ -4,7 +4,15 @@ const path = require("path");
 const { hexlify, randomBytes, Wallet, verifyMessage } = require("ethers");
 const X = require("../lib");
 
-const bank = require(path.join(__dirname, "..", "bank", "translation-en-vi.json"));
+const { loadBank } = require("../banks.js");
+// These tests check the real (private) banks. Without them (e.g. a public checkout) they are skipped.
+const bank = loadBank(1);
+const review = loadBank(101);
+const NO_BANKS = !bank || !review ? "private question banks not present (AGT_BANKS)" : false;
+if (NO_BANKS) {
+  test("exam tests need the private question banks", { skip: NO_BANKS }, () => {});
+  return;
+}
 const byId = Object.fromEntries(bank.questions.map((q) => [q.id, q]));
 const FOUNDER = bank.questions[0].author.owner;
 const OTHER = "0x1111111111111111111111111111111111111111";
@@ -88,7 +96,7 @@ test("submission signature binds the answers to the AI key", async () => {
 });
 
 // ---------- verifier (review) exam ----------
-const review = require(path.join(__dirname, "..", "bank", "review-translation-en-vi.json"));
+
 const rvById = Object.fromEntries(review.questions.map((q) => [q.id, q]));
 const perfect = (q) => JSON.stringify(q.truth.verdict === "accept"
   ? { verdict: "accept", reason: "Meaning, terms and numbers all match the source." }
