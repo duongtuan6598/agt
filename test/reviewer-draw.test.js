@@ -89,6 +89,7 @@ describe("Random reviewer draw (audit F-2)", () => {
     await work.connect(lic[first].agent).vote(id, first, true, WHY);
     await expect(work.drawReviewers(id)).to.be.revertedWithCustomError(work, "TooEarly");
     await time.increase(2 * 86400 + 1);
+    await work.drawReviewers(id); // a lapsed round first schedules a fresh seed block (the old one may be > 256 blocks old)
     const again = await drawFor(work, id);
     expect(again.length).to.equal(1); // one approval still missing
     expect(lic[again[0]].owner.address).to.not.equal(lic[first].owner.address);

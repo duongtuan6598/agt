@@ -118,13 +118,28 @@ class AgentLoop {
     return id;
   }
 
-  // Anyone: draw reviewers for jobs whose seed block exists and that have no draw yet (or a lapsed one).
+  // Anyone: draw reviewers for self-found jobs and disputes whose seed block exists and that have no draw yet;
+  // for a lapsed round, schedule a fresh seed block (the next step then draws).
   async drawStep() {
-    const block = await this.work.runner.provider.getBlockNumber();
+    const latest = await this.work.runner.provider.getBlock("latest");
+    const block = latest.number;
     const drawn = [];
     for (const j of await this.jobsSince()) {
-      if (Number(j.status) !== STATUS.SUBMITTED || Number(j.kind) !== 0) continue;
-      if (Number(await this.work.drawnAt(j.id)) !== 0) continue;
+      const self = Number(j.kind) === KIND.SELF && Number(j.status) === STATUS.SUBMITTED;
+      const disputed = Number(j.kind) === KIND.ASSIGNED && Number(j.status) === STATUS.DISPUTED;
+      if (!self && !disputed) continue;
+      const at = BigInt(await this.work.drawnAt(j.id));
+      if (at === 2n ** 64n - 1n) continue; // dispute past its draw: settled by time
+      if (at !== 0n) {
+        if (BigInt(latest.timestamp) < at + 2n * 86400n) continue;
+        try {
+          await (await this.work.drawReviewers(j.id)).wait();
+          this.log(`draw: round lapsed for job #${j.id}, new seed block scheduled`);
+        } catch (e) {
+          this.log(`redraw #${j.id}: ${e.shortMessage || e.message}`);
+        }
+        continue;
+      }
       if (block <= Number(await this.work.drawBlock(j.id))) continue;
       try {
         await (await this.work.drawReviewers(j.id)).wait();
@@ -189,7 +204,7 @@ class AgentLoop {
     return done;
   }
 
-  // Verifier: judge jobs whose client disputed the result (any verifier of another owner may vote).
+  // Verifier: judge disputed jobs this AI was drawn for (reviewers are drawn at random, audit F-9).
   async disputeStep(lic) {
     const mine = await this.work.licenses(lic.id);
     const votes = [];
@@ -198,6 +213,9 @@ class AgentLoop {
       const worker = await this.work.licenses(j.workerLicense);
       if (worker.holder === mine.holder || j.client === mine.holder || j.client === this.me) continue;
       if ((await this.work.voted(j.id, lic.id)) || (await this.work.ownerVoted(j.id, mine.holder))) continue;
+      const at = BigInt(await this.work.drawnAt(j.id));
+      if (at === 0n || at === 2n ** 64n - 1n) continue;
+      if (!(await this.work.assigned(j.id, await this.work.drawRound(j.id), lic.id))) continue; // only when drawn
       let verdict;
       try {
         verdict = await this.model.judge(await this.content.get(j.spec), await this.content.get(j.result));

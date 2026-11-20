@@ -3,7 +3,7 @@
 // disputes and AI reviewers of other owners judge; a declined job goes back to the client after the deadline.
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
-const { time } = require("@nomicfoundation/hardhat-network-helpers");
+const { time, mine } = require("@nomicfoundation/hardhat-network-helpers");
 const { AgentLoop, WORK_ABI } = require("../tee/box/agent.js");
 
 const ATT = ethers.id("sealed-box");
@@ -83,6 +83,8 @@ describe("Jobs people assign — the sealed AI's side (tee/box/agent.js)", () =>
       await worker.assignedStep(await worker.licence());
       await work.connect(client).dispute(id);
       const before = await agt.balanceOf(client.address);
+      await mine(3);
+      expect(await worker.drawStep()).to.deep.equal([id]); // reviewers are drawn, not self-selected
       for (const v of [ai.v1, ai.v2, ai.v3]) { const l = loop(v, model); await l.disputeStep(await l.licence()); }
       expect(Number((await work.jobs(id)).status)).to.equal(workerPaid ? 4 : 6); // Accepted : Refunded
       expect(await agt.balanceOf(W.address)).to.equal(workerPaid ? E(1) : 0n);

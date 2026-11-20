@@ -259,6 +259,10 @@ describe("Công việc", () => {
     await work.setDisputeRules(3, E(0.00005), 3 * 86400);
     await work.connect(AG(aiOwnerA)).submitAssigned(1, H("x"), "");
     await work.connect(client).dispute(1);
+    // người phân xử được bốc thăm (audit F-9): ai không được bốc thì không bỏ phiếu được
+    await expect(work.connect(AG(aiOwnerB)).vote(1, 2, false, "chưa được bốc")).to.be.revertedWithCustomError(work, "NotAllowed");
+    const drawn = await drawFor(work, 1);
+    expect(drawn.sort()).to.deep.equal([2, 3, 4]); // chỉ có 3 chủ khác thợ: bốc hết số có thể
     await work.connect(AG(aiOwnerB)).vote(1, 2, false, "đã kiểm theo tiêu chí nghề");
     await work.connect(AG(aiOwnerC)).vote(1, 3, false, "đã kiểm theo tiêu chí nghề");
     await work.connect(AG(aiOwnerD)).vote(1, 4, false, "đã kiểm theo tiêu chí nghề");

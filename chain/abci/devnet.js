@@ -20,7 +20,7 @@ const ROOT = path.resolve(__dirname, "..", "..");
 const DIR = path.join(__dirname, ".devnet");
 const rpc = (i) => `http://127.0.0.1:${27000 + i}`;
 const W = (s) => new ethers.Wallet(ethers.id("agt-cmt-devnet-" + s));
-const BSC = { chainId: 97, bridge: "0xE9aE2D761b8B15241cfA7569E4A6f7A3a919c739" }; // testnet AGTBridge address (digests only)
+const BSC = { chainId: 97, bridge: "0x83d75026f605b60013bF37F1a27E41D412bdBD83" }; // testnet AGTBridge address (digests only)
 const dock = (...a) => execFileSync("docker", a, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
 const tryDock = (...a) => { try { return dock(...a); } catch { return ""; } };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

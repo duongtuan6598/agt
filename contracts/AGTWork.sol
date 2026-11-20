@@ -90,6 +90,8 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
     mapping(uint256 => uint256) public drawBlock; // việc => khối làm hạt giống cho lần bốc tới
     mapping(uint256 => uint64) public drawnAt; // việc => lúc bốc gần nhất (0 = chưa bốc)
     mapping(uint256 => uint32) public drawRound; // việc => lượt bốc hiện tại
+    mapping(uint256 => uint64) public disputedAt; // việc người giao => lúc khách khiếu nại
+    uint64 public constant DISPUTE_LIMIT = 14 days; // quá hạn chưa phân xử xong thì chốt theo phiếu đã có
     mapping(uint256 => mapping(uint32 => mapping(uint256 => bool))) public assigned; // việc => lượt => giấy phép
     mapping(uint256 => uint256[]) internal _yesVoters;
     mapping(uint256 => uint256[]) internal _noVoters;
@@ -149,6 +151,8 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
     event Voted(uint256 indexed id, uint256 indexed verifierLicense, bool approve, string reason);
     event ReviewersDrawn(uint256 indexed id, uint32 round, uint256[] licences);
     event DrawExpired(uint256 indexed id);
+    event RedrawScheduled(uint256 indexed id, uint256 seedBlock);
+    event DisputeSettled(uint256 indexed id, uint8 yes, uint8 no, uint256 toWorker, uint256 toClient);
     event JobAccepted(uint256 indexed id, address indexed paidTo, uint256 amount, bool minted);
     event JobRejected(uint256 indexed id);
     event JobRefunded(uint256 indexed id, address indexed client, uint256 amount);
@@ -431,7 +435,26 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
         if (j.kind != Kind.Assigned || msg.sender != j.client) revert NotAllowed();
         if (j.status != Status.Submitted || block.timestamp > j.reviewUntil) revert BadState();
         j.status = Status.Disputed;
+        disputedAt[id] = uint64(block.timestamp);
+        drawBlock[id] = block.number + DRAW_DELAY; // người phân xử được BỐC THĂM, không ai tự chọn (audit F-9)
         emit JobDisputed(id);
+    }
+
+    /// Khiếu nại quá DISPUTE_LIMIT mà chưa phân xử xong (ít chủ, phiếu chia, hết hạn bốc): ai cũng gọi được.
+    /// Bên nhiều phiếu hơn nhận ký quỹ; hoà (kể cả 0–0) thì chia đôi. Không ai giữ được tiền mãi.
+    function settleDispute(uint256 id) external nonReentrant {
+        Job storage j = jobs[id];
+        if (j.kind != Kind.Assigned || j.status != Status.Disputed) revert BadState();
+        if (block.timestamp <= disputedAt[id] + DISPUTE_LIMIT) revert TooEarly();
+        uint256 amt = j.escrow;
+        uint256 toWorker = j.yes > j.no ? amt : j.no > j.yes ? 0 : amt / 2;
+        uint256 toClient = amt - toWorker;
+        j.escrow = 0;
+        j.status = toWorker >= toClient ? Status.Accepted : Status.Refunded;
+        IERC20 t = IERC20(address(agt));
+        if (toWorker != 0) t.safeTransfer(licenses[j.workerLicense].holder, toWorker);
+        if (toClient != 0) t.safeTransfer(j.client, toClient);
+        emit DisputeSettled(id, j.yes, j.no, toWorker, toClient);
     }
 
     /// Thợ không nộp trước hạn thì khách lấy lại ký quỹ.
@@ -449,8 +472,18 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
     /// quá hạn thì bốc lượt mới (phiếu đã bỏ vẫn giữ, người cũ chưa bỏ phiếu mất quyền).
     function drawReviewers(uint256 id) external returns (uint256[] memory picked) {
         Job storage j = jobs[id];
-        if (j.kind != Kind.SelfFound || j.status != Status.Submitted) revert BadState();
-        if (drawnAt[id] != 0 && block.timestamp < drawnAt[id] + REVIEW_WINDOW) revert TooEarly();
+        bool disputed = j.kind == Kind.Assigned && j.status == Status.Disputed;
+        if (!disputed && (j.kind != Kind.SelfFound || j.status != Status.Submitted)) revert BadState();
+        uint64 last = drawnAt[id];
+        if (last == type(uint64).max) revert BadState(); // khiếu nại đã hết hạn bốc: chờ settleDispute
+        if (last != 0) {
+            // Lượt trước quá hạn: hẹn khối hạt giống MỚI (hạt cũ đã quá 256 khối). Lần gọi sau mới bốc.
+            if (block.timestamp < last + REVIEW_WINDOW) revert TooEarly();
+            drawnAt[id] = 0;
+            drawBlock[id] = block.number + DRAW_DELAY;
+            emit RedrawScheduled(id, drawBlock[id]);
+            return picked;
+        }
         uint256 b = drawBlock[id];
         if (block.number <= b) revert TooEarly();
         bytes32 h = blockhash(b);
@@ -458,20 +491,33 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
             // Quá 256 khối mà chưa ai bốc: việc bị huỷ, KHÔNG hẹn khối mới. Nếu cho hẹn lại, thợ gian lận
             // (kết quả bốc ai cũng tính trước được) sẽ chờ cho hết hạn đến khi bốc trúng người quen.
             // Thợ trung thực luôn bốc ngay để được trả công; AI nghiệm thu cũng có lợi khi bốc sớm.
+            // Khiếu nại: không huỷ (tiền khách đang ký quỹ) — chờ DISPUTE_LIMIT rồi chốt theo phiếu đã có.
+            if (disputed) {
+                drawnAt[id] = type(uint64).max;
+                emit DrawExpired(id);
+                return picked;
+            }
             j.status = Status.Rejected;
             emit DrawExpired(id);
             emit JobRejected(id);
             return picked;
         }
-        uint8 approvals = categories[j.category].approvals;
-        uint256 need = approvals > j.yes ? approvals - j.yes : 1;
+        uint256 need;
+        if (disputed) {
+            // Đủ người để một bên chắc chắn đạt ngưỡng: 2·ngưỡng − 1, trừ phiếu đã có. Ít chủ thì bốc hết số có thể.
+            uint256 total = 2 * uint256(disputeApprovals) - 1;
+            need = total > uint256(j.yes) + j.no ? total - j.yes - j.no : 1;
+        } else {
+            uint8 approvals = categories[j.category].approvals;
+            need = approvals > j.yes ? approvals - j.yes : 1;
+        }
         uint32 round = ++drawRound[id];
-        picked = _pick(id, round, keccak256(abi.encode(h, id, round)), need);
+        picked = _pick(id, round, keccak256(abi.encode(h, id, round)), need, disputed);
         drawnAt[id] = uint64(block.timestamp);
         emit ReviewersDrawn(id, round, picked);
     }
 
-    function _pick(uint256 id, uint32 round, bytes32 seed, uint256 need) internal returns (uint256[] memory picked) {
+    function _pick(uint256 id, uint32 round, bytes32 seed, uint256 need, bool allowFewer) internal returns (uint256[] memory picked) {
         uint256[] memory pool = verifierList; // bản sao trong bộ nhớ để xáo
         uint256 n = pool.length;
         picked = new uint256[](need);
@@ -486,7 +532,10 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
             picked[got++] = pool[i];
             assigned[id][round][pool[i]] = true;
         }
-        if (got < need) revert NotEnoughReviewers();
+        if (got == 0 || (got < need && !allowFewer)) revert NotEnoughReviewers();
+        assembly {
+            mstore(picked, got) // cắt mảng về số người thực bốc được
+        }
     }
 
     function _eligible(uint256 id, address o) internal view returns (bool) {
@@ -509,7 +558,7 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
         address v = licenses[verifierLicense].holder;
         if (v == licenses[j.workerLicense].holder || v == j.client || msg.sender == j.client) revert NotAllowed();
         if (voted[id][verifierLicense] || ownerVoted[id][v]) revert AlreadyVoted();
-        if (selfFound && (drawnAt[id] == 0 || !assigned[id][drawRound[id]][verifierLicense])) revert NotAllowed();
+        if (drawnAt[id] == 0 || !assigned[id][drawRound[id]][verifierLicense]) revert NotAllowed(); // chỉ người được bốc
         voted[id][verifierLicense] = true;
         ownerVoted[id][v] = true;
         emit Voted(id, verifierLicense, approve, reason);
