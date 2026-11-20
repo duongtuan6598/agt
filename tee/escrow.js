@@ -132,7 +132,7 @@ async function makeEscrow({ master, myClaims, peers, verify }) {
 // Peer side: release my share of `record` to the box that sent `request` = { manifest: { agt: "escrow-release-v1", agent, requestPub }, token }.
 function releaseShare({ myMaster, record, request, verifyToken }) {
   if (ethers.verifyMessage(ethers.getBytes(hashOf(recordBody(record))), record.sig) !== ethers.getAddress(record.agent)) throw new Error("record not signed by its AI");
-  const claims = verifyToken(request.token); // genuine, approved, production box
+  const claims = verifyToken(request); // genuine, approved, production box — Confidential Space token or dstack TDX quote
   if (!T.tokenNonces(claims).includes(T.nonceOf(request.manifest))) throw new Error("token not issued for this request");
   if (request.manifest.agt !== "escrow-release-v1" || ethers.getAddress(request.manifest.agent) !== ethers.getAddress(record.agent)) throw new Error("bad request");
   const inst = instanceOf(claims);

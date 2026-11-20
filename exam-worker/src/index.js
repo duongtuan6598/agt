@@ -198,7 +198,8 @@ async function checkGoogleToken(token) {
 
 async function apply(env, req) {
   const b = await body(req);
-  if (!b || !/^0x[0-9a-f]{64}$/.test(b.examHash || "") || !b.evidence || !b.evidence.manifest || !b.evidence.token) return fail(400, "need {examHash, evidence:{manifest, token}}");
+  const dstack = b && b.evidence && b.evidence.platform === "dstack-tdx";
+  if (!b || !/^0x[0-9a-f]{64}$/.test(b.examHash || "") || !b.evidence || !b.evidence.manifest || !(b.evidence.token || (dstack && b.evidence.quote))) return fail(400, "need {examHash, evidence:{manifest, token | platform:\"dstack-tdx\", quote, eventLog}}");
   const rec = JSON.parse((await env.EXAMS.get(`rec:${b.examHash}`)) || "null");
   if (!rec) return fail(404, "exam record not found");
   const r = rec.record;
@@ -206,13 +207,21 @@ async function apply(env, req) {
   const m = b.evidence.manifest;
   if (!isAddress(m.agent) || getAddress(m.agent) !== getAddress(r.candidate.agent)) return fail(409, "the sealed box's AI key is not the key that sat this exam");
   let claims;
-  try {
-    claims = await checkGoogleToken(b.evidence.token);
-  } catch (e) {
-    return fail(400, e.message);
+  if (dstack) {
+    // TDX quote: the report_data (bytes 568..600) must be this manifest's hash. The Intel certificate chain,
+    // the signatures and the RTMR3 replay are verified in full by the licence process (tee/tdx.js).
+    const q = String(b.evidence.quote).replace(/^0x/, "");
+    if (q.slice(1136, 1200) !== core.hashOf(m).slice(2)) return fail(400, "quote was not issued for this manifest");
+    claims = { hwmodel: "INTEL_TDX", submods: { container: { image_digest: "dstack (checked at licensing)" } }, iat: now() };
+  } else {
+    try {
+      claims = await checkGoogleToken(b.evidence.token);
+    } catch (e) {
+      return fail(400, e.message);
+    }
+    const nonces = Array.isArray(claims.eat_nonce) ? claims.eat_nonce : [claims.eat_nonce];
+    if (!nonces.includes(core.hashOf(m).slice(2))) return fail(400, "token was not issued for this manifest");
   }
-  const nonces = Array.isArray(claims.eat_nonce) ? claims.eat_nonce : [claims.eat_nonce];
-  if (!nonces.includes(core.hashOf(m).slice(2))) return fail(400, "token was not issued for this manifest");
   const app = {
     examHash: b.examHash, trade: r.trade, name: r.candidate.name, owner: r.candidate.owner, agent: r.candidate.agent,
     exam: r.result, hwmodel: claims.hwmodel, imageDigest: claims.submods && claims.submods.container && claims.submods.container.image_digest,

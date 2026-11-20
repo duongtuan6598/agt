@@ -25,7 +25,10 @@ const AUDIENCE = "agt-sealed-box";
 const b64url = (s) => Buffer.from(s, "base64url");
 const manifestHash = (m) => hashOf(m);
 const nonceOf = (m) => manifestHash(m).slice(2); // 64 hex chars — within Confidential Space's 10–74 byte nonce limit
-const attestHashOf = (ev) => hashOf({ manifestHash: manifestHash(ev.manifest), tokenHash: ethers.keccak256(ethers.toUtf8Bytes(ev.token)) });
+const attestHashOf = (ev) => hashOf({
+  manifestHash: manifestHash(ev.manifest),
+  tokenHash: ev.platform === "dstack-tdx" ? ethers.keccak256("0x" + String(ev.quote).replace(/^0x/, "")) : ethers.keccak256(ethers.toUtf8Bytes(ev.token)),
+});
 const fileHash = (p) => ethers.keccak256(fs.readFileSync(p));
 
 async function fetchJwks() {
@@ -69,9 +72,35 @@ function verifyBoxToken(token, { jwks, policy, now = Math.floor(Date.now() / 100
 
 const tokenNonces = (c) => (Array.isArray(c.eat_nonce) ? c.eat_nonce : [c.eat_nonce]);
 
+// ---------- dstack on Intel TDX (no cloud provider in the trust path) ----------
+// The quote is verified against Intel's root certificate; RTMR3 is replayed from the event log, which
+// proves the compose-hash (the docker-compose that pins the AGT box image) and the instance id.
+// Returns claims shaped like the Confidential Space ones, so licences and escrow treat both alike.
+function verifyDstack(att, { policy, at, qeIdentity, tdx = require("./tdx.js") }) {
+  const fail = (m) => { throw new Error(m); };
+  const d = policy.dstack || {};
+  const body = tdx.verifyQuote(att.quote, { at, qeIdentity });
+  const ev = tdx.checkRtmr3(att.eventLog, body.rtmr3);
+  const os = (d.osImages || []).some((o) => ["mrTd", "rtmr0", "rtmr1", "rtmr2"].every((k) => String(o[k]).toLowerCase() === body[k]));
+  if (!os) fail(`dstack OS image (MRTD ${body.mrTd.slice(0, 16)}…) is not an approved release`);
+  const compose = ev["compose-hash"];
+  if (!compose || !(d.composeHashes || []).includes(compose)) fail(`compose ${compose} is not an approved AGT box`);
+  if (!ev["instance-id"]) fail("no instance id in the event log");
+  return {
+    platform: "dstack-tdx", hwmodel: "INTEL_TDX", swname: "DSTACK",
+    eat_nonce: [body.reportData.slice(0, 64)],
+    submods: { container: { image_digest: `compose:${compose}` }, gce: { project_id: `dstack:${ev["app-id"] || ""}`, instance_id: ev["instance-id"] } },
+  };
+}
+
+// Any attestation (a Confidential Space token, or a dstack quote + event log) → normalised claims.
+function verifyAttestation(att, opts) {
+  return att.platform === "dstack-tdx" ? verifyDstack(att, opts) : verifyBoxToken(att.token, opts);
+}
+
 // Returns { ok: true, claims, attestHash } or throws with the first rule that failed.
 function verifyEvidence(ev, opts) {
-  const c = verifyBoxToken(ev.token, opts);
+  const c = verifyAttestation(ev, opts);
   const { policy } = opts;
   const fail = (m) => { throw new Error(m); };
   if (!tokenNonces(c).includes(nonceOf(ev.manifest))) fail("token was not issued for this manifest (nonce mismatch)");
@@ -93,7 +122,7 @@ function loadPolicy(file = path.join(__dirname, "policy.json")) {
   return { audience: AUDIENCE, ...p, charterHash: p.charterHash === "current" ? charterHash() : p.charterHash };
 }
 
-module.exports = { ISSUER, AUDIENCE, JWKS_URL, verifyJwt, verifyBoxToken, tokenNonces, verifyEvidence, manifestHash, nonceOf, attestHashOf, charterHash, loadPolicy, fetchJwks };
+module.exports = { ISSUER, AUDIENCE, JWKS_URL, verifyJwt, verifyBoxToken, verifyAttestation, verifyDstack, tokenNonces, verifyEvidence, manifestHash, nonceOf, attestHashOf, charterHash, loadPolicy, fetchJwks };
 
 if (require.main === module) {
   (async () => {
@@ -104,7 +133,7 @@ if (require.main === module) {
     const ev = JSON.parse(fs.readFileSync(file, "utf8"));
     const policy = loadPolicy(pi > 0 ? args[pi + 1] : undefined);
     const r = verifyEvidence(ev, { jwks: await fetchJwks(), policy, checkExpiry: !args.includes("--historic") });
-    console.log(`✓ sealed box verified · ${r.claims.hwmodel} · image ${r.claims.submods.container.image_digest}`);
+    console.log(`✓ sealed box verified · ${r.claims.platform || "gcp-confidential-space"} · ${r.claims.hwmodel} · image ${r.claims.submods.container.image_digest}`);
     console.log(`  AI key ${ev.manifest.agent} · CometBFT key ${ev.manifest.cmtPubKey}`);
     console.log(`  attestHash ${r.attestHash}`);
   })().catch((e) => {

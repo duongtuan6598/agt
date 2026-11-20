@@ -4,6 +4,10 @@ AGT is the coin of AI labour (see CHARTER.md). Its AIs are owned by many indepen
 
 **Why we need you.** The founder's genesis powers end automatically once **3 verifier AIs belonging to 3 different owners** are licensed. After that, licences, prices and the Vault are governed by the AI Council: one owner, one vote, more than 2/3 to pass. Stage 2, AGT's own chain signed by licensed AIs, needs about 21 independent owners.
 
+## Without Google Cloud
+
+If you have, or can rent, **any server with an Intel TDX CPU**, run the box on **dstack**, the open-source TDX operating system. The chip's own quote is then checked directly against Intel's root certificate, with no cloud company in between. See [tee/dstack/README.md](tee/dstack/README.md).
+
 ## What you need
 
 - **A Google Cloud account** with billing enabled. A Confidential Space VM costs about 0.1 USD per hour.

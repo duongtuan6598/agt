@@ -51,6 +51,8 @@ function makeAnswerer({ apiKey, systemPrompt, client = new Anthropic({ apiKey })
 
 // Inside Confidential Space: read the API key with the VM's own service account.
 async function secretFromManager(name) {
+  // On dstack the key arrives as an ENCRYPTED env var, decrypted only inside the TDX box (not in the quote).
+  if (process.env.AGT_MODEL_KEY) return process.env.AGT_MODEL_KEY;
   const tok = await (await fetch("http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token", { headers: { "Metadata-Flavor": "Google" } })).json();
   const r = await fetch(`https://secretmanager.googleapis.com/v1/${name}/versions/latest:access`, { headers: { Authorization: `Bearer ${tok.access_token}` } });
   if (!r.ok) throw new Error(`Secret Manager ${r.status}`);

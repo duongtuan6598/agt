@@ -36,6 +36,39 @@ function launcherToken(nonce) {
   });
 }
 const claimsOf = (token) => JSON.parse(Buffer.from(token.split(".")[1], "base64url"));
+
+// ---------- platform: Google Confidential Space, or dstack on Intel TDX (any TDX server, no cloud needed) ----------
+const DSTACK_SOCKS = ["/var/run/dstack.sock", "/run/dstack.sock", "/var/run/dstack/dstack.sock", "/run/dstack/dstack.sock"];
+const dstackSock = () => DSTACK_SOCKS.find((p) => fs.existsSync(p));
+function unixPost(sock, urlPath, body) {
+  return new Promise((resolve, reject) => {
+    const data = JSON.stringify(body);
+    const req = http.request({ socketPath: sock, path: urlPath, method: "POST", headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(data) } }, (res) => {
+      let t = "";
+      res.on("data", (d) => (t += d));
+      res.on("end", () => (res.statusCode === 200 ? resolve(JSON.parse(t)) : reject(new Error(`dstack ${urlPath} ${res.statusCode}: ${t}`))));
+    });
+    req.on("error", reject);
+    req.end(data);
+  });
+}
+// Attestation bound to `manifest` (its hash is the nonce / report_data).
+async function attest(manifest) {
+  const nonce = T.nonceOf(manifest);
+  const ds = dstackSock();
+  if (ds) {
+    const r = await unixPost(ds, "/GetQuote", { report_data: nonce });
+    return { platform: "dstack-tdx", quote: r.quote, eventLog: r.event_log };
+  }
+  return { token: await launcherToken(nonce) };
+}
+// Claims about THIS box, read from its own attestation (trusted: it was just produced here).
+function ownClaims(att) {
+  if (att.platform !== "dstack-tdx") return claimsOf(att.token);
+  const ev = {};
+  for (const e of JSON.parse(att.eventLog)) if (e.imr === 3) ev[e.event] = e.event_payload;
+  return { platform: "dstack-tdx", submods: { container: { image_digest: `compose:${ev["compose-hash"]}` }, gce: { project_id: `dstack:${ev["app-id"] || ""}`, instance_id: ev["instance-id"] } } };
+}
 const peers = () => (env.AGT_PEER_BOXES || "").split(",").map((s) => s.trim()).filter(Boolean);
 async function getJson(url, opts) {
   const r = await fetch(url, opts);
@@ -46,11 +79,11 @@ async function getJson(url, opts) {
 async function recoverMaster(jwks) {
   const record = await getJson(env.AGT_ESCROW_URL);
   const req = E.releaseRequest(record);
-  const token = await launcherToken(T.nonceOf(req.manifest));
+  const att = await attest(req.manifest);
   const replies = [];
   for (const url of peers()) {
     try {
-      replies.push(await getJson(`${url}/escrow/release`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ record, request: { manifest: req.manifest, token } }) }));
+      replies.push(await getJson(`${url}/escrow/release`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ record, request: { manifest: req.manifest, ...att } }) }));
       log(`share received from ${url}`);
     } catch (e) {
       log(`no share from ${url}: ${e.message}`);
@@ -68,7 +101,7 @@ async function main() {
   const TEST_JWKS = path.join(ROOT, "tee", "test-jwks.json");
   const jwks = fs.existsSync(TEST_JWKS) ? (log("TEST IMAGE: using baked test JWKS"), JSON.parse(fs.readFileSync(TEST_JWKS, "utf8"))) : await T.fetchJwks().catch(() => null);
   const verifyEv = (ev) => T.verifyEvidence(ev, { jwks, policy: POLICY });
-  const verifyToken = (t) => T.verifyBoxToken(t, { jwks, policy: POLICY });
+  const verifyToken = (r) => T.verifyAttestation(r, { jwks, policy: POLICY });
 
   // 1. Keys
   let master, record = null;
@@ -87,10 +120,17 @@ async function main() {
     sealPubKey: k.seal.pub.toString("base64"),
   };
   log(`AI licence key ${k.agent.address} · CometBFT key ${manifest.cmtPubKey} · manifest nonce ${T.nonceOf(manifest)}`);
-  const token = await launcherToken(T.nonceOf(manifest));
-  const evidence = { manifest, token };
+  const att = await attest(manifest);
+  const evidence = { manifest, ...att };
+  const mine = ownClaims(att);
   // Peers running EXACTLY this image run exactly this code: trust them as well as Council-approved images.
-  POLICY.imageDigests = [...new Set([...POLICY.imageDigests, claimsOf(token).submods.container.image_digest])];
+  if (att.platform === "dstack-tdx") {
+    // same compose + same dstack OS as me = same code: trust it (plus Council-approved ones)
+    const body = require("../tdx.js").parseQuote(att.quote).body;
+    POLICY.dstack = POLICY.dstack || { osImages: [], composeHashes: [] };
+    POLICY.dstack.osImages = [...POLICY.dstack.osImages, { mrTd: body.mrTd, rtmr0: body.rtmr0, rtmr1: body.rtmr1, rtmr2: body.rtmr2 }];
+    POLICY.dstack.composeHashes = [...new Set([...POLICY.dstack.composeHashes, mine.submods.container.image_digest.slice("compose:".length)])];
+  } else POLICY.imageDigests = [...new Set([...POLICY.imageDigests, mine.submods.container.image_digest])];
   fs.writeFileSync(path.join(RUN, "evidence.json"), JSON.stringify(evidence));
   log(`AGT_EVIDENCE ${JSON.stringify(evidence)}`);
   log(`attestHash ${T.attestHashOf(evidence)} — give this evidence to the licence process`);
@@ -100,7 +140,7 @@ async function main() {
     try {
       const peerEvidence = [];
       for (const url of peers()) peerEvidence.push({ evidence: await getJson(`${url}/evidence`).catch(() => null) });
-      record = await E.makeEscrow({ master, myClaims: claimsOf(token), peers: peerEvidence.filter((p) => p.evidence), verify: verifyEv });
+      record = await E.makeEscrow({ master, myClaims: mine, peers: peerEvidence.filter((p) => p.evidence), verify: verifyEv });
       log(`AGT_ESCROW ${JSON.stringify(record)}`);
       log(`keys escrowed with ${record.shares.length} attested peer boxes (any ${record.threshold} can restore them, only to this machine)`);
     } catch (e) {

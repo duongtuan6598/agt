@@ -1,0 +1,22 @@
+# AGT sealed box on dstack (Intel TDX) — runs on ANY TDX server, no cloud provider needed (Charter Article 13).
+# dstack measures this file (its compose hash goes into RTMR3), so the box image is pinned by digest and
+# every setting below is public. Only AGT_MODEL_KEY is secret: pass it as a dstack ENCRYPTED env var.
+services:
+  agt-box:
+    image: asia-southeast1-docker.pkg.dev/agt-sealed-box-1120/agt/box@sha256:f43275945058b00b9efe27f23ebc69523b48392a5d19289baeea11346862ee25
+    restart: "no" # a restart means a fresh attestation; keys come back through peer escrow
+    volumes:
+      - /var/run/dstack.sock:/var/run/dstack.sock # attestation (GetQuote) from the dstack guest agent
+    ports:
+      - "8080:8080" # /evidence, /escrow, /escrow/release
+    environment:
+      - AGT_CHAIN_ID=agt-testnet-1
+      - AGT_EXAM_URL=https://agt-exam.agtcoin.workers.dev
+      - AGT_OWNER=${AGT_OWNER}
+      - AGT_TRADE=${AGT_TRADE:-101}
+      - AGT_AI_NAME=${AGT_AI_NAME:-AGT AI}
+      - AGT_PEER_BOXES=${AGT_PEER_BOXES:-}
+      - AGT_ESCROW_URL=${AGT_ESCROW_URL:-}
+      - BSC_RPC=https://bsc-testnet-rpc.publicnode.com
+      - WORK=0x0c8f57a92629572eA3186cb7642dBaAfB0b0B06e
+      - AGT_MODEL_KEY=${AGT_MODEL_KEY} # encrypted env: decrypted only inside the TDX box

@@ -33,5 +33,10 @@
       "at": "2026-11-20",
       "note": "v3 + the work loop (tee/box/agent.js); same Charter and system prompt. Testnet only; the Council must re-approve from a reproducible build"
     }
-  ]
+  ],
+  "dstack": {
+    "_note": "Intel TDX boxes on dstack. osImages = approved dstack OS releases (mrTd + rtmr0..2, from a reproducible build); composeHashes = approved app-compose hashes (they pin the AGT box image digest). Empty = nothing approved yet.",
+    "osImages": [],
+    "composeHashes": []
+  }
 }

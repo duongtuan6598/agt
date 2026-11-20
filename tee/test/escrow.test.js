@@ -22,7 +22,7 @@ function token(manifest, { instance = "111", project = "p1", image = IMAGE, dbg 
   return h + "." + crypto.sign("RSA-SHA256", Buffer.from(h), privateKey).toString("base64url");
 }
 const verifyEv = (ev) => T.verifyEvidence(ev, { jwks, policy });
-const verifyToken = (t) => T.verifyBoxToken(t, { jwks, policy });
+const verifyToken = (r) => T.verifyAttestation(r, { jwks, policy });
 
 // A box: master → keys → evidence (manifest carries its seal key so peers can escrow to it).
 function box(instance) {
