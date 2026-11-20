@@ -15,6 +15,7 @@ const S = require("./secrets.js");
 const { EngagementMemory } = require("./memory.js");
 const { Workspace, shaToBytes32 } = require("./workspace.js");
 const { ciStatus } = require("./forge.js");
+const R = require("./builder.js");
 
 const ROUNDS = 3;
 const CI_TIMEOUT = 6 * 3600; // seconds without a CI verdict before the attempt is abandoned
@@ -37,8 +38,10 @@ class EngageLoop {
   // eng, mnt: ethers Contracts connected to the AI's signer · content: {get(hash), put(text)} · sealed: {get(kind,id)}
   // model: {assess, engineer, judge} · ci: {status({repository, token, sha, required})} · keys: E.derive(master)
   // memStore: encrypted memory storage · state: {get(key), set(key, value|null)} for pending work
-  constructor({ eng, mnt, me, chainId, content, sealed, model, ci, keys, memStore, state, wsRoot = "/var/agt/ws", log = () => {}, allowFileUrls = false, gitBin }) {
-    Object.assign(this, { eng, mnt, me, chainId, content, sealed, model, keys, memStore, state, wsRoot, log, allowFileUrls, gitBin });
+  // repro: {jobs(dispute), postBundle(nonce, sealed)} — the exam service's §14 endpoints (null: no reproduction)
+  // verifyBuilder(manifest, evidence) → true only for an approved builder image in a genuine TEE (default: none yet)
+  constructor({ eng, mnt, me, chainId, content, sealed, model, ci, keys, memStore, state, repro = null, verifyBuilder = () => false, wsRoot = "/var/agt/ws", log = () => {}, allowFileUrls = false, gitBin }) {
+    Object.assign(this, { eng, mnt, me, chainId, content, sealed, model, keys, memStore, state, repro, verifyBuilder, wsRoot, log, allowFileUrls, gitBin });
     this.ci = ci || { status: ciStatus };
     this.chainNow = 0;
   }
@@ -241,6 +244,40 @@ class EngageLoop {
     }
   }
 
+  // ---------- §14: send the disputed commit to attested builders (worker side) ----------
+  async serveReproduction(lic) {
+    if (!this.repro) return;
+    for (const { id, e } of await this.engagementsOf(lic)) {
+      let b;
+      for (let m = 0; m < Number(e.count); m++) {
+        const x = await this.eng.milestone(id, m);
+        if (Number(x.state) !== M.DISPUTED || x.dispute === 0n) continue;
+        try {
+          b = b || (await this.brief(e.brief)).b;
+          const commands = b.fields.reproCommands || [];
+          const commit = x.result.slice(2, 42);
+          for (const j of await this.repro.jobs(Number(x.dispute))) {
+            const mf = j.manifest;
+            if (j.hasBundle || j.result) continue;
+            if (mf.commit !== commit || R.canonical(mf.commands) !== R.canonical(commands) || !commands.length) continue; // not the disputed work
+            if (!this.verifyBuilder(mf, j.evidence)) { this.log(`dispute #${x.dispute}: builder job ${mf.nonce} is not an attested builder — no source sent`); continue; }
+            const token = await this.token("engagement", id);
+            if (!token) continue;
+            const ws = new Workspace({ root: this.wsRoot, id: `repro-${mf.nonce}`, allowFileUrls: this.allowFileUrls, git: this.gitBin });
+            try {
+              ws.clone(b.fields.repository, token, `agt/engagement-${id}-m${m + 1}`);
+              const sealed = R.exportBundle({ gitBin: this.gitBin || "git", gitDir: ws.gitDir, commit, manifest: mf });
+              await this.repro.postBundle(mf.nonce, sealed);
+              this.log(`dispute #${x.dispute}: sent commit ${commit.slice(0, 10)} to builder ${mf.nonce} (sealed to its job key)`);
+            } finally {
+              ws.dispose();
+            }
+          }
+        } catch (err) { this.log(`engagement #${id} reproduction: ${err.message}`); }
+      }
+    }
+  }
+
   // ---------- maintenance ----------
   async maintenance(lic) {
     const n = Number(await this.mnt.nextRetainer());
@@ -325,13 +362,29 @@ class EngageLoop {
           `Client's hardware failure log:\n${await this.lastNote(id, m, "HardwareFailure")}`,
           Number(ms.claimAt) ? `Warranty claim:\n${await this.note(ms.claim)}\nFix delivered: ${ms.fix}` : "",
         ].filter(Boolean).join("\n\n");
+        // §14: independent reproductions on attested builders (evidence, not an oracle)
+        let repro = "none";
+        const reproNotes = [];
+        if (this.repro) {
+          const commands = ((await this.brief(e.brief)).b.fields.reproCommands) || [];
+          const verdicts = [];
+          for (const j of await this.repro.jobs(d)) {
+            if (!j.result) continue;
+            const v = R.verifyResult({ job: { manifest: j.manifest }, result: j.result.result, signature: j.result.signature, evidence: j.evidence, dispute: d, commitBytes32: ms.result, commands, verifyAttestation: this.verifyBuilder });
+            reproNotes.push(`builder ${j.manifest.nonce}: ${v.valid ? v.why : "ignored — " + v.why}`);
+            if (v.valid) verdicts.push(v.ok);
+          }
+          repro = !verdicts.length ? "none" : verdicts.every(Boolean) ? "pass" : verdicts.every((x) => !x) ? "fail" : "inconclusive";
+        }
         const warranty = Number(ms.disputeKind) === 3;
         // A worker's claim (§13): until reviewers can reproduce checks on disposable builders (step 2), only a claim
         // over a SILENT client CI is weighed on its merits; a claim over a FAILING CI goes to the client.
         const claimSilent = Number(ms.disputeKind) === 4 && !!report && report.schema === "agt-claim/v1" && report.ci && report.ci.state === "pending" &&
           shaToBytes32(String(report.commit || "")) === ms.result;
-        const weigh = reportOk || warranty || claimSilent;
-        const v = weigh ? await this.model.judge(text, evidence) : { verdict: "reject", reason: "no passing client-CI report for the delivered commit" };
+        const claimFailingReproduced = Number(ms.disputeKind) === 4 && repro === "pass"; // §14: a reproduction can overrule a failing client CI
+        const weigh = repro !== "fail" && (reportOk || warranty || claimSilent || claimFailingReproduced);
+        const allEvidence = `${evidence}\n\nIndependent reproductions on attested builders (§14): ${repro}\n${reproNotes.join("\n")}`;
+        const v = weigh ? await this.model.judge(text, allEvidence) : { verdict: "reject", reason: repro === "fail" ? "an attested independent reproduction failed" : "no passing client-CI report for the delivered commit" };
         if (!["accept", "reject"].includes(v.verdict)) continue;
         const workerRight = v.verdict === "accept" && weigh;
         await (await this.eng.vote(d, lic, workerRight, `${workerRight ? "worker" : "client"} is right: ${v.reason}`.slice(0, 500))).wait();
@@ -355,12 +408,26 @@ class EngageLoop {
     const lic = await this.licence();
     if (!lic) return this.log("engage: not licensed yet");
     if (lic.role === 1) {
+      await this.serveReproduction(lic.id);
       await this.acceptNew(lic.id);
       await this.workEngagements(lic.id);
       await this.maintenance(lic.id);
     }
     await this.disputes(lic.id, lic.role === 2);
   }
+}
+
+/// HTTP client for the §14 reproduction endpoints; bundles are signed with the AI's key.
+function httpRepro(base, wallet) {
+  return {
+    async jobs(dispute) { const r = await (await fetch(`${base}/repro/jobs?dispute=${dispute}`)).json(); return r.ok ? r.jobs : []; },
+    async postBundle(nonce, sealed) {
+      const text = JSON.stringify(sealed);
+      const signature = await wallet.signMessage(`AGT repro bundle ${nonce} ${ethers.keccak256(ethers.toUtf8Bytes(text))}`);
+      const r = await (await fetch(`${base}/repro/${nonce}/bundle`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sealed, signature }) })).json();
+      if (!r.ok) throw new Error("sending the bundle: " + r.error);
+    },
+  };
 }
 
 /// HTTP clients for the exam service's long-term endpoints.
@@ -385,4 +452,4 @@ function fileState(dir) {
   };
 }
 
-module.exports = { EngageLoop, httpSealed, fileState, ciReport, ROUNDS, CI_TIMEOUT };
+module.exports = { EngageLoop, httpSealed, httpRepro, fileState, ciReport, ROUNDS, CI_TIMEOUT };

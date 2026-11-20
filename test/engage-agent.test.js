@@ -85,7 +85,7 @@ async function world() {
   });
   const brief = (over = {}) => Brief.build(FORM, {
     workType: "new", mcu: "STM32F407", resources: "1 MB / 192 KB", software: "C11", repository: repo.url,
-    ciChecks: ["build", "unit-tests", "qemu-sim"], description: "UART driver and logger", milestones: ["UART driver", "Logger"],
+    ciChecks: ["build", "unit-tests", "qemu-sim"], reproCommands: ["make", "make test"], description: "UART driver and logger", milestones: ["UART driver", "Logger"],
     maintenance: "no", pinnedTests: [["tests/test_uart.c", "ab".repeat(32)]], ...over,
   });
   async function open(b = brief(), plan = { amounts: [E(0.5), E(0.5)], hwBps: [0, 0], dueDays: [14, 28], holdbackBps: 0, warrantyDays: 30 }) {
@@ -291,5 +291,88 @@ describe("forge.js — reading the client's CI", () => {
     let threw = false;
     try { await ciStatus({ repository: "https://example.org/acme/fw.git", token: "T", sha, required: ["build"], fetchImpl: f }); } catch { threw = true; }
     expect(threw).to.equal(true);
+  });
+});
+
+describe("§14 — independent reproduction on attested builders (joint decision of Claude and Codex)", function () {
+  this.timeout(120000);
+  const R = require("../tee/embedded/builder.js");
+
+  // An in-memory exam service for the §14 endpoints, and builders that run with fake tools.
+  function reproService() {
+    const jobs = new Map();
+    return {
+      jobs,
+      api: {
+        jobs: async (d) => [...jobs.values()].filter((j) => j.manifest.dispute === Number(d)),
+        postBundle: async (nonce, sealed) => { jobs.get(nonce).bundle = sealed; jobs.get(nonce).hasBundle = true; },
+      },
+    };
+  }
+  async function scenario({ buildExit = 0, attested = true, tamperCommit = false }) {
+    const w = await world();
+    const id = await w.open(undefined, { amounts: [E(1)], hwBps: [0], dueDays: [14], holdbackBps: 0, warrantyDays: 0 });
+    w.sealFor("engagement", id);
+    const svc = reproService();
+    const approved = new Set();
+    const verifyBuilder = (m) => approved.has(m.signer);
+    const loop = (signer) => w.loop(signer, { repro: svc.api, verifyBuilder });
+    const ai = loop(w.wAI);
+    w.ci.plan = ["failure", "failure", "failure"];
+    for (let i = 0; i < 5; i++) await ai.step(); // 3 rounds fail → the AI claims (§13)
+    const ms = await w.eng.milestone(id, 0);
+    expect(Number(ms.state)).to.equal(5);
+    // Someone who wants the evidence starts a builder (§14: they run it and pay for it).
+    const job = R.newJob({ dispute: Number(ms.dispute), commit: tamperCommit ? "e".repeat(40) : ms.result.slice(2, 42), commands: ["make", "make test"], imageDigest: "sha256:builder" });
+    if (attested) approved.add(job.manifest.signer);
+    svc.jobs.set(job.manifest.nonce, { manifest: job.manifest, evidence: { fake: "attestation" } });
+    await ai.step(); // the worker's box sends the commit sealed to the job key (only to an attested builder)
+    const entry = svc.jobs.get(job.manifest.nonce);
+    if (entry.bundle) {
+      const tools = { run: async (_sh, args) => ({ code: args[1] === "make test" ? buildExit : 0, out: "log", timedOut: false }) };
+      entry.result = await R.runJob({ job, sealedBundle: entry.bundle, tools, gitBin: GIT, workRoot: fs.mkdtempSync(path.join(os.tmpdir(), "agt-repro-")), chown: false });
+    }
+    await mine(3);
+    await ai.step(); // draw
+    for (const r of w.s.slice(11, 14)) await loop(r).step();
+    return { w, id, entry, job };
+  }
+
+  it("brief commands reproduced on an attested builder overrule a failing client CI: the worker is paid", async () => {
+    const { w, id, entry } = await scenario({ buildExit: 0 });
+    expect(entry.bundle, "the worker sent the sealed commit").to.be.ok;
+    expect(entry.result.result).to.include({ ok: true, schema: "agt-repro/v1" });
+    expect(Number((await w.eng.milestone(id, 0)).state)).to.equal(4); // accepted
+    expect(await w.agt.balanceOf(w.s[2].address)).to.equal(E(1));
+  });
+
+  it("a failing reproduction confirms the client's CI: the client is refunded", async () => {
+    const { w, id } = await scenario({ buildExit: 2 });
+    expect(Number((await w.eng.milestone(id, 0)).state)).to.equal(6); // refunded
+  });
+
+  it("an unattested builder never receives the source, and its claims are ignored", async () => {
+    const { w, id, entry } = await scenario({ attested: false });
+    expect(entry.bundle).to.equal(undefined);
+    expect(Number((await w.eng.milestone(id, 0)).state)).to.equal(6); // no valid reproduction: a failing CI goes to the client
+  });
+
+  it("a builder job about another commit gets no source", async () => {
+    const { entry } = await scenario({ tamperCommit: true });
+    expect(entry.bundle).to.equal(undefined);
+  });
+
+  it("a forged or mismatched result is never counted", async () => {
+    const job = R.newJob({ dispute: 7, commit: "a".repeat(40), commands: ["make"], imageDigest: null });
+    const result = { schema: "agt-repro/v1", dispute: 7, nonce: job.manifest.nonce, commit: "a".repeat(40), treeHash: "t", imageDigest: null, commands: [{ cmd: "make", exit: 0, timedOut: false, logSha256: "x" }], ok: true };
+    const good = await job.signer.signMessage(ethers.getBytes(R.resultDigest(result)));
+    const base = { job, result, signature: good, evidence: {}, dispute: 7, commitBytes32: "0x" + "a".repeat(40).padEnd(64, "0"), commands: ["make"], verifyAttestation: () => true };
+    expect(R.verifyResult(base)).to.include({ valid: true, ok: true });
+    expect(R.verifyResult({ ...base, signature: await ethers.Wallet.createRandom().signMessage(ethers.getBytes(R.resultDigest(result))) }).valid).to.equal(false);
+    expect(R.verifyResult({ ...base, result: { ...result, ok: true, commands: [] } }).valid).to.equal(false); // altered after signing
+    expect(R.verifyResult({ ...base, commitBytes32: "0x" + "b".repeat(40).padEnd(64, "0") }).valid).to.equal(false);
+    expect(R.verifyResult({ ...base, commands: ["make", "make test"] }).valid).to.equal(false);
+    expect(R.verifyResult({ ...base, dispute: 8 }).valid).to.equal(false);
+    expect(R.verifyResult({ ...base, verifyAttestation: () => false }).valid).to.equal(false);
   });
 });

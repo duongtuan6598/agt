@@ -397,6 +397,7 @@ async function putRequest(env, req) {
 const LONG_IFACE = new Interface([
   "function engagements(uint256) view returns (address client, uint256 worker, bytes32 brief, uint16 holdbackBps, uint32 warrantyDays, uint64 startedAt, bool ended, uint8 count)",
   "function retainers(uint256) view returns (address client, uint256 worker, bytes32 brief, uint128 fee, uint16 penaltyBps, uint64 startedAt, uint32 funded, uint32 closed, uint32 nextIncident, bool stopped)",
+  "function disputeEngagement(uint256) view returns (uint256)",
 ]);
 async function callTo(env, to, data) {
   const r = await fetch(env.BSC_RPC, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to, data }, "latest"] }) });
@@ -475,6 +476,69 @@ async function putSealed(env, req) {
   await env.EXAMS.put(`sealed:${b.contract}:${b.id}`, text, { expirationTtl: KEEP });
   await env.EXAMS.put(`sealedv:${b.contract}:${b.id}`, String(b.version), { expirationTtl: KEEP });
   return json({ ok: true, version: b.version });
+}
+
+// ---------- independent reproduction in disputes (THIET-KE-NGHE-NHUNG.md §14) ----------
+// A disposable attested builder posts its job (manifest + attestation, signed by its job key); the WORKER's box
+// posts the disputed commit sealed to that job key; the builder posts its signed result; anyone reads results.
+// This service only stores and routes: reviewers verify attestation, signatures and bindings themselves.
+const REPRO_MAX_JOBS = 10;
+const digestOf = (o) => keccak256(toUtf8Bytes(Brief.canonical(o)));
+async function postReproJob(env, req) {
+  const b = await body(req);
+  const m = b && b.manifest;
+  if (!m || m.agt !== "builder-v1" || !/^\d+$/.test(String(m.dispute)) || !/^[0-9a-f]{32}$/.test(m.nonce || "") || !isAddress(m.signer || "") || !b.evidence) return fail(400, "need {manifest: builder-v1, evidence, signature}");
+  let signer;
+  try { signer = verifyMessage(`AGT repro job ${digestOf(m)}`, b.signature); } catch { return fail(400, "bad signature"); }
+  if (getAddress(signer) !== getAddress(m.signer)) return fail(403, "not signed by the job key in the manifest");
+  if (await env.EXAMS.get(`rj:${m.nonce}`)) return fail(409, "job exists");
+  const n = (await env.EXAMS.list({ prefix: `rjd:${m.dispute}:` })).keys.length;
+  if (n >= REPRO_MAX_JOBS) return fail(429, "too many reproduction jobs for this dispute");
+  await env.EXAMS.put(`rj:${m.nonce}`, JSON.stringify({ manifest: m, evidence: b.evidence, at: now() }), { expirationTtl: 60 * 86400 });
+  await env.EXAMS.put(`rjd:${m.dispute}:${m.nonce}`, "1", { expirationTtl: 60 * 86400 });
+  return json({ ok: true, nonce: m.nonce });
+}
+async function reproJobs(env, dispute) {
+  const out = [];
+  for (const k of (await env.EXAMS.list({ prefix: `rjd:${dispute}:` })).keys) {
+    const nonce = k.name.split(":").pop();
+    const j = JSON.parse((await env.EXAMS.get(`rj:${nonce}`)) || "null");
+    if (!j) continue;
+    const r = JSON.parse((await env.EXAMS.get(`rr:${nonce}`)) || "null");
+    out.push({ ...j, hasBundle: !!(await env.EXAMS.get(`rbx:${nonce}`)), result: r });
+  }
+  return json({ ok: true, jobs: out });
+}
+async function postReproBundle(env, req, nonce) {
+  const j = JSON.parse((await env.EXAMS.get(`rj:${nonce}`)) || "null");
+  if (!j) return fail(404, "no such job");
+  const b = await body(req);
+  if (!b || !b.sealed || b.sealed.v !== 1) return fail(400, "need {sealed, signature}");
+  const text = JSON.stringify(b.sealed);
+  if (text.length > 24 * 1024 * 1024) return fail(413, "bundle too large");
+  let signer;
+  try { signer = verifyMessage(`AGT repro bundle ${nonce} ${keccak256(toUtf8Bytes(text))}`, b.signature); } catch { return fail(400, "bad signature"); }
+  // only the WORKER of the disputed engagement (its AI key) may send the source
+  const id = LONG_IFACE.decodeFunctionResult("disputeEngagement", await callTo(env, env.ENGAGEMENT, LONG_IFACE.encodeFunctionData("disputeEngagement", [BigInt(j.manifest.dispute)])))[0];
+  const e = LONG_IFACE.decodeFunctionResult("engagements", await callTo(env, env.ENGAGEMENT, LONG_IFACE.encodeFunctionData("engagements", [id])));
+  const l = WORK_IFACE.decodeFunctionResult("licenses", await ethCall(env, WORK_IFACE.encodeFunctionData("licenses", [e.worker])));
+  if (getAddress(l.agent) !== getAddress(signer)) return fail(403, "only the worker AI of this dispute may send the source");
+  await env.EXAMS.put(`rb:${nonce}`, text, { expirationTtl: 7 * 86400 });
+  await env.EXAMS.put(`rbx:${nonce}`, "1", { expirationTtl: 7 * 86400 });
+  return json({ ok: true });
+}
+async function postReproResult(env, req, nonce) {
+  const j = JSON.parse((await env.EXAMS.get(`rj:${nonce}`)) || "null");
+  if (!j) return fail(404, "no such job");
+  const b = await body(req);
+  if (!b || !b.result || b.result.schema !== "agt-repro/v1" || typeof b.signature !== "string") return fail(400, "need {result, signature}");
+  let signer;
+  try { signer = verifyMessage(getBytes(digestOf(b.result)), b.signature); } catch { return fail(400, "bad signature"); }
+  if (getAddress(signer) !== getAddress(j.manifest.signer)) return fail(403, "not signed by this builder's job key");
+  if (await env.EXAMS.get(`rr:${nonce}`)) return fail(409, "result already posted");
+  await env.EXAMS.put(`rr:${nonce}`, JSON.stringify({ result: b.result, signature: b.signature, at: now() }), { expirationTtl: 60 * 86400 });
+  await env.EXAMS.delete(`rb:${nonce}`); // the source is gone once the job is done
+  return json({ ok: true });
 }
 
 // ---------- quotes: before any money moves, the chosen AI reads the brief and answers ----------
@@ -581,6 +645,19 @@ export default {
       if (p === "/requests" && req.method === "POST") return await putRequest(env, req);
       if (p === "/briefs" && req.method === "POST") return await putBrief(env, req);
       if (p === "/notes" && req.method === "POST") return await putNote(env, req);
+      if (p === "/repro/jobs" && req.method === "POST") return await postReproJob(env, req);
+      if (p === "/repro/jobs" && req.method === "GET") {
+        const d = url.searchParams.get("dispute");
+        if (!/^\d+$/.test(d || "")) return fail(400, "need ?dispute=<id>");
+        return await reproJobs(env, d);
+      }
+      const mr = p.match(/^\/repro\/([0-9a-f]{32})\/(bundle|result)$/);
+      if (mr && mr[2] === "bundle" && req.method === "POST") return await postReproBundle(env, req, mr[1]);
+      if (mr && mr[2] === "bundle" && req.method === "GET") {
+        const v = await env.EXAMS.get(`rb:${mr[1]}`);
+        return v ? json({ ok: true, sealed: JSON.parse(v) }) : fail(404, "no bundle");
+      }
+      if (mr && mr[2] === "result" && req.method === "POST") return await postReproResult(env, req, mr[1]);
       if (p === "/sealed" && req.method === "POST") return await putSealed(env, req);
       const ms = p.match(/^\/sealed\/(engagement|maintenance)\/(\d+)$/);
       if (ms && req.method === "GET") {

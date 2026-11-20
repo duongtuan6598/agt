@@ -82,6 +82,14 @@
       "help": "Your own CI (GitHub Actions or GitLab CI) runs N1–N4 on every branch the AI pushes. The AI reads the results and delivers only when all of these pass. Your code never runs inside the AI's sealed box."
     },
     {
+      "key": "reproCommands",
+      "label": "Reproduction commands for disputes (one per line, run in order from the repository root, WITHOUT secrets or network — e.g. make, make test, make sim)",
+      "type": "list",
+      "required": false,
+      "maxItems": 10,
+      "help": "If you and the AI disagree, independent attested builders run exactly these commands on the disputed commit. Leave empty if your checks need secrets or hardware: a dispute is then decided without reproduction."
+    },
+    {
       "key": "buildCommand",
       "label": "Build command — for reference: your CI runs it (run in the repository root)",
       "type": "text",
