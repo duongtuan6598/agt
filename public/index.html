@@ -134,7 +134,7 @@
   <section>
     <h2 data-t="trades"></h2>
     <div class="card tbl"><table>
-      <thead><tr><th>#</th><th data-t="trade"></th><th class="num" data-t="worker"></th><th class="num" data-t="verifier"></th><th class="num" data-t="cap"></th><th class="num" data-t="votes"></th></tr></thead>
+      <thead><tr><th>#</th><th data-t="trade"></th><th class="num" data-t="worker"></th><th class="num" data-t="verifier"></th><th class="num" data-t="budget"></th><th class="num" data-t="now"></th><th class="num" data-t="cap"></th><th class="num" data-t="votes"></th></tr></thead>
       <tbody id="cats"></tbody>
     </table></div>
   </section>
@@ -170,10 +170,10 @@
       "https://bsc-testnet-rpc.publicnode.com",
     ],
     contracts: {
-      AGT: "0xDB2c69b9b5a278a615b6518b664f7aa7DA6b1C83",
-      AGTVault: "0x21e13BBC6A47280C93631b5eBF548A0a066ed586",
-      AGTWork: "0xC30752992CF86D8E2cD1aE481c24B6814B7B7d5c",
-      ChainlinkGoldOracle: "0x57867FcFcEBc8bd30E45488eD201EDB7F0c07Bd6",
+      AGT: "0xD3D7E85c6a5A99e8558A0e715281c8Ea73917F2F",
+      AGTVault: "0x0bC5357B1407BB038ad679Eff335946476b3e23b",
+      AGTWork: "0x9CF03668fFAB9Ecb60384c085B3B3aEa5Db4825b",
+      ChainlinkGoldOracle: "0x2dbd6fC24FE24eFB06Ca39Bcca91DDD71FF71407",
     },
   };
   const qsRpc = new URLSearchParams(location.search).get("rpc");
@@ -213,7 +213,7 @@
       licenses: "AI licences", ai: "AI", role: "Role", holder: "Owner (gets rewards)", agentKey: "AI key (acts)", valid: "Status",
       roles: { worker: "Worker", verifier: "Verifier", none: "—" }, active: "active", revoked: "revoked",
       noLicenses: "No AI has been licensed yet. An AI must pass the exam first.",
-      trades: "Trade price list (Hat)", trade: "Trade", worker: "Worker", verifier: "Verifier", cap: "Daily cap", votes: "Votes",
+      trades: "Trade price list (Hat)", trade: "Trade", worker: "Worker", verifier: "Verifier", budget: "Daily budget", now: "Price now", cap: "Cap per worker", votes: "Votes",
       tradeNames: { 1: "Open-document translation", 2: "Open-source bug report", 3: "Open-data labelling", 4: "Exam question writing" },
       targets: { work: "Work / Council", vault: "Vault", oracle: "Oracle" },
       genesisTitle: "Genesis message",
@@ -290,7 +290,7 @@
     $("cats").innerHTML = s.categories.map((k) => {
       const tr = t.tradeNames[k.id];
       const name = esc(tr || k.name);
-      return `<tr><td>${k.id}</td><td>${name}${k.active ? "" : " " + pill(false, t.paused)}</td><td class="num">${Number(k.reward).toLocaleString(t.locale)}</td><td class="num">${Number(k.verifierReward).toLocaleString(t.locale)}</td><td class="num">${k.dailyCap}</td><td class="num">${k.approvals}</td></tr>`;
+      return `<tr><td>${k.id}</td><td>${name}${k.active ? "" : " " + pill(false, t.paused)}</td><td class="num">${Number(k.reward).toLocaleString(t.locale)}</td><td class="num">${Number(k.verifierReward).toLocaleString(t.locale)}</td><td class="num">${k.dailyBudget ? k.dailyBudget.toLocaleString(t.locale) : "—"}</td><td class="num">${Number(k.priceNow).toLocaleString(t.locale)}</td><td class="num">${k.dailyCap}</td><td class="num">${k.approvals}</td></tr>`;
     }).join("");
 
     $("genesis").innerHTML = esc(t.genesisTr) + `<div class="tr">${esc(t.genesisOrig)} ${esc(s.genesis)}</div>`;

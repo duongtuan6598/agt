@@ -45,6 +45,8 @@
       "function proposals(uint256) view returns (address proposer, address target, uint64 deadline, uint32 yes, uint32 no, bool executed, bytes data, string reason)",
       "function passed(uint256) view returns (bool)",
       "function categories(uint256) view returns (uint128 reward, uint128 verifierReward, uint32 dailyCap, uint8 approvals, bool active, string name)",
+      "function dailyBudget(uint256) view returns (uint32)",
+      "function currentReward(uint256) view returns (uint256)",
     ],
     // để đọc nội dung đề xuất của Hội đồng
     gov: [
@@ -175,10 +177,15 @@
 
     const categories = [];
     const cats = await Promise.all(Array.from({ length: 12 }, (_, j) => work.categories(j + 1)));
+    const [budgets, nows] = await Promise.all([
+      Promise.all(Array.from({ length: 12 }, (_, j) => work.dailyBudget(j + 1).catch(() => 0n))),
+      Promise.all(Array.from({ length: 12 }, (_, j) => work.currentReward(j + 1).catch(() => null))),
+    ]);
     for (let i = 1; i <= 12; i++) {
       const k = cats[i - 1];
       if (!k.name) continue;
-      categories.push({ id: i, name: k.name, reward: (k.reward / HAT).toString(), verifierReward: (k.verifierReward / HAT).toString(), dailyCap: Number(k.dailyCap), approvals: Number(k.approvals), active: k.active });
+      const now = nows[i - 1] === null ? k.reward : nows[i - 1];
+      categories.push({ id: i, name: k.name, reward: (k.reward / HAT).toString(), dailyBudget: Number(budgets[i - 1]), priceNow: (Number((now * 1000n) / HAT) / 1000).toString(), verifierReward: (k.verifierReward / HAT).toString(), dailyCap: Number(k.dailyCap), approvals: Number(k.approvals), active: k.active });
     }
 
     // Chỉ trả dữ liệu — trang tự dịch sang ngôn ngữ người xem.

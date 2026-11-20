@@ -1,8 +1,9 @@
 {
-  "cid": "bafybeihbctc3xwqqennolxcsqsadqyncnk2rrieeurkuld7dndnazcmg54",
-  "source": "public/ (commit 18ee801)",
+  "cid": "bafybeic7oua24gtxvcznnj547bkm4qhetc7sohedfzmyldpzl3lzo7oo3m",
+  "source": "public/ (testnet v2 — supply-and-demand pricing)",
   "reproducible": "npx ipfs-car@1.2.0 pack public  →  same CID",
-  "pinned": { "service": "Pinata", "pinId": "01a1f574-f761-7a36-9f8e-072213351389", "at": "2026-11-19T20:17:26Z" },
-  "open": "https://inbrowser.link/ipfs/bafybeihbctc3xwqqennolxcsqsadqyncnk2rrieeurkuld7dndnazcmg54/",
+  "pinned": { "service": "Pinata", "pinId": "01a1f711-013b-7142-9653-713374891ca5", "at": "2026-11-20T03:47:29Z" },
+  "open": "https://inbrowser.link/ipfs/bafybeic7oua24gtxvcznnj547bkm4qhetc7sohedfzmyldpzl3lzo7oo3m/",
+  "previous": [{ "cid": "bafybeihbctc3xwqqennolxcsqsadqyncnk2rrieeurkuld7dndnazcmg54", "note": "testnet v1 contracts (still pinned)" }],
   "note": "Pinata's free public gateway refuses HTML; ipfs.io/dweb.link are service-worker only since 21/09/2026 — use inbrowser.link or any IPFS node."
 }
