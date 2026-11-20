@@ -41,6 +41,12 @@ test("a builder is trusted only with an attested BUILDER image and the exact man
   assert.equal(verify(j.manifest, { token: sign(claims(T.nonceOf(j.manifest), { dbgstat: "enabled" })) }), false, "debug");
   assert.equal(verify({ ...job().manifest, imageDigest: "sha256:" + "cc".repeat(32) }, { token: sign(claims(T.nonceOf({ ...job().manifest }))) }), false);
   assert.equal(makeVerifyBuilder({ jwks, policy: { ...policy, builderImages: [] } })(j.manifest, ok), false, "nothing approved → nothing trusted");
+  const ctr = (over) => ({ submods: { confidential_space: { support_attributes: ["STABLE"] }, container: { image_digest: BUILDER, restart_policy: "Never", ...over } } });
+  const n = T.nonceOf(j.manifest);
+  assert.equal(verify(j.manifest, { token: sign(claims(n, ctr({ restart_policy: undefined }))) }), false, "restart policy Never is required (L-3)");
+  assert.equal(verify(j.manifest, { token: sign(claims(n, ctr({ args: ["sh", "-c", "evil"] }))) }), false, "the image's own command only (L-5)");
+  assert.equal(verify(j.manifest, { token: sign(claims(n, ctr({ env: { AGT_BUCKET: "b", AGT_FAKE_RESULT: "1" } }))) }), false, "no other AGT_ override (L-5)");
+  assert.equal(verify(j.manifest, { token: sign(claims(n, ctr({ args: ["node", "/agt/tee/builder/main.js"], env: { AGT_BUCKET: "b", PATH: "/usr/bin" } }))) }), true);
 });
 
 test("the supervisor: spec → attested job → sealed source → signed result a reviewer accepts", async () => {

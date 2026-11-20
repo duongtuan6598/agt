@@ -55,7 +55,11 @@ function gcsIO(bucket) {
 }
 
 /// One job, start to end. io: {get(name), put(name, text)}; attest(nonceHex) → evidence; tools: tee/embedded/tools.js
-async function runBuilder({ io, attest, tools, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), waitSec = 3 * 3600, pollSec = 20 }) {
+// Ordering is part of the security (Codex L-2): the build can reach the metadata server and so the bucket, but by
+// the time any client code runs, the launcher has already read job.json and the supervisor has already read
+// source.sealed; result.json is written only after every sandbox process is killed (runJob's cleanup), and it is
+// signed with a key the build never sees. The build can at most write extra objects into the party's own bucket.
+async function runBuilder({ io, attest, tools, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), waitSec = 90 * 60, pollSec = 20 }) {
   const spec = JSON.parse((await io.get("spec.json")) || "null");
   if (!spec) throw new Error("no spec.json in the job bucket");
   const job = R.newJob({ dispute: spec.dispute, commit: spec.commit, commands: spec.commands, imageDigest: spec.imageDigest });
@@ -80,8 +84,14 @@ module.exports = { runBuilder, gcsIO, launcherToken };
 
 if (require.main === module) {
   const bucket = process.env.AGT_BUCKET;
+  const io = gcsIO(bucket);
   require("../embedded/isolation.js").lockDown(log); // the attestation socket: root only (defence in depth)
-  runBuilder({ io: gcsIO(bucket), attest: async (nonce) => ({ token: await launcherToken(nonce) }), tools: require("../embedded/tools.js") })
-    .catch((e) => log("FAILED:", e.message))
-    .finally(() => { log("done — powering off"); setTimeout(() => process.exit(0), 1000); });
+  runBuilder({ io, attest: async (nonce) => ({ token: await launcherToken(nonce) }), tools: require("../embedded/tools.js") })
+    .then(() => { log("done"); setTimeout(() => process.exit(0), 1000); })
+    .catch(async (e) => {
+      // a terminal failure is reported, so the launcher deletes the VM at once instead of waiting (Codex L-1)
+      log("FAILED:", e.message);
+      try { await io.put("failed.json", JSON.stringify({ error: String(e.message).slice(0, 500) })); } catch {}
+      setTimeout(() => process.exit(1), 1000);
+    });
 }

@@ -69,6 +69,12 @@
 | R-5 (Codex) | Medium | Source delivery could repeat; bindings before disclosure. | **Fixed**: one bundle per job (remembered by the worker's box and refused twice by the service); commit and commands checked before sending. |
 | R-6 (Codex) | High | No caps on commands, total time or request size. | **Fixed**: ≤ 10 commands of ≤ 300 characters, ≤ 1 h in total, request size refused before parsing; VM-level limits come with the launcher. |
 | R-7 (Codex) | Medium | Anyone could fill a dispute's job slots; results without a source. | **Fixed**: jobs only for a live dispute on chain, one per builder key per dispute; results only after a source was sent, and only for that job; the source is deleted once the result is in. |
+| L-1 (Codex) | High | Builder: the process exit did not stop the VM; failures exited 0; waits exceeded the VM lifetime. | **Fixed** (2026-11-21): failures write failed.json and exit 1; the launcher deletes the VM as soon as a result or a failure appears; source wait 90 min < 2 h VM life (deleted by the cloud anyway). |
+| L-2 (Codex) | High | The build can reach the metadata server and so the job bucket. | **Mitigated by ordering, proven in the image**: job.json is read and source.sealed fetched before any client code runs; every sandbox process is killed before the signed result is written; a detached process trying to overwrite result.json fails. The build can only add objects to the party's own bucket (and that party already has the code). |
+| L-3 (Codex) | Medium | Restart policy Never was not required for builder evidence. | **Fixed**: required. |
+| L-4 (Codex) | Medium | Expiry checks off: freshness relies on replay protection. | **Documented**: single-use nonce, one job per nonce, one result per job, and results count only with that job's key — replay gains nothing. |
+| L-5 (Codex) | Medium | Token container command and environment were not checked. | **Fixed**: the image's own command only; no AGT_ override except AGT_BUCKET. Tests added. |
+| L-6 (Codex) | Low | The project-level IAM binding was left behind. | **Fixed**: removed during cleanup. |
 
 ### Slither results
 

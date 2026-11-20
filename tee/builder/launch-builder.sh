@@ -22,6 +22,7 @@ SA="$SA_ID@$PROJECT.iam.gserviceaccount.com"
 WORK=$(mktemp -d)
 cleanup() {
   gcloud compute instances delete "$NAME" --zone "$ZONE" --project "$PROJECT" --quiet >/dev/null 2>&1 || true
+  gcloud projects remove-iam-policy-binding "$PROJECT" --member "serviceAccount:$SA" --role roles/confidentialcomputing.workloadUser --condition=None --quiet >/dev/null 2>&1 || true
   gcloud storage rm -r "$BUCKET" --project "$PROJECT" --quiet >/dev/null 2>&1 || true
   gcloud iam service-accounts delete "$SA" --project "$PROJECT" --quiet >/dev/null 2>&1 || true
   rm -rf "$WORK"
@@ -48,13 +49,23 @@ gcloud compute instances create "$NAME" --project "$PROJECT" --zone "$ZONE" \
 
 # 4. Relay: job → exam service; sealed source (sent by the worker's box after it verifies this builder) → bucket;
 #    result → exam service.
-wait_for() { for i in $(seq 1 360); do gcloud storage cat "$BUCKET/$1" > "$WORK/$1" 2>/dev/null && return 0; sleep 20; done; return 1; }
+# Waits stay inside the VM's 2 h lifetime; a failed.json from the builder ends the run at once (Codex L-1).
+wait_for() {
+  for i in $(seq 1 330); do
+    gcloud storage cat "$BUCKET/$1" > "$WORK/$1" 2>/dev/null && return 0
+    if gcloud storage cat "$BUCKET/failed.json" > "$WORK/failed.json" 2>/dev/null; then echo "the builder failed: $(cat "$WORK/failed.json")" >&2; return 1; fi
+    sleep 20
+  done
+  return 1
+}
 wait_for job.json || { echo "the builder never published its job" >&2; exit 1; }
 NONCE=$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1])).manifest.nonce)' "$WORK/job.json")
 curl -fsS -X POST "$EXAM/repro/jobs" -H 'content-type: application/json' --data-binary @"$WORK/job.json"; echo
-for i in $(seq 1 360); do
-  curl -fsS "$EXAM/repro/$NONCE/bundle" -o "$WORK/bundle.json" 2>/dev/null && break; sleep 20
+GOT=""
+for i in $(seq 1 240); do
+  curl -fsS "$EXAM/repro/$NONCE/bundle" -o "$WORK/bundle.json" 2>/dev/null && { GOT=1; break; }; sleep 20
 done
+[ -n "$GOT" ] || { echo "the worker's box never sent the source (it sends only to an attested, approved builder)" >&2; exit 1; }
 node -e 'process.stdout.write(JSON.stringify(JSON.parse(require("fs").readFileSync(process.argv[1])).sealed))' "$WORK/bundle.json" > "$WORK/source.sealed"
 gcloud storage cp "$WORK/source.sealed" "$BUCKET/source.sealed"
 wait_for result.json || { echo "no result within the VM's lifetime" >&2; exit 1; }
