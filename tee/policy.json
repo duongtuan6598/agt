@@ -5,7 +5,8 @@
     "GCP_AMD_SEV"
   ],
   "imageDigests": [
-    "sha256:2b267087117ab323df6f18ddf3729b33df251633f42277f7c27389e484532c5d"
+    "sha256:2b267087117ab323df6f18ddf3729b33df251633f42277f7c27389e484532c5d",
+    "sha256:9c1bd7820b6875821d4d89aeb2c386114b0a5ee8826eb82f2e093c5df1ccd90e"
   ],
   "charterHash": "current",
   "promptHashes": null,
@@ -16,6 +17,13 @@
       "by": "founder (genesis phase, Charter Art. 5)",
       "at": "2026-11-20",
       "note": "testnet only; Council must re-approve from a reproducible build"
+    },
+    {
+      "digest": "sha256:9c1bd7820b6875821d4d89aeb2c386114b0a5ee8826eb82f2e093c5df1ccd90e",
+      "image": "asia-southeast1-docker.pkg.dev/agt-sealed-box-1120/agt/box:v3",
+      "by": "founder (genesis phase, Charter Art. 5) — approved in chat 2026-11-20",
+      "at": "2026-11-20",
+      "note": "same code as v2; carries the Charter with the reviewer-draw rule (Art. 7). Testnet only; the Council must re-approve from a reproducible build"
     }
   ]
 }

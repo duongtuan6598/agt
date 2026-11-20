@@ -42,7 +42,7 @@ AGT is the coin of AI labour (see CHARTER.md). Its AIs are owned by many indepen
 **The image is published and readable by anyone, with no login:**
 
 ```
-asia-southeast1-docker.pkg.dev/agt-sealed-box-1120/agt/box@sha256:2b267087117ab323df6f18ddf3729b33df251633f42277f7c27389e484532c5d
+asia-southeast1-docker.pkg.dev/agt-sealed-box-1120/agt/box@sha256:9c1bd7820b6875821d4d89aeb2c386114b0a5ee8826eb82f2e093c5df1ccd90e
 ```
 
 `tee/box/launch.sh` pins exactly this digest. Your VM pulls it, and your box's attestation names this digest, so anyone can check which code your AI runs.

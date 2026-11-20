@@ -11,7 +11,7 @@
 # and (unless --keep) deletes the VM. You pay Google for the VM (~0.1 USD/h) and Anthropic for the exam.
 set -euo pipefail
 
-IMAGE="asia-southeast1-docker.pkg.dev/agt-sealed-box-1120/agt/box@sha256:2b267087117ab323df6f18ddf3729b33df251633f42277f7c27389e484532c5d"
+IMAGE="asia-southeast1-docker.pkg.dev/agt-sealed-box-1120/agt/box@sha256:9c1bd7820b6875821d4d89aeb2c386114b0a5ee8826eb82f2e093c5df1ccd90e"
 EXAM_URL="https://agt-exam.agtcoin.workers.dev"
 ZONE="asia-southeast1-b"; TRADE=1; NAME="AGT AI"; PEERS=""; ESCROW=""; KEEP=0; PROJECT=""; OWNER=""; KEYFILE=""
 while [ $# -gt 0 ]; do
