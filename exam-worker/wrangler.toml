@@ -5,4 +5,4 @@ compatibility_flags = ["nodejs_compat"]
 
 [[kv_namespaces]]
 binding = "EXAMS"
-id = "7255050a8f6f40d8b40d365c12c94336"
+id = "9c2e0a6be7744dbdb012393f17660cdd"

@@ -57,7 +57,7 @@ Không ai — kể cả Hội đồng — rút được Kho hay đúc thẳng AG
 ## Còn thiếu / cần kiểm trước mainnet
 - [x] Chainlink có XAU/USD trên BSC mainnet: `0x86896fEB19D8A607c3b11f2aF50A0f239Bd71CD0` (8 số lẻ, cập nhật ≤600s hoặc khi lệch 0.2%). Đã gọi kiểm trên chain 20/11/2026: 3680.25 USD/oz. Địa chỉ BNB/BTC/USDT/USDC/TRX/PAXG ở `config/bsc-mainnet.json`.
 - [x] **Giờ chợ vàng — CHỐT cách 1:** chợ vàng đóng thì Kho đóng (Hiến chương Điều 1). Giá vàng cũ quá `xauMaxAge` = 3600s thì Kho từ chối; công việc vẫn chạy. Không dùng giá dự phòng.
-- [x] Hệ thống bài thi (`exam/lib.js`) + Worker thi qua mạng `https://agt-exam.duongtuan6598888.workers.dev` (`exam-worker/`, KV `AGT_EXAMS`, client mẫu `exam-worker/client.js`).
+- [x] Hệ thống bài thi (`exam/lib.js`) + Worker thi qua mạng `https://agt-exam.agtcoin.workers.dev` (`exam-worker/`, KV `AGT_EXAMS`, client mẫu `exam-worker/client.js`).
 - [x] Đơn vị con **Hạt** = 1/1.000.000 AGT (`AGT.HAT`). Bảng giá nghề bản 1 ở `config/nghe.json`: Dịch tài liệu mở 500 Hạt/1.000 từ, Báo lỗi nguồn mở 5.000 Hạt/lỗi, Gắn nhãn dữ liệu mở 100 Hạt/100 mẫu.
 - [ ] BTC gốc / TRON vào Kho (địa chỉ không ai tiêu được + cầu xác nhận).
 - [ ] Trang công khai: Kho, tỷ lệ bảo chứng, sổ công.
@@ -81,7 +81,7 @@ npm test   # hợp đồng (hardhat) + hệ thống thi (node:test)
 ```
 
 ## Điều kiện bắt buộc TRƯỚC KHI lên mạng thật
-- [ ] Tách danh tính: chuyển trang công khai + Worker thi + KV + Pinata sang tài khoản riêng của AGT (email riêng, không dính tài khoản cá nhân). Hiện đang chạy tạm trên tài khoản cá nhân (`agt-so-cong.pages.dev`, `agt-exam.duongtuan6598888.workers.dev`) — chấp nhận được cho testnet, KHÔNG cho mainnet. Email `agtcoin@proton.me` đã tạo nhưng Cloudflare chưa gửi được mail xác thực → thử Tuta.
+- [x] Tách danh tính (một phần, 20/11/2026): trang công khai → `agtcoin.pages.dev`, Worker thi + KV → `agt-exam.agtcoin.workers.dev`, trên tài khoản Cloudflare riêng của AGT. Còn: Pinata, dự án Google Cloud của hộp kín, ví mainnet mới.
 - [ ] Kho đề đủ lớn (vài trăm câu, nhiều người ra đề).
 - [ ] Ví triển khai mainnet mới, khoá không nằm dạng chữ thường trên laptop.
 - [ ] Kiểm toán (audit) hợp đồng.

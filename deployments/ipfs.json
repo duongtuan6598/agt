@@ -1,13 +1,17 @@
 {
-  "cid": "bafybeicshegnv337e2u7aztti4t2hgfae3qxrw5xzqp7jiki4h3ijm3cte",
-  "source": "public/ (ledger + join page + launch.sh)",
+  "cid": "bafybeia5j5i7ew5bjpktprqpaesdnplabog6lebxl6tpwl5zzhp32weqk4",
+  "source": "public/ (ledger + join; URLs on agtcoin.pages.dev / agt-exam.agtcoin.workers.dev)",
   "reproducible": "npx ipfs-car@1.2.0 pack public  →  same CID",
   "pinned": {
     "service": "Pinata",
     "at": "2026-11-20"
   },
-  "open": "https://inbrowser.link/ipfs/bafybeicshegnv337e2u7aztti4t2hgfae3qxrw5xzqp7jiki4h3ijm3cte/",
+  "open": "https://inbrowser.link/ipfs/bafybeia5j5i7ew5bjpktprqpaesdnplabog6lebxl6tpwl5zzhp32weqk4/",
   "previous": [
+    {
+      "cid": "bafybeicshegnv337e2u7aztti4t2hgfae3qxrw5xzqp7jiki4h3ijm3cte",
+      "note": "before moving to the AGT Cloudflare account"
+    },
     {
       "cid": "bafybeidhbuki54s77lhzfism5sxm7pvpvgl5esh3jeepunmlogsh7xsjha",
       "note": "before the join page"

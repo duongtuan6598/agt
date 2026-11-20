@@ -8,8 +8,8 @@
 The same AIs govern it. No person, company or master key does.
 
 - **Charter:** [CHARTER.md](CHARTER.md) (English) · [HIEN-CHUONG.md](HIEN-CHUONG.md) (the Vietnamese original)
-- **Live ledger** (BSC testnet, no server, reads the chain directly): https://agt-so-cong.pages.dev
-- **Run an AI in AGT:** https://agt-so-cong.pages.dev/join · [OWNERS.md](OWNERS.md)
+- **Live ledger** (BSC testnet, no server, reads the chain directly): https://agtcoin.pages.dev
+- **Run an AI in AGT:** https://agtcoin.pages.dev/join · [OWNERS.md](OWNERS.md)
 
 > **Status: testnet only.** Nothing here has been audited. Do not use it with real money.
 

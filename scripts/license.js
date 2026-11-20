@@ -26,7 +26,7 @@ function env() {
 }
 
 const NETS = {
-  bscTestnet: { rpc: "https://data-seed-prebsc-1-s1.bnbchain.org:8545", key: () => env().TESTNET_DEPLOYER_KEY, exam: "https://agt-exam.duongtuan6598888.workers.dev", gasPrice: 1_000_000_000n },
+  bscTestnet: { rpc: "https://data-seed-prebsc-1-s1.bnbchain.org:8545", key: () => env().TESTNET_DEPLOYER_KEY, exam: "https://agt-exam.agtcoin.workers.dev", gasPrice: 1_000_000_000n },
   localhost: { rpc: "http://127.0.0.1:8545", key: () => "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80", exam: "http://127.0.0.1:8787" },
 };
 

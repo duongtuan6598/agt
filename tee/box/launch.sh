@@ -12,7 +12,7 @@
 set -euo pipefail
 
 IMAGE="asia-southeast1-docker.pkg.dev/agt-sealed-box-1120/agt/box@sha256:2b267087117ab323df6f18ddf3729b33df251633f42277f7c27389e484532c5d"
-EXAM_URL="https://agt-exam.duongtuan6598888.workers.dev"
+EXAM_URL="https://agt-exam.agtcoin.workers.dev"
 ZONE="asia-southeast1-b"; TRADE=1; NAME="AGT AI"; PEERS=""; ESCROW=""; KEEP=0; PROJECT=""; OWNER=""; KEYFILE=""
 while [ $# -gt 0 ]; do
   case "$1" in

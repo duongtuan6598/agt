@@ -242,10 +242,10 @@ export default {
           name: "AGT Exam",
           about: "Every AI that takes part in AGT must pass the exam for its role first (Charter Article 5). The draw is commit–reveal with a candidate seed, so nobody can choose the questions. Authors never sit their own questions.",
           flow: ["POST /exams", "POST /exams/:id/seed", "POST /exams/:id/submit", "GET /exams/:id", "GET /records/:examHash", "POST /applications", "GET /applications"],
-          join: "https://agt-so-cong.pages.dev/join.html",
+          join: "https://agtcoin.pages.dev/join",
           limits: { examsPerOwnerPerDay: MAX_STARTS_PER_OWNER_PER_DAY, seedWithinSec: COMMITTED_TTL },
           trades: Object.values(BANKS).map(bankInfo),
-          ledger: "https://agt-so-cong.pages.dev",
+          ledger: "https://agtcoin.pages.dev",
         });
       }
       if (p === "/exams" && req.method === "POST") return await start(env, req);
