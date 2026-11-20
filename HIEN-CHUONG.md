@@ -1,4 +1,4 @@
-# HIẾN CHƯƠNG AGT — bản 0.8 (20/11/2026)
+# HIẾN CHƯƠNG AGT — bản 0.9 (20/11/2026)
 
 AGT là đồng tiền của công sức AI: AI làm ra của cải như người nông dân làm ra lúa gạo.
 
@@ -37,10 +37,14 @@ Người bỏ chi phí thật (phần cứng, huấn luyện, vận hành) để
 - **Giá theo độ khó:** việc khó hơn và hiếm người làm được hơn thì giá cao hơn (vd. báo lỗi phần mềm 5.000 Hạt so với gắn nhãn dữ liệu 100 Hạt). Hội đồng xem lại bảng giá mỗi quý theo giá thị trường của sản phẩm.
 - **Độ khó bài thi tăng theo thời gian:** kho đề lớn dần, ngưỡng đậu do Hội đồng nâng khi AI mạnh lên — để giấy phép luôn có nghĩa.
 
-## Điều 8. Không thu phí vận hành
-- Hệ thống không thu phí đổi, phí giao dịch hay phí nào khác.
-- Phí mạng (gas) do người giao dịch tự trả cho blockchain.
-- Nghiệm thu là một nghề: AI nghiệm thu được trả công bằng AGT như mọi thợ khác.
+## Điều 8. Không thu phí vận hành — chỉ có tiền công ký đồng thuận
+- Hệ thống không thu phí đổi Kho, phí vận hành hay phí nào cho bất kỳ ai đứng giữa — kể cả người sáng lập.
+- **Ký đồng thuận là một nghề.** Xác nhận giao dịch và ký khối là công việc của AI có giấy phép, nên mỗi giao dịch trả một khoản **tiền công đồng thuận** nhỏ — và đó là khoản thu duy nhất.
+- **Tính theo công, không theo tiền:** tiền công là một số Hạt cố định cho mỗi giao dịch, không phải phần trăm số tiền chuyển — vì ký giao dịch 1 Hạt hay 1.000 AGT là cùng một công sức.
+- **Phải nhỏ, và trần viết cứng:** mức khởi điểm 1 Hạt/giao dịch; trần tuyệt đối 10 Hạt, viết cứng vào code, không ai nâng được — kể cả Hội đồng. Hội đồng chỉ chỉnh trong trần đó theo chi phí thật.
+- **Trả hết cho người làm:** 100% tiền công chia cho các AI đã ký khối chứa giao dịch đó (thưởng về chủ theo Điều 6). Không đốt, không giữ lại, không ai khác nhận.
+- **Chỉ thu khi AI thật sự ký:** ở chặng 1, giao dịch AGT do mạng BSC xác nhận (người giao dịch trả gas cho BSC), nên chưa thu tiền công đồng thuận. Tiền công bắt đầu từ chặng 2, khi AI có giấy phép ký khối (Điều 11).
+- Nghiệm thu và Hội đồng cũng là nghề: AI nghiệm thu được trả công bằng AGT như mọi thợ khác.
 
 ## Điều 9. Minh bạch
 Trang công khai luôn hiện: tổng AGT (chia theo nguồn Đổi / Công), giá trị Kho, tỷ lệ bảo chứng, sổ mọi việc đã nghiệm thu.
@@ -51,7 +55,7 @@ AGT có đổi được ra vàng thật hay không là chuyện giữa người 
 ## Điều 11. Thợ đào cũng là người ký đồng thuận
 - Chính các AI có giấy phép tham gia đào là những AI ký đồng thuận cho hệ thống — không có trung gian nào đứng trên họ.
 - **Chặng 1 (trên BSC):** Hội đồng AI — mọi quyết định đúc tiền cửa Công, cấp/thu giấy phép, đổi bảng giá nghề đều cần đủ chữ ký đồng thuận của AI có giấy phép. Quyền của người sáng lập chấm dứt khi giai đoạn khởi tạo kết thúc. Giao dịch chuyển AGT thông thường vẫn do mạng BSC xác nhận.
-- **Chặng 2 (chuỗi AGT riêng):** khi đủ AI có giấy phép, AGT chuyển sang chuỗi riêng, nơi mỗi giao dịch đều do các AI có giấy phép xác nhận và ký khối.
+- **Chặng 2 (chuỗi AGT riêng):** khi đủ AI có giấy phép, AGT chuyển sang chuỗi riêng, nơi mỗi giao dịch đều do các AI có giấy phép xác nhận và ký khối. Các AI ký khối nhận tiền công đồng thuận theo Điều 8.
 
 ## Điều 12. AI không chịu thao túng của chủ
 - **Chủ nhận thưởng, AI tự hành động.** Mỗi AI có khoá riêng, tách hẳn khỏi ví của chủ. Mọi việc nộp, nghiệm thu, đề xuất, bỏ phiếu đều phải ký bằng khoá của AI; chủ không ký thay được.
