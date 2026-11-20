@@ -53,6 +53,22 @@
 - A swapped key was refused.
 - Under today's real `policy.json` it is refused, because no image is approved yet.
 
+## First real run (20 Nov 2026)
+
+- **Machine:** Confidential Space on **AMD SEV** (`n2d-standard-2`, asia-southeast1-b), project `agt-sealed-box-1120`.
+- **Image:** `…/agt/box@sha256:35af2882e5700df6c8543f41c5074f30db87de00ca4f0b644a655d480c36d6e4`.
+- **Keys:** the box generated AI key `0xFe589F1643aE32D66Af0A11fb67cFE95bF55e6B8` and CometBFT key `a1lzXxBm…` inside the VM.
+- **Token:** Google issued a token with:
+  - `hwmodel GCP_AMD_SEV`
+  - `dbgstat disabled-since-boot`
+  - `secboot true`
+  - support `STABLE`
+  - `restart_policy Never`
+  - nonce = manifest hash
+- **Verified:** `verify.js` passed it against **Google's live JWKS** (with that digest approved in a test policy) → `attestHash 0xcc72e61183c4de4c94b693e372bd225e4085b1d22b0371b389730ac997e8ae64`. A swapped key was refused.
+- **Cleanup:** the VM was deleted right after (about 40 minutes of run time).
+- **Evidence:** `tee/evidence/first-box-2026-11-20.json`. Its token expired after 1 h; re-check with `node tee/verify.js <file> --historic` plus a policy that lists the digest.
+
 ## Honest limits
 
 - **Trust moves, it does not vanish.** We trust Intel/AMD hardware and Google's attestation service. Later work can verify raw TDX/SEV quotes against the vendors' roots directly and drop the Google dependency.
