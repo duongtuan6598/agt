@@ -29,7 +29,7 @@ Last run (2026-11-20), after the Codex review fixes S-1 to S-9: all 16 checks pa
 
 ## Not done yet
 
-- **Network isolation for the client's build** (audit S-2, open). The container has no namespaces, so `builder` can still reach the network, but it can read nothing secret: tokens are used only by the box's process to clone. Planned: a network namespace or a microVM per build. This must be done before real client secrets are used.
+- **Isolation of the client's build** (audit S-2, G-3; open; long-term work is OFF until this is solved). In the box's container the sandbox user cannot create namespaces, so it can reach the network. Two things there are dangerous: the TEE attestation socket (impersonating the box) and the cloud metadata server (the owner's credentials). `isolation.js` makes the TEE sockets root-only, then proves as the sandbox user that nothing dangerous is reachable. If anything is, **the box refuses all long-term work**. On Google Cloud the metadata server is always reachable, so today the box fails closed. Planned: run each build in a QEMU microVM with no network device, sharing only the work tree.
 - **RISC-V check.** The RISC-V toolchain and QEMU are installed, but the fixture checks only Cortex-M3.
 - **Renode** (models of real peripherals) and the Xtensa/ESP32 toolchain are not in the image.
 - **Reproducible builds.** Alpine packages are not pinned to exact versions, so the image digest changes when the mirrors update. Pinning (or a snapshot mirror) is needed before the Council approves this image.
