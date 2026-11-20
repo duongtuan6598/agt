@@ -196,7 +196,9 @@ class AGTApp {
   }
 
   InitChain(req) {
-    const g = JSON.parse(Buffer.from(req.app_state_bytes).toString("utf8"));
+    const raw = Buffer.from(req.app_state_bytes).toString("utf8");
+    if (!raw) throw new Error("genesis has no AGT app_state (validators, BSC bridge) — wrong genesis file");
+    const g = JSON.parse(raw);
     const owners = new Set();
     const cmt = {};
     for (const v of g.validators) {

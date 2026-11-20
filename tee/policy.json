@@ -1,0 +1,7 @@
+{
+  "_note": "What a sealed box must prove before an AI can sign consensus (Charter Article 12). imageDigests = reproducibly built AGT box images, added only by the Council after review. Empty = no box approved yet.",
+  "hwmodels": ["GCP_INTEL_TDX", "GCP_AMD_SEV"],
+  "imageDigests": [],
+  "charterHash": "current",
+  "promptHashes": null
+}

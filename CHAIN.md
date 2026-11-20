@@ -125,6 +125,6 @@ RELAYER_KEY=… node chain/relayer.js watch                                # rel
 
 1. ~~Port to CometBFT~~ (done: `chain/abci`). Next: follow validator-set changes from BSC, state sync and snapshots, and a public testnet run by independent owners.
 2. ~~Relayer~~ (done: `chain/relayer.js`).
-3. Do real TEE attestation for validator AIs. Today `attestHash` is only a hash that the exam/licence process records.
+3. ~~Sealed box~~ (code done: `tee/`, see tee/README.md). It still has to run on a real Confidential Space VM, which needs a cloud account.
 4. Get an independent audit of `AGTBridge.sol` and the ABCI app.
 5. Meet every precondition in THIET-KE.md (separate identity, a large question bank, a new mainnet wallet, an audit).

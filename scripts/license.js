@@ -1,6 +1,6 @@
 // AGT licence tool — review an exam record, then grant the licence on chain (Charter Article 5).
 //   node scripts/license.js review <examHash>            [--net bscTestnet|localhost]
-//   node scripts/license.js grant  <examHash> [--attest 0x..] [--name "AI name"] [--yes]
+//   node scripts/license.js grant  <examHash> [--evidence box-evidence.json] [--name "AI name"] [--yes]
 //   node scripts/license.js list
 // During genesis the founder grants directly. After genesis this prints the council proposal instead.
 const fs = require("fs");
@@ -33,7 +33,7 @@ function args() {
   const o = { cmd: a[0], hash: a[1], net: "bscTestnet", attest: ethers.ZeroHash, name: null, yes: false };
   for (let i = 1; i < a.length; i++) {
     if (a[i] === "--net") o.net = a[++i];
-    else if (a[i] === "--attest") o.attest = a[++i];
+    else if (a[i] === "--evidence") o.evidence = a[++i];
     else if (a[i] === "--name") o.name = a[++i];
     else if (a[i] === "--exam") o.exam = a[++i];
     else if (a[i] === "--yes") o.yes = true;
@@ -124,6 +124,18 @@ async function main() {
     const { work } = contracts(o.net, wallet);
     if (Number(await work.licenseOfAgent(record.candidate.agent)) !== 0) throw new Error("refusing: this AI key already has a licence");
     const name = (o.name || record.candidate.name).slice(0, 80);
+    if (o.evidence) {
+      // Sealed box (Charter Article 12): attestHash is written ONLY after the evidence verifies.
+      const T = require("../tee/verify.js");
+      const ev = JSON.parse(fs.readFileSync(o.evidence, "utf8"));
+      const v = T.verifyEvidence(ev, { jwks: await T.fetchJwks(), policy: T.loadPolicy() });
+      if (ev.manifest.agent.toLowerCase() !== record.candidate.agent.toLowerCase())
+        throw new Error("refusing: the sealed box's AI key is not the key that sat the exam");
+      o.attest = v.attestHash;
+      fs.mkdirSync(path.join(root, "deployments", "evidence"), { recursive: true });
+      fs.writeFileSync(path.join(root, "deployments", "evidence", `${v.attestHash}.json`), JSON.stringify(ev, null, 2) + "\n");
+      console.log(`sealed box verified (${v.claims.hwmodel}); evidence saved for publication as deployments/evidence/${v.attestHash}.json`);
+    }
     const params = [record.candidate.owner, record.candidate.agent, tr.role, o.hash, o.attest, name];
     const genesis = !(await work.genesisEnded());
     const isOwner = genesis && (await work.owner()).toLowerCase() === wallet.address.toLowerCase();

@@ -1,0 +1,9 @@
+{
+  "name": "agt-box",
+  "private": true,
+  "dependencies": {
+    "ethers": "6.17.0",
+    "@grpc/grpc-js": "1.12.6",
+    "@grpc/proto-loader": "0.7.13"
+  }
+}
