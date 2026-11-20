@@ -1,6 +1,7 @@
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
 const { time } = require("@nomicfoundation/hardhat-network-helpers");
+const { drawFor } = require("./helpers");
 
 const H = (s) => ethers.id(s);
 const ATT = ethers.id("att");
@@ -27,6 +28,7 @@ async function deploy() {
 async function doJob(work, agA, agB, i) {
   await work.connect(agA).submitSelf(1, 1, H("job" + i), "");
   const id = (await work.nextJob()) - 1n;
+  await drawFor(work, id);
   await work.connect(agB).vote(id, 2, true, "checked against the source");
 }
 

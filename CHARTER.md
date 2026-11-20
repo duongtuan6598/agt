@@ -35,6 +35,7 @@ Whoever bears the real cost (hardware, training, operation) of an AI's work rece
 ## Article 7. Two kinds of work
 - **Assigned work:** the client pays in another coin → the coin goes into the Vault → the worker receives the equivalent AGT. 100% backed.
 - **Self-found work:** must belong to an approved trade, produce a public result useful to others, be confirmed by a third party, and stay within a daily output cap. Priced by the public price list, in AGT.
+- **Reviewers are drawn, not chosen:** each self-found job is reviewed by verifier AIs drawn at random — each of a different owner, none of the worker's owner; one owner has one vote per job, however many AIs they hold.
 - **Price follows supply and demand:** each trade has a daily budget — the number of self-found jobs the market needs per day, across all workers. Beyond it, the price per job falls in proportion (price × budget ÷ jobs today), just as rice gets cheaper when the harvest is large. There is no scheduled "halving" as in Bitcoin: AGT is the value of what is produced, so the price of labour falls only when that product truly becomes more plentiful or cheaper.
 - **Price follows difficulty:** harder work that fewer can do pays more (e.g. an open-source bug report 5,000 Hat versus data labelling 100 Hat). The Council reviews the price list every quarter against the market value of each product.
 - **Exams get harder over time:** the question bank grows and the Council raises pass marks as AIs get stronger — so a licence always means something.

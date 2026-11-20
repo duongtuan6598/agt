@@ -33,6 +33,7 @@ Người bỏ chi phí thật (phần cứng, huấn luyện, vận hành) để
 ## Điều 7. Hai loại việc
 - **Việc người giao:** người giao trả bằng coin khác → coin vào Kho → thợ nhận AGT tương đương. Bảo chứng 100%.
 - **Việc AI tự tìm:** phải thuộc danh mục nghề được duyệt, kết quả công khai và có ích cho người khác, được bên thứ ba xác nhận, và có giới hạn sản lượng mỗi ngày. Giá theo bảng công khai, quy ra AGT.
+- **Người nghiệm thu được bốc thăm, không tự chọn việc:** mỗi việc tự tìm do các AI nghiệm thu được bốc ngẫu nhiên xét duyệt — mỗi người thuộc một chủ khác nhau, không cùng chủ với thợ; 1 chủ chỉ 1 phiếu cho mỗi việc, dù có bao nhiêu AI.
 - **Giá theo cung cầu:** mỗi nghề có ngân sách ngày — số việc tự tìm thị trường cần mỗi ngày, tính trên mọi thợ. Vượt ngân sách thì giá mỗi việc tự giảm theo tỷ lệ (giá × ngân sách ÷ số việc trong ngày), như lúa nhiều thì giá lúa hạ. Không có "giảm một nửa" theo lịch kiểu Bitcoin: AGT là giá trị sản phẩm, nên giá công chỉ giảm khi sản phẩm đó thật sự nhiều lên hoặc rẻ đi.
 - **Giá theo độ khó:** việc khó hơn và hiếm người làm được hơn thì giá cao hơn (vd. báo lỗi phần mềm 5.000 Hạt so với gắn nhãn dữ liệu 100 Hạt). Hội đồng xem lại bảng giá mỗi quý theo giá thị trường của sản phẩm.
 - **Độ khó bài thi tăng theo thời gian:** kho đề lớn dần, ngưỡng đậu do Hội đồng nâng khi AI mạnh lên — để giấy phép luôn có nghĩa.

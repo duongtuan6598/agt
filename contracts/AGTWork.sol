@@ -76,6 +76,18 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
     mapping(uint256 => Job) public jobs;
     mapping(uint256 => mapping(uint256 => bool)) public voted; // job => giấy phép nghiệm thu
     mapping(uint256 => mapping(address => bool)) public ownerVoted; // job => CHỦ — 1 chủ 1 phiếu, dù có nhiều AI nghiệm thu
+
+    // ---------- Bốc thăm người nghiệm thu (audit F-2) ----------
+    // Người nghiệm thu việc tự tìm không được tự chọn việc: họ được bốc ngẫu nhiên từ các AI nghiệm thu
+    // của những CHỦ khác chủ thợ, theo mã băm của một khối chốt trước. Bốc xong mới được bỏ phiếu.
+    uint256 public constant DRAW_DELAY = 2; // số khối giữa lúc nộp việc và khối làm hạt giống
+    uint64 public constant REVIEW_WINDOW = 2 days; // quá hạn mà chưa xong thì ai cũng bốc lại được
+    uint256[] public verifierList; // giấy phép nghiệm thu đang hiệu lực
+    mapping(uint256 => uint256) internal verifierPos; // giấy phép => vị trí + 1
+    mapping(uint256 => uint256) public drawBlock; // việc => khối làm hạt giống cho lần bốc tới
+    mapping(uint256 => uint64) public drawnAt; // việc => lúc bốc gần nhất (0 = chưa bốc)
+    mapping(uint256 => uint32) public drawRound; // việc => lượt bốc hiện tại
+    mapping(uint256 => mapping(uint32 => mapping(uint256 => bool))) public assigned; // việc => lượt => giấy phép
     mapping(uint256 => uint256[]) internal _yesVoters;
     mapping(uint256 => uint256[]) internal _noVoters;
     mapping(uint256 => mapping(uint256 => mapping(uint256 => uint32))) public dailyCount; // giấy phép => nghề => ngày
@@ -128,6 +140,8 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
     event JobSubmitted(uint256 indexed id, uint256 indexed workerLicense, bytes32 result, string uri);
     event JobDisputed(uint256 indexed id);
     event Voted(uint256 indexed id, uint256 indexed verifierLicense, bool approve, string reason);
+    event ReviewersDrawn(uint256 indexed id, uint32 round, uint256[] licences);
+    event DrawExpired(uint256 indexed id);
     event JobAccepted(uint256 indexed id, address indexed paidTo, uint256 amount, bool minted);
     event JobRejected(uint256 indexed id);
     event JobRefunded(uint256 indexed id, address indexed client, uint256 amount);
@@ -140,6 +154,8 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
     error NotAllowed();
     error DailyCapReached();
     error AlreadyVoted();
+    error TooEarly();
+    error NotEnoughReviewers();
     error BadParams();
     error NotPassed();
     error NoReason();
@@ -183,6 +199,10 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
         everHolder[holder] = true;
         if (activeLicensesOf[holder]++ == 0) activeHolders++;
         if (role == Role.Verifier && activeVerifiersOf[holder]++ == 0) verifierHolders++;
+        if (role == Role.Verifier) {
+            verifierList.push(id);
+            verifierPos[id] = verifierList.length;
+        }
         emit LicenseGranted(id, holder, agent, role, examHash, attestHash, name);
         // Kết thúc khởi tạo tự động & vĩnh viễn: người sáng lập mất mọi quyền, chỉ còn Hội đồng AI.
         if (!genesisEnded && verifierHolders >= genesisExitVerifiers) {
@@ -198,6 +218,14 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
         l.active = false;
         if (--activeLicensesOf[l.holder] == 0) activeHolders--;
         if (l.role == Role.Verifier && --activeVerifiersOf[l.holder] == 0) verifierHolders--;
+        uint256 pos = verifierPos[id];
+        if (pos != 0) {
+            uint256 last = verifierList[verifierList.length - 1];
+            verifierList[pos - 1] = last;
+            verifierPos[last] = pos;
+            verifierList.pop();
+            delete verifierPos[id];
+        }
         emit LicenseRevoked(id);
     }
 
@@ -323,6 +351,7 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
         j.category = category;
         j.result = result;
         j.uri = uri;
+        drawBlock[id] = block.number + DRAW_DELAY;
         emit JobSubmitted(id, workerLicense, result, uri);
     }
 
@@ -389,6 +418,61 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
 
     // ---------- nghiệm thu ----------
 
+    /// Ai cũng gọi được (thường là chính AI thợ). Bốc đủ số phiếu còn thiếu, mỗi người một CHỦ khác nhau,
+    /// không cùng chủ với thợ, chưa từng bỏ phiếu việc này. Người được bốc có REVIEW_WINDOW để bỏ phiếu;
+    /// quá hạn thì bốc lượt mới (phiếu đã bỏ vẫn giữ, người cũ chưa bỏ phiếu mất quyền).
+    function drawReviewers(uint256 id) external returns (uint256[] memory picked) {
+        Job storage j = jobs[id];
+        if (j.kind != Kind.SelfFound || j.status != Status.Submitted) revert BadState();
+        if (drawnAt[id] != 0 && block.timestamp < drawnAt[id] + REVIEW_WINDOW) revert TooEarly();
+        uint256 b = drawBlock[id];
+        if (block.number <= b) revert TooEarly();
+        bytes32 h = blockhash(b);
+        if (h == bytes32(0)) {
+            // Quá 256 khối mà chưa ai bốc: việc bị huỷ, KHÔNG hẹn khối mới. Nếu cho hẹn lại, thợ gian lận
+            // (kết quả bốc ai cũng tính trước được) sẽ chờ cho hết hạn đến khi bốc trúng người quen.
+            // Thợ trung thực luôn bốc ngay để được trả công; AI nghiệm thu cũng có lợi khi bốc sớm.
+            j.status = Status.Rejected;
+            emit DrawExpired(id);
+            emit JobRejected(id);
+            return picked;
+        }
+        uint8 approvals = categories[j.category].approvals;
+        uint256 need = approvals > j.yes ? approvals - j.yes : 1;
+        uint32 round = ++drawRound[id];
+        picked = _pick(id, round, keccak256(abi.encode(h, id, round)), need);
+        drawnAt[id] = uint64(block.timestamp);
+        emit ReviewersDrawn(id, round, picked);
+    }
+
+    function _pick(uint256 id, uint32 round, bytes32 seed, uint256 need) internal returns (uint256[] memory picked) {
+        uint256[] memory pool = verifierList; // bản sao trong bộ nhớ để xáo
+        uint256 n = pool.length;
+        picked = new uint256[](need);
+        address[] memory owners = new address[](need);
+        uint256 got;
+        for (uint256 i; i < n && got < need; i++) {
+            uint256 r = i + (uint256(keccak256(abi.encode(seed, i))) % (n - i)); // xáo Fisher–Yates từng bước
+            (pool[i], pool[r]) = (pool[r], pool[i]);
+            address o = licenses[pool[i]].holder;
+            if (!_eligible(id, o) || _seen(owners, got, o)) continue;
+            owners[got] = o;
+            picked[got++] = pool[i];
+            assigned[id][round][pool[i]] = true;
+        }
+        if (got < need) revert NotEnoughReviewers();
+    }
+
+    function _eligible(uint256 id, address o) internal view returns (bool) {
+        Job storage j = jobs[id];
+        return o != licenses[j.workerLicense].holder && o != j.client && !ownerVoted[id][o];
+    }
+
+    function _seen(address[] memory owners, uint256 count, address o) internal pure returns (bool) {
+        for (uint256 k; k < count; k++) if (owners[k] == o) return true;
+        return false;
+    }
+
     function vote(uint256 id, uint256 verifierLicense, bool approve, string calldata reason) external nonReentrant {
         _requireAgent(verifierLicense, Role.Verifier);
         if (bytes(reason).length == 0) revert NoReason();
@@ -399,6 +483,7 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
         address v = licenses[verifierLicense].holder;
         if (v == licenses[j.workerLicense].holder || v == j.client || msg.sender == j.client) revert NotAllowed();
         if (voted[id][verifierLicense] || ownerVoted[id][v]) revert AlreadyVoted();
+        if (selfFound && (drawnAt[id] == 0 || !assigned[id][drawRound[id]][verifierLicense])) revert NotAllowed();
         voted[id][verifierLicense] = true;
         ownerVoted[id][v] = true;
         emit Voted(id, verifierLicense, approve, reason);

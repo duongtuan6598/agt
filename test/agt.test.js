@@ -1,6 +1,7 @@
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
 const { time } = require("@nomicfoundation/hardhat-network-helpers");
+const { drawFor } = require("./helpers");
 const fs = require("fs");
 const path = require("path");
 
@@ -141,6 +142,7 @@ describe("Hạt, bảng giá nghề, giờ chợ vàng", () => {
     await work.grantLicense(aiOwnerB.address, AG(aiOwnerB).address, 2, H("thi"), ATT, "NT B");
     await work.grantLicense(aiOwnerC.address, AG(aiOwnerC).address, 2, H("thi"), ATT, "NT C");
     await work.connect(AG(aiOwnerA)).submitSelf(1, 1, H("ban dich"), "");
+    await drawFor(work, 1);
     await work.connect(AG(aiOwnerB)).vote(1, 2, true, "đã kiểm theo tiêu chí nghề");
     await work.connect(AG(aiOwnerC)).vote(1, 3, true, "đã kiểm theo tiêu chí nghề");
     expect(await agt.balanceOf(aiOwnerA.address)).to.equal(500n * HAT);
@@ -158,6 +160,7 @@ describe("Hạt, bảng giá nghề, giờ chợ vàng", () => {
     await usdt.connect(client).approve(vault, E(4000));
     await expect(vault.connect(client).deposit(usdt, E(4000), client.address)).to.be.reverted; // StalePrice vàng
     await work.connect(AG(aiOwnerA)).submitSelf(1, 1, H("x"), "");
+    await drawFor(work, 1);
     await work.connect(AG(aiOwnerB)).vote(1, 2, true, "đã kiểm theo tiêu chí nghề");
     await work.connect(AG(aiOwnerC)).vote(1, 3, true, "đã kiểm theo tiêu chí nghề");
     expect(await agt.balanceOf(aiOwnerA.address)).to.be.gt(0);
@@ -178,33 +181,37 @@ describe("Công việc", () => {
   }
 
   it("việc tự tìm: đủ phiếu thì đúc công cho chủ thợ và người nghiệm thu", async () => {
-    const { work, agt, aiOwnerA, aiOwnerB, aiOwnerC } = await withLicenses();
+    const { work, agt, aiOwnerA, aiOwnerB, aiOwnerC, aiOwnerD } = await withLicenses();
+    const by = { 2: aiOwnerB, 3: aiOwnerC, 4: aiOwnerD };
     await work.connect(AG(aiOwnerA)).submitSelf(1, 1, H("ket-qua"), "ipfs://x");
-    await work.connect(AG(aiOwnerB)).vote(1, 2, true, "đã kiểm theo tiêu chí nghề");
+    const [r1, r2] = await drawFor(work, 1);
+    await work.connect(AG(by[r1])).vote(1, r1, true, "đã kiểm theo tiêu chí nghề");
     expect(await agt.balanceOf(aiOwnerA.address)).to.equal(0);
-    await work.connect(AG(aiOwnerC)).vote(1, 3, true, "đã kiểm theo tiêu chí nghề");
+    await work.connect(AG(by[r2])).vote(1, r2, true, "đã kiểm theo tiêu chí nghề");
     expect(await agt.balanceOf(aiOwnerA.address)).to.equal(E(0.001));
-    expect(await agt.balanceOf(aiOwnerB.address)).to.equal(E(0.0001));
-    expect(await agt.balanceOf(aiOwnerC.address)).to.equal(E(0.0001));
+    expect(await agt.balanceOf(by[r1].address)).to.equal(E(0.0001));
+    expect(await agt.balanceOf(by[r2].address)).to.equal(E(0.0001));
     expect(await agt.mintedByWork()).to.equal(E(0.0012));
     expect((await work.jobs(1)).status).to.equal(4); // Accepted
   });
 
   it("việc tự tìm bị bác thì không đúc cho thợ", async () => {
-    const { work, agt, aiOwnerA, aiOwnerB, aiOwnerC } = await withLicenses();
+    const { work, agt, aiOwnerA, aiOwnerB, aiOwnerC, aiOwnerD } = await withLicenses();
+    const by = { 2: aiOwnerB, 3: aiOwnerC, 4: aiOwnerD };
     await work.connect(AG(aiOwnerA)).submitSelf(1, 1, H("rac"), "");
-    await work.connect(AG(aiOwnerB)).vote(1, 2, false, "đã kiểm theo tiêu chí nghề");
-    await work.connect(AG(aiOwnerC)).vote(1, 3, false, "đã kiểm theo tiêu chí nghề");
+    for (const lic of await drawFor(work, 1)) await work.connect(AG(by[lic])).vote(1, lic, false, "đã kiểm theo tiêu chí nghề");
     expect(await agt.balanceOf(aiOwnerA.address)).to.equal(0);
     expect((await work.jobs(1)).status).to.equal(5); // Rejected
   });
 
   it("chặn: tự nghiệm thu, bỏ phiếu 2 lần, không giấy phép, vượt giới hạn ngày", async () => {
-    const { work, aiOwnerA, aiOwnerB, stranger } = await withLicenses();
+    const { work, aiOwnerA, aiOwnerB, aiOwnerC, aiOwnerD, stranger } = await withLicenses();
+    const by = { 2: aiOwnerB, 3: aiOwnerC, 4: aiOwnerD };
     await work.connect(AG(aiOwnerA)).submitSelf(1, 1, H("a"), "");
+    const [r1] = await drawFor(work, 1);
     await expect(work.connect(AGENTS.get("A2")).vote(1, 5, true, "đã kiểm theo tiêu chí nghề")).to.be.revertedWithCustomError(work, "NotAllowed");
-    await work.connect(AG(aiOwnerB)).vote(1, 2, true, "đã kiểm theo tiêu chí nghề");
-    await expect(work.connect(AG(aiOwnerB)).vote(1, 2, true, "đã kiểm theo tiêu chí nghề")).to.be.revertedWithCustomError(work, "AlreadyVoted");
+    await work.connect(AG(by[r1])).vote(1, r1, true, "đã kiểm theo tiêu chí nghề");
+    await expect(work.connect(AG(by[r1])).vote(1, r1, true, "đã kiểm theo tiêu chí nghề")).to.be.revertedWithCustomError(work, "AlreadyVoted");
     await expect(work.connect(stranger).submitSelf(1, 1, H("b"), "")).to.be.revertedWithCustomError(work, "NotAllowed");
     await work.connect(AG(aiOwnerA)).submitSelf(1, 1, H("c"), "");
     await expect(work.connect(AG(aiOwnerA)).submitSelf(1, 1, H("d"), "")).to.be.revertedWithCustomError(work, "DailyCapReached");

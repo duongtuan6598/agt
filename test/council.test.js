@@ -1,6 +1,7 @@
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
 const { time } = require("@nomicfoundation/hardhat-network-helpers");
+const { drawFor } = require("./helpers");
 
 const E = (n) => ethers.parseEther(String(n));
 const H = (s) => ethers.id(s);
@@ -91,19 +92,19 @@ describe("AI không chịu thao túng của chủ", () => {
 
   it("thưởng vẫn về ví chủ dù AI là người làm", async () => {
     const d = await afterGenesis();
-    const { work, agt, A, B, C, ag } = d;
+    const { work, agt, A, B, C, D, ag } = d;
     // Hội đồng mở nghề 1
     const target = await work.getAddress();
     await work.connect(ag.A).propose(1, target, call(work, "setCategory", [1, "Dịch", E(0.0005), E(0.00005), 5, 2, true]), LD);
     for (const [a, lic] of [[ag.B, 2], [ag.C, 3], [ag.D, 5]]) await work.connect(a).councilVote(1, lic, true, LD);
     await work.execute(1);
     await work.connect(ag.A).submitSelf(1, 1, H("ban dich"), "ipfs://x");
-    await work.connect(ag.B).vote(1, 2, true, "đủ ý, đúng thuật ngữ");
-    await work.connect(ag.C).vote(1, 3, true, "đủ ý, đúng thuật ngữ");
+    const by = { 2: [ag.B, B], 3: [ag.C, C], 4: [ag.B2, B], 5: [ag.D, D] };
+    const drawn = await drawFor(work, 1);
+    for (const lic of drawn) await work.connect(by[lic][0]).vote(1, lic, true, "đủ ý, đúng thuật ngữ");
     expect(await agt.balanceOf(A.address)).to.equal(E(0.0005));
     expect(await agt.balanceOf(ag.A.address)).to.equal(0);
-    expect(await agt.balanceOf(B.address)).to.equal(E(0.00005));
-    expect(await agt.balanceOf(C.address)).to.equal(E(0.00005));
+    for (const lic of drawn) expect(await agt.balanceOf(by[lic][1].address)).to.equal(E(0.00005));
   });
 });
 
