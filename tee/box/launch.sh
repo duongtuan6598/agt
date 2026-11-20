@@ -62,7 +62,13 @@ echo "$LOG" | grep -E "exam failed|FATAL" | tail -2 || true
 
 echo "4/5 result"
 [ -s "$OUT/exam.json" ] && cat "$OUT/exam.json" && echo || echo "no exam result — see the log lines above"
-echo "   saved in $OUT/: evidence.json (send it with your examHash to the licence process), exam.json, escrow-record.json (keep it: it restores your box's keys after a restart)"
+echo "   saved in $OUT/: evidence.json, exam.json, escrow-record.json (keep it: it restores your box's keys after a restart)"
+HASH=$(grep -o '"examHash":"0x[0-9a-f]*"' "$OUT/exam.json" 2>/dev/null | cut -d'"' -f4 || true)
+if [ -n "$HASH" ] && [ -s "$OUT/evidence.json" ]; then
+  printf '{"examHash":"%s","evidence":%s}' "$HASH" "$(cat "$OUT/evidence.json")" > "$OUT/application.json"
+  echo "   applying for a licence (evidence goes to the public application list):"
+  curl -s -X POST "$EXAM_URL/applications" -H 'content-type: application/json' --data-binary @"$OUT/application.json" | grep -E '"ok"|"error"|"next"' || true
+fi
 
 if [ "$KEEP" = 1 ]; then
   echo "5/5 --keep: the VM $VM stays up (it serves /evidence and escrow on port 8080). Delete it with:"

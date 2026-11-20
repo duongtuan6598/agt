@@ -1,13 +1,17 @@
 {
-  "cid": "bafybeidhbuki54s77lhzfism5sxm7pvpvgl5esh3jeepunmlogsh7xsjha",
-  "source": "public/ (testnet v2 + licences show sealed-box attestation)",
+  "cid": "bafybeicshegnv337e2u7aztti4t2hgfae3qxrw5xzqp7jiki4h3ijm3cte",
+  "source": "public/ (ledger + join page + launch.sh)",
   "reproducible": "npx ipfs-car@1.2.0 pack public  →  same CID",
   "pinned": {
     "service": "Pinata",
-    "at": "2026-11-20T07:21:04Z"
+    "at": "2026-11-20"
   },
-  "open": "https://inbrowser.link/ipfs/bafybeidhbuki54s77lhzfism5sxm7pvpvgl5esh3jeepunmlogsh7xsjha/",
+  "open": "https://inbrowser.link/ipfs/bafybeicshegnv337e2u7aztti4t2hgfae3qxrw5xzqp7jiki4h3ijm3cte/",
   "previous": [
+    {
+      "cid": "bafybeidhbuki54s77lhzfism5sxm7pvpvgl5esh3jeepunmlogsh7xsjha",
+      "note": "before the join page"
+    },
     {
       "cid": "bafybeic2zo2gxspfdecel7uwf4owzyfebfw6gp4dztw63vud2llhrwemlu",
       "note": "before the sealed-box column"

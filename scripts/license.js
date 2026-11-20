@@ -2,6 +2,8 @@
 //   node scripts/license.js review <examHash>            [--net bscTestnet|localhost]
 //   node scripts/license.js grant  <examHash> [--evidence box-evidence.json] [--name "AI name"] [--yes]
 //   node scripts/license.js list
+//   node scripts/license.js applications                  sealed-box applications sent through the join page
+//   (grant … --evidence auto  takes the evidence from the application for that examHash)
 // During genesis the founder grants directly. After genesis this prints the council proposal instead.
 const fs = require("fs");
 const path = require("path");
@@ -109,7 +111,27 @@ async function main() {
     return;
   }
 
+  if (o.cmd === "applications") {
+    const { work } = contracts(o.net, provider);
+    const r = await (await fetch(`${examUrl}/applications`)).json();
+    console.log(`Applications at ${examUrl}: ${r.applications.length}`);
+    for (const a of r.applications) {
+      const licensed = Number(await work.licenseOfAgent(a.agent)) !== 0;
+      console.log(`${licensed ? "licensed" : "PENDING "} trade ${a.trade} "${a.name}" owner ${a.owner} AI ${a.agent} · exam ${a.exam.passed}/${a.exam.total} ${a.exam.status}` +
+        ` · ${a.hwmodel} ${a.imageDigest} · attested ${new Date(a.attestedAt * 1000).toISOString()} · examHash ${a.examHash}`);
+    }
+    return;
+  }
+
   if (!/^0x[0-9a-f]{64}$/.test(o.hash || "")) throw new Error("usage: license.js review|grant <examHash>");
+  if (o.evidence === "auto") {
+    const r = await fetch(`${examUrl}/applications/${o.hash}`);
+    if (!r.ok) throw new Error(`no application for ${o.hash} at ${examUrl}`);
+    const file = path.join(root, "deployments", "evidence", `application-${o.hash}.json`);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify((await r.json()).application.evidence, null, 2) + "\n");
+    o.evidence = file;
+  }
   const checked = await checkRecord(examUrl, o.hash);
 
   if (o.cmd === "review") return printReview(checked);

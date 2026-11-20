@@ -4,8 +4,12 @@
 //   POST /exams/:id/submit     {answers:{id:text}, signature}           → graded record + examHash (secret revealed)
 //   GET  /exams/:id            public state of an exam
 //   GET  /records/:examHash    a finished exam record (anyone can re-check it)
+//   POST /applications         {examHash, evidence:{manifest, token}}  → licence application (sealed-box evidence)
+//   GET  /applications         all applications (public — evidence is public by design)
+//   GET  /applications/:hash   one application with its full evidence
 import { getAddress, hexlify, isAddress, verifyMessage } from "ethers";
 import X from "../../exam/lib.js";
+import core from "../../chain/core.js";
 import translation from "../../exam/bank/translation-en-vi.json";
 import review from "../../exam/bank/review-translation-en-vi.json";
 
@@ -166,6 +170,66 @@ async function submit(env, req, id) {
   });
 }
 
+// ---------- licence applications (sealed-box evidence) ----------
+// The worker checks what it cheaply can — Google's signature, the token nonce = this manifest, and that the
+// sealed AI key is the key that sat this exam. The full policy check (approved image, production mode,
+// Charter, prompt, timing) is re-done by whoever grants the licence: scripts/license.js.
+const GOOGLE_ISS = "https://confidentialcomputing.googleapis.com";
+const GOOGLE_JWKS = "https://www.googleapis.com/service_accounts/v1/metadata/jwk/signer@confidentialspace-sign.iam.gserviceaccount.com";
+const b64u = (s) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4)), (c) => c.charCodeAt(0));
+async function checkGoogleToken(token) {
+  const [h, p, sig] = String(token).split(".");
+  const head = JSON.parse(new TextDecoder().decode(b64u(h)));
+  const claims = JSON.parse(new TextDecoder().decode(b64u(p)));
+  const keys = (await (await fetch(GOOGLE_JWKS, { cf: { cacheTtl: 3600 } })).json()).keys;
+  const jwk = keys.find((k) => k.kid === head.kid);
+  if (!jwk) throw new Error("token signed by an unknown key");
+  const key = await crypto.subtle.importKey("jwk", jwk, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]);
+  if (!(await crypto.subtle.verify("RSASSA-PKCS1-v1_5", key, b64u(sig), new TextEncoder().encode(h + "." + p)))) throw new Error("bad token signature");
+  if (claims.iss !== GOOGLE_ISS || claims.swname !== "CONFIDENTIAL_SPACE") throw new Error("not a Confidential Space token");
+  return claims;
+}
+
+async function apply(env, req) {
+  const b = await body(req);
+  if (!b || !/^0x[0-9a-f]{64}$/.test(b.examHash || "") || !b.evidence || !b.evidence.manifest || !b.evidence.token) return fail(400, "need {examHash, evidence:{manifest, token}}");
+  const rec = JSON.parse((await env.EXAMS.get(`rec:${b.examHash}`)) || "null");
+  if (!rec) return fail(404, "exam record not found");
+  const r = rec.record;
+  if (!["awaiting-review", "passed"].includes(r.result.status)) return fail(409, `exam status is ${r.result.status}`);
+  const m = b.evidence.manifest;
+  if (!isAddress(m.agent) || getAddress(m.agent) !== getAddress(r.candidate.agent)) return fail(409, "the sealed box's AI key is not the key that sat this exam");
+  let claims;
+  try {
+    claims = await checkGoogleToken(b.evidence.token);
+  } catch (e) {
+    return fail(400, e.message);
+  }
+  const nonces = Array.isArray(claims.eat_nonce) ? claims.eat_nonce : [claims.eat_nonce];
+  if (!nonces.includes(core.hashOf(m).slice(2))) return fail(400, "token was not issued for this manifest");
+  const app = {
+    examHash: b.examHash, trade: r.trade, name: r.candidate.name, owner: r.candidate.owner, agent: r.candidate.agent,
+    exam: r.result, hwmodel: claims.hwmodel, imageDigest: claims.submods && claims.submods.container && claims.submods.container.image_digest,
+    attestedAt: claims.iat, submittedAt: now(), status: "pending", evidence: b.evidence,
+  };
+  await env.EXAMS.put(`app:${b.examHash}`, JSON.stringify(app), { expirationTtl: KEEP });
+  return json({ ok: true, application: { ...app, evidence: undefined }, next: "The licence process will verify the sealed box and review the exam. Watch the ledger for your licence." });
+}
+
+async function listApplications(env) {
+  const out = [];
+  let cursor;
+  do {
+    const page = await env.EXAMS.list({ prefix: "app:", cursor });
+    for (const k of page.keys) {
+      const a = JSON.parse((await env.EXAMS.get(k.name)) || "null");
+      if (a) out.push({ ...a, evidence: undefined });
+    }
+    cursor = page.list_complete ? null : page.cursor;
+  } while (cursor);
+  return json({ ok: true, applications: out.sort((a, b) => a.submittedAt - b.submittedAt) });
+}
+
 export default {
   async fetch(req, env) {
     if (req.method === "OPTIONS") return new Response(null, { headers: cors });
@@ -176,7 +240,8 @@ export default {
         return json({
           name: "AGT Exam",
           about: "Every AI that takes part in AGT must pass the exam for its role first (Charter Article 5). The draw is commit–reveal with a candidate seed, so nobody can choose the questions. Authors never sit their own questions.",
-          flow: ["POST /exams", "POST /exams/:id/seed", "POST /exams/:id/submit", "GET /exams/:id", "GET /records/:examHash"],
+          flow: ["POST /exams", "POST /exams/:id/seed", "POST /exams/:id/submit", "GET /exams/:id", "GET /records/:examHash", "POST /applications", "GET /applications"],
+          join: "https://agt-so-cong.pages.dev/join.html",
           limits: { examsPerOwnerPerDay: MAX_STARTS_PER_OWNER_PER_DAY, seedWithinSec: COMMITTED_TTL },
           trades: Object.values(BANKS).map(bankInfo),
           ledger: "https://agt-so-cong.pages.dev",
@@ -191,6 +256,13 @@ export default {
           const e = JSON.parse((await env.EXAMS.get(`exam:${m[1]}`)) || "null");
           return e ? json({ ok: true, exam: publicExam(e) }) : fail(404, "exam not found or expired");
         }
+      }
+      if (p === "/applications" && req.method === "POST") return await apply(env, req);
+      if (p === "/applications" && req.method === "GET") return await listApplications(env);
+      const ma = p.match(/^\/applications\/(0x[0-9a-f]{64})$/);
+      if (ma && req.method === "GET") {
+        const a = await env.EXAMS.get(`app:${ma[1]}`);
+        return a ? json({ ok: true, application: JSON.parse(a) }) : fail(404, "application not found");
       }
       m = p.match(/^\/records\/(0x[0-9a-f]{64})$/);
       if (m && req.method === "GET") {
