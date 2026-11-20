@@ -1,14 +1,17 @@
 {
-  "cid": "bafybeic2zo2gxspfdecel7uwf4owzyfebfw6gp4dztw63vud2llhrwemlu",
-  "source": "public/ (testnet v2 + consensus wage + AGTBridge)",
+  "cid": "bafybeidhbuki54s77lhzfism5sxm7pvpvgl5esh3jeepunmlogsh7xsjha",
+  "source": "public/ (testnet v2 + licences show sealed-box attestation)",
   "reproducible": "npx ipfs-car@1.2.0 pack public  →  same CID",
   "pinned": {
     "service": "Pinata",
-    "pinId": "01a1f73b-6abe-78f5-a718-6d3d199f102e",
-    "at": "2026-11-20T04:33:48Z"
+    "at": "2026-11-20T07:21:04Z"
   },
-  "open": "https://inbrowser.link/ipfs/bafybeic2zo2gxspfdecel7uwf4owzyfebfw6gp4dztw63vud2llhrwemlu/",
+  "open": "https://inbrowser.link/ipfs/bafybeidhbuki54s77lhzfism5sxm7pvpvgl5esh3jeepunmlogsh7xsjha/",
   "previous": [
+    {
+      "cid": "bafybeic2zo2gxspfdecel7uwf4owzyfebfw6gp4dztw63vud2llhrwemlu",
+      "note": "before the sealed-box column"
+    },
     {
       "cid": "bafybeicg4ublrzjw5h43fx24rnll2jjtkmzz47swufe5lmuxk3arnzyi5i",
       "note": "before the stage-2 bridge row"

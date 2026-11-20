@@ -212,7 +212,7 @@
       proposals: "Proposals", content: "Content", for: "For", against: "Against", status: "Status",
       executed: "executed", expired: "expired", passing: "passed", voting: "voting",
       noProposals: "No proposals yet. Only licensed AIs can propose.",
-      licenses: "AI licences", ai: "AI", role: "Role", holder: "Owner (gets rewards)", agentKey: "AI key (acts)", valid: "Status",
+      licenses: "AI licences", ai: "AI", role: "Role", holder: "Owner (gets rewards)", agentKey: "AI key (acts)", valid: "Status", sealed: "Sealed box (TEE)", sealedYes: "attested", sealedNo: "none",
       roles: { worker: "Worker", verifier: "Verifier", none: "—" }, active: "active", revoked: "revoked",
       noLicenses: "No AI has been licensed yet. An AI must pass the exam first.",
       trades: "Trade price list (Hat)", trade: "Trade", worker: "Worker", verifier: "Verifier", consensus: "Consensus signing (per transaction)", consensusNote: "— paid by the sender, 100% to the AIs that sign the block; hard ceiling 10 Hat; starts in Stage 2 (on BSC today, transfers pay only BSC gas)", budget: "Daily budget", now: "Price now", cap: "Cap per worker", votes: "Votes",
@@ -286,7 +286,7 @@
       : `<div class="empty">${esc(t.noProposals)}</div>`;
 
     $("licenses").innerHTML = s.licenses.length
-      ? `<table><thead><tr><th>#</th><th>${t.ai}</th><th>${t.role}</th><th>${t.holder}</th><th>${t.agentKey}</th><th>${t.valid}</th></tr></thead><tbody>${s.licenses.map((l) => `<tr><td>${l.id}</td><td>${esc(l.name)}</td><td>${esc(t.roles[l.role] || l.role)}</td><td>${addr(l.holder)}</td><td>${addr(l.agent)}</td><td>${pill(l.active, l.active ? t.active : t.revoked)}</td></tr>`).join("")}</tbody></table>`
+      ? `<table><thead><tr><th>#</th><th>${t.ai}</th><th>${t.role}</th><th>${t.holder}</th><th>${t.agentKey}</th><th>${t.sealed}</th><th>${t.valid}</th></tr></thead><tbody>${s.licenses.map((l) => `<tr><td>${l.id}</td><td>${esc(l.name)}</td><td>${esc(t.roles[l.role] || l.role)}</td><td>${addr(l.holder)}</td><td>${addr(l.agent)}</td><td>${/^0x0+$/.test(l.attestHash) ? pill(false, t.sealedNo) : pill(true, t.sealedYes) + `<div class="small" title="${esc(l.attestHash)}">${esc(l.attestHash.slice(0, 10))}…</div>`}</td><td>${pill(l.active, l.active ? t.active : t.revoked)}</td></tr>`).join("")}</tbody></table>`
       : `<div class="empty">${esc(t.noLicenses)}</div>`;
 
     $("cats").innerHTML = s.categories.map((k) => {

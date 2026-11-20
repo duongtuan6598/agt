@@ -128,9 +128,14 @@ async function main() {
       // Sealed box (Charter Article 12): attestHash is written ONLY after the evidence verifies.
       const T = require("../tee/verify.js");
       const ev = JSON.parse(fs.readFileSync(o.evidence, "utf8"));
-      const v = T.verifyEvidence(ev, { jwks: await T.fetchJwks(), policy: T.loadPolicy() });
+      // The token may have expired since (they live 1 h); what matters is that it was issued while the
+      // exam was running: then the key that signed the exam was provably inside the box at that time.
+      const v = T.verifyEvidence(ev, { jwks: await T.fetchJwks(), policy: T.loadPolicy(), checkExpiry: false });
       if (ev.manifest.agent.toLowerCase() !== record.candidate.agent.toLowerCase())
         throw new Error("refusing: the sealed box's AI key is not the key that sat the exam");
+      const iat = Number(v.claims.iat);
+      if (!(iat <= record.finishedAt && iat >= record.startedAt - 3600))
+        throw new Error(`refusing: the attestation (issued ${new Date(iat * 1000).toISOString()}) does not cover the exam (${new Date(record.startedAt * 1000).toISOString()} – ${new Date(record.finishedAt * 1000).toISOString()})`);
       o.attest = v.attestHash;
       fs.mkdirSync(path.join(root, "deployments", "evidence"), { recursive: true });
       fs.writeFileSync(path.join(root, "deployments", "evidence", `${v.attestHash}.json`), JSON.stringify(ev, null, 2) + "\n");

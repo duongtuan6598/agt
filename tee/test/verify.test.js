@@ -54,9 +54,10 @@ const cases = [
 for (const [name, make, re] of cases)
   test(`refuses ${name}`, () => assert.throws(() => check(make(manifest())), re));
 
-test("the real policy approves no image yet — nothing can pass until the Council approves a reproducible build", () => {
+test("the real policy approves only the images listed in it — any other image is refused", () => {
   const p = T.loadPolicy();
-  assert.deepEqual(p.imageDigests, []);
+  assert.ok(!p.imageDigests.includes(IMAGE));
+  for (const d of p.imageDigests) assert.match(d, /^sha256:[0-9a-f]{64}$/);
   const m = manifest();
   assert.throws(() => T.verifyEvidence({ manifest: m, token: sign(claims(m)) }, { jwks, policy: p, now }), /not an approved AGT image/);
 });
