@@ -216,6 +216,36 @@ describe("Engagement — milestones, hardware test, warranty (embedded trade)", 
   });
 });
 
+describe("Engagement — the worker's claim when the client's CI fails or stays silent (§13)", () => {
+  it("the AI may ask reviewers to decide a pending milestone: once, before the deadline; it freezes the client's reclaim", async () => {
+    const { agt, eng, client, W, wAI, stranger, plan, opened, decide, empty } = await world();
+    const id = await opened(plan([E(1)], [0], [30], 0, 0));
+    await expect(eng.connect(stranger).claimDone(id, 0, H("c"), H("ev"))).to.be.revertedWithCustomError(eng, "NotWorker");
+    await eng.connect(wAI).claimDone(id, 0, H("commit"), H("evidence: CI silent for 6 h, 3 rounds"));
+    await expect(eng.connect(wAI).claimDone(id, 0, H("c2"), H("ev2"))).to.be.revertedWithCustomError(eng, "BadState"); // once
+    await time.increase(31 * DAY);
+    await expect(eng.connect(stranger).reclaimLate(id, 0)).to.be.revertedWithCustomError(eng, "BadState"); // frozen while reviewers decide
+    await decide((await eng.milestone(id, 0)).dispute, true);
+    expect(await agt.balanceOf(W.address)).to.equal(E(1));
+    expect((await eng.reputation(1)).disputesWon).to.equal(1);
+    await empty();
+  });
+
+  it("reviewers who find the milestone not done refund the client; a claim after the deadline is refused", async () => {
+    const { agt, eng, client, wAI, plan, opened, decide, empty } = await world();
+    const before = await agt.balanceOf(client.address);
+    const id = await opened(plan([E(1), E(1)], [0, 0], [10, 20], 0, 0));
+    await eng.connect(wAI).claimDone(id, 0, H("commit"), H("evidence"));
+    await decide((await eng.milestone(id, 0)).dispute, false);
+    expect((await eng.reputation(1)).disputesLost).to.equal(1);
+    await time.increase(21 * DAY);
+    await expect(eng.connect(wAI).claimDone(id, 1, H("late"), H("ev"))).to.be.revertedWithCustomError(eng, "BadState");
+    await eng.reclaimLate(id, 1);
+    expect(await agt.balanceOf(client.address)).to.equal(before);
+    await empty();
+  });
+});
+
 describe("Maintenance — monthly retainer, service levels measured on chain", () => {
   async function retainer(w, fee = E(1), penaltyBps = 2000) {
     await w.mnt.connect(w.client).open(1, H("maintain firmware v2"), fee, penaltyBps);

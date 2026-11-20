@@ -93,7 +93,7 @@ async function world() {
     await eng.connect(client).open(1, h, plan);
     return Number(await eng.nextEngagement()) - 1;
   }
-  return { s, eng, mnt, client, wAI, repo, content, sealFor, model, calls, ci, loop, open, brief, store, state, keys };
+  return { s, agt, eng, mnt, client, wAI, repo, content, sealFor, model, calls, ci, loop, open, brief, store, state, keys };
 }
 
 const branchFile = (bare, branch, file) => execFileSync("git", ["--git-dir", bare, "show", `${branch}:${file}`], { encoding: "utf8" });
@@ -124,16 +124,23 @@ describe("Sealed AI long-term work loop — the client's CI runs N1–N4 (§12)"
     expect(calls.ci.every((q) => q.token === "token-for-this-repo" && q.required.length === 3)).to.equal(true);
   });
 
-  it("CI failure goes back to the model; never delivered while failing; gives up after the last round", async () => {
-    const { eng, wAI, sealFor, loop, open, ci, calls } = await world();
+  it("CI failure goes back to the model; never delivered while failing; after the last round the AI asks reviewers, who side with a FAILING CI", async () => {
+    const { s: signers, eng, wAI, sealFor, loop, open, ci, calls, store } = await world();
     const id = await open();
     sealFor("engagement", id);
     const ai = loop(wAI);
     ci.plan = ["failure", "failure", "failure"];
     for (let i = 0; i < 6; i++) await ai.step();
-    expect(Number((await eng.milestone(id, 0)).state)).to.equal(1); // never delivered
     expect(calls.engineer.length).to.equal(3);
     expect(calls.engineer[1].failure).to.contain("'UART0' undeclared"); // the CI's failure text reached the model
+    const m = await eng.milestone(id, 0);
+    expect(Number(m.state)).to.equal(5); // never delivered: a worker's claim, now with reviewers (§13)
+    expect(await eng.workerClaimed(id, 0)).to.equal(true);
+    expect(JSON.parse(store.get(m.report))).to.include({ schema: "agt-claim/v1", rounds: 3 });
+    await mine(3);
+    await ai.step();
+    for (const r of signers.slice(11, 14)) await loop(r).step();
+    expect(Number((await eng.disputes(m.dispute)).yes)).to.equal(0); // a failing CI is not overruled before step 2
   });
 
   it("a pinned client test cannot be changed by the model", async () => {
@@ -147,17 +154,24 @@ describe("Sealed AI long-term work loop — the client's CI runs N1–N4 (§12)"
     expect(Number((await eng.milestone(id, 0)).state)).to.equal(1);
   });
 
-  it("CI silent for too long: the attempt is abandoned, nothing delivered", async () => {
-    const { eng, wAI, sealFor, loop, open, ci } = await world();
+  it("CI silent for too long: nothing delivered; the AI asks reviewers, who weigh it and can pay the worker", async () => {
+    const { s: signers, agt, eng, wAI, sealFor, loop, open, ci } = await world();
     const id = await open();
     sealFor("engagement", id);
     const ai = loop(wAI);
-    ci.plan = ["pending", "pending", "pending"];
+    ci.plan = Array(20).fill("pending");
     await ai.step();
     await ai.step();
     await time.increase(CI_TIMEOUT + 60);
     await ai.step();
-    expect(Number((await eng.milestone(id, 0)).state)).to.equal(1);
+    const m = await eng.milestone(id, 0);
+    expect(Number(m.state)).to.equal(5);
+    await ai.step(); // no second claim
+    await mine(3);
+    await ai.step();
+    for (const r of signers.slice(11, 14)) await loop(r).step();
+    expect(Number((await eng.milestone(id, 0)).state)).to.equal(4); // reviewers found the work done → accepted (no hardware part) and paid
+    expect(await agt.balanceOf(signers[2].address)).to.equal(E(0.5));
   });
 
   it("a revision request starts a fresh attempt on the same branch, with the client's note", async () => {
@@ -253,6 +267,22 @@ describe("forge.js — reading the client's CI", () => {
     expect(ok.state).to.equal("success");
     const missing = await ciStatus({ repository: "https://github.com/acme/fw", token: "T", sha, required: ["build", "size"], fetchImpl: f });
     expect(missing.state).to.equal("pending"); // a required check that has not reported yet is never treated as passed
+  });
+
+  it("a re-run counts by its newest result; the same name from two sources is ambiguous and fails; every page is read (Codex F-1, F-6)", async () => {
+    const page1 = Array.from({ length: 100 }, (_, i) => ({ name: "lint-" + i, status: "completed", conclusion: "success", id: i + 1, app: { slug: "github-actions" } }));
+    const page2 = [
+      { name: "build", status: "completed", conclusion: "failure", id: 500, app: { slug: "github-actions" } },
+      { name: "build", status: "completed", conclusion: "success", id: 900, app: { slug: "github-actions" } }, // re-run, newer
+      { name: "sim", status: "completed", conclusion: "success", id: 901, app: { slug: "github-actions" } },
+      { name: "sim", status: "completed", conclusion: "success", id: 902, app: { slug: "some-other-app" } }, // same name, other source
+    ];
+    const f = async (url, opts) => ({ ok: true, status: 200, json: async () => (url.includes("/check-runs") ? { check_runs: /[?&]page=1$/.test(url) ? page1 : page2 } : { statuses: [] }) });
+    const r = await ciStatus({ repository: "https://github.com/acme/fw", token: "T", sha, required: ["build", "lint-99"], fetchImpl: f });
+    expect(r.state).to.equal("success"); // newest build re-run passed; lint-99 is on page 1
+    const amb = await ciStatus({ repository: "https://github.com/acme/fw", token: "T", sha, required: ["build", "sim"], fetchImpl: f });
+    expect(amb.state).to.equal("failure");
+    expect(amb.failures).to.contain("more than one source");
   });
 
   it("GitLab statuses map to the same states; unknown forges are refused", async () => {

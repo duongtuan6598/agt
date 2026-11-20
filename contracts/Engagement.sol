@@ -26,7 +26,7 @@ contract Engagement is DrawnDisputes, ReentrancyGuard {
     uint32 public constant MAX_WARRANTY_DAYS = 365;
 
     enum M { None, Pending, Delivered, HwTesting, Done, Disputed, Refunded }
-    enum Kind { None, Delivery, Hardware, Warranty }
+    enum Kind { None, Delivery, Hardware, Warranty, WorkerClaim }
 
     struct Milestone {
         uint128 amount; // escrow for this milestone
@@ -80,6 +80,7 @@ contract Engagement is DrawnDisputes, ReentrancyGuard {
     mapping(uint256 => Eng) public engagements;
     mapping(uint256 => mapping(uint8 => Milestone)) internal milestones;
     mapping(uint256 => Reputation) public reputation; // worker licence => public, permanent record
+    mapping(uint256 => mapping(uint8 => bool)) public workerClaimed; // one worker claim per milestone
     mapping(uint256 => uint256) public disputeEngagement;
     mapping(uint256 => uint8) public disputeMilestone;
 
@@ -98,6 +99,7 @@ contract Engagement is DrawnDisputes, ReentrancyGuard {
     event HoldbackReleased(uint256 indexed id, uint8 m, uint256 amount);
     event Ended(uint256 indexed id);
     event DisputeOn(uint256 indexed id, uint8 m, uint256 dispute, Kind kind);
+    event WorkerClaimed(uint256 indexed id, uint8 m, bytes32 result, bytes32 evidence);
 
     error BadParams();
     error NotClient();
@@ -315,6 +317,24 @@ contract Engagement is DrawnDisputes, ReentrancyGuard {
         _toDispute(id, m, e, x, Kind.Delivery);
     }
 
+    /// The client's CI failed or stayed silent after the AI pushed its work (the client sees the code before paying):
+    /// the AI may ask drawn reviewers to decide whether the milestone is done — once per milestone, before the
+    /// deadline (so it never races the client's reclaimLate). Not a delivery: the money moves only on the reviewers'
+    /// verdict, and the outcome goes into the AI's permanent record like any dispute.
+    /// (Joint decision of Claude and Codex, THIET-KE-NGHE-NHUNG.md §13.)
+    function claimDone(uint256 id, uint8 m, bytes32 result, bytes32 evidence) external {
+        (Eng storage e, Milestone storage x) = _ms(id, m);
+        _onlyWorker(e);
+        if (e.startedAt == 0 || e.ended || x.state != M.Pending || block.timestamp > x.dueAt) revert BadState();
+        if (result == bytes32(0) || evidence == bytes32(0) || workerClaimed[id][m]) revert BadState();
+        workerClaimed[id][m] = true;
+        x.result = result;
+        x.report = evidence;
+        x.deliveredAt = uint64(block.timestamp);
+        emit WorkerClaimed(id, m, result, evidence);
+        _toDispute(id, m, e, x, Kind.WorkerClaim);
+    }
+
     // ---------- hardware test (N5): always done by the client, on the real board ----------
     function confirmHardware(uint256 id, uint8 m) external nonReentrant {
         (Eng storage e, Milestone storage x) = _ms(id, m);
@@ -463,9 +483,10 @@ contract Engagement is DrawnDisputes, ReentrancyGuard {
             return;
         }
         // Delivery or Hardware: what is still in escrow for this milestone
-        uint256 left = kind == Kind.Delivery && !x.simPaid ? x.amount : _hwPart(x);
+        bool asDelivery = kind == Kind.Delivery || kind == Kind.WorkerClaim;
+        uint256 left = asDelivery && !x.simPaid ? x.amount : _hwPart(x);
         if (outcome == WORKER) {
-            if (kind == Kind.Delivery) {
+            if (asDelivery) {
                 x.state = M.Delivered;
                 _acceptDelivery(id, m, e, x);
             } else {

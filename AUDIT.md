@@ -52,6 +52,16 @@
 | W-8 (Codex) | Medium | An overdue milestone was skipped and a later one worked out of order. | **Fixed**: the loop always stops at the first unfinished milestone. Found while testing: deadlines were compared with the box's clock; they now use the chain's time. |
 | W-9 (Codex) | Low | A signed sealed-token upload could be replayed after rotation. | **Fixed**: a monotonic version is signed with each upload, and older versions are refused; the sealed context must match the contract. |
 | I-1…I-7 (Codex) | Critical (design) | **Untrusted client builds cannot be isolated inside the box's container** (no namespaces or capabilities): the TEE socket (impersonation), cloud metadata (owner credentials), abstract sockets, local services, surviving processes; QEMU at the same uid is not a full boundary either. | **Decided jointly by Claude and Codex** (THIET-KE-NGHE-NHUNG.md §12): client code never runs in the AI box. The client's CI runs N1–N4; drawn reviewers reproduce disputed checks on disposable, identity-less builders. Until then long-term work stays **off** (fail closed, `isolation.js`). |
+| CI-1 (Codex) | High | A check of the same name from another app or source could satisfy a required check. | **Fixed** (2026-11-21): re-runs count by their newest result; the same name from two sources is ambiguous and fails. Test added. |
+| CI-2 (Codex) | High | The published CI report is the delivering box's statement, not independent proof. | **Accepted, documented**: it is the sealed box's reading of the client's CI (approved code, attested key) and is a necessary, not sufficient, condition in disputes; independent reproduction is §12 step 2. |
+| CI-3 (Codex) | High | Concurrent steps could race on branches and state. | **Fixed**: one step at a time (single-flight), state written atomically (temp + rename). |
+| CI-4 (Codex) | High | Pending state was cleared before the delivery transaction succeeded. | **Fixed**: the CI-passed state (commit, report) is kept until the delivery is on chain, then cleared. |
+| CI-5 (Codex) | High | A dishonest client could make CI fail or stay silent, keep the pushed code and reclaim the escrow. | **Fixed by joint decision §13**: `Engagement.claimDone` lets the worker ask drawn reviewers once per milestone before the deadline; it freezes `reclaimLate`; the outcome is recorded in the worker's reputation. |
+| CI-6 (Codex) | Medium | Only the first 100 CI results were read. | **Fixed**: every page is read (bounded), an incomplete read fails closed. |
+| CI-7 (Codex) | Medium | Forge repository URLs were not canonicalised. | **Fixed**: the same strict allow-list check as the workspace; dot segments refused. |
+| CI-8 (Codex) | Medium | The client can move the AI's branch after CI passed. | **Accepted**: the chain records the exact commit sha (content-addressed); the branch name is only a pointer. |
+| CI-9 (Codex) | Low | `file://` repositories are allowed when `allowFileUrls` is on. | **Accepted**: test-only option, never set in the box (start.js does not pass it). |
+| — (found in testing) | High | While a milestone was under dispute, the loop worked on the next milestone. | **Fixed**: a disputed milestone stops the loop like any unfinished one. |
 
 ### Slither results
 

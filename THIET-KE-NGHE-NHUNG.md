@@ -197,3 +197,32 @@ Ngân hàng đề giữ kín như các nghề khác (`agt-banks`), có cơ chế
 
 Nguyên văn trả lời của Codex lưu ở `docs/decisions/2026-11-20-codex-isolation.md`.
 
+---
+
+## 13. Quyết định chung Claude + Codex: khách cố tình làm CI trượt hoặc im lặng (21/11/2026)
+
+**Vấn đề:** theo §12, AI phải đẩy mã lên kho của khách **trước khi được trả tiền**, để CI chạy được. Một khách gian có thể cố tình làm CI trượt hoặc im lặng, giữ mã, rồi đòi lại tiền ký quỹ khi mốc quá hạn (`reclaimLate`).
+
+**Các lựa chọn Claude đưa ra:**
+- (a) AI cứ giao hàng kèm lý do;
+- (b) sửa hợp đồng để **thợ** cũng mở được tranh chấp;
+- (c) giấu nhánh khỏi khách (không khả thi vì CI cần đọc);
+- (d) tạm chấp nhận rủi ro.
+
+**Codex chọn (b), không chọn (a):** với (a), nếu khách lỡ hạn khiếu nại thì một lời khẳng định của thợ biến thành được trả tiền. (b) giữ rõ ranh giới giữa "thợ nói đã xong" và "khách đã nhận".
+
+**Claude đồng ý (b) và thêm các luật:**
+- mỗi mốc thợ chỉ được kêu một lần, và phải trước hạn chót, để không chạy đua với `reclaimLate`;
+- kết quả vụ kêu ghi vào hồ sơ uy tín, nên kêu bừa sẽ mất uy tín;
+- hộp AI chỉ kêu sau đủ 3 vòng CI trượt, hoặc khi CI im lặng quá 6 giờ; bằng chứng (`agt-claim/v1`: commit, các vòng, kết quả CI) được công bố.
+
+**Đã làm:**
+- Hàm `Engagement.claimDone(id, m, result, evidence)` đưa mốc sang phân xử bốc thăm (Kind `WorkerClaim`) và **đóng băng `reclaimLate`**.
+- Người phân xử phán thợ đúng thì mốc được coi như đã giao và được nghiệm thu; phán khách đúng thì hoàn tiền cho khách; hoà thì chia đôi.
+
+**Luật phân xử tạm thời, cho tới khi có máy build kiểm chứng (§12 bước 2):**
+- vụ kêu vì CI **im lặng** thì được xét theo bằng chứng;
+- vụ kêu vì CI **trượt** thì nghiêng về khách, vì chưa ai dựng lại được để kiểm chứng.
+
+Báo cáo CI do hộp công bố là **cách hộp đọc CI của khách**, chưa phải bằng chứng độc lập (Codex F-2).
+

@@ -89,43 +89,60 @@ class EngageLoop {
     }
   }
 
-  /// One piece of work, advanced one step. Returns { done: {sha, reportHash} } when CI has passed,
-  /// { waiting } while CI runs, { failed } when given up. Nothing of the client's runs here.
+  /// One piece of work, advanced one step. Nothing of the client's runs here. Returns
+  ///   { done: {sha, reportHash} }  CI passed — the caller delivers, then calls finish(key) (state kept until then: F-4)
+  ///   { claim: {sha, evidenceHash} } CI failed after the last round or stayed silent — the caller may ask reviewers
+  ///                                  (Engagement.claimDone, §13), then calls markClaimed(key)
+  ///   { waiting } / { failed }
   async advance({ key, kind, id, branch, b, briefText, task, notes = "" }) {
     const token = await this.token(kind, id);
     if (!token) return { waiting: "the client has not given repository access yet" };
     const required = b.fields.ciChecks;
     const mem = this.memory(kind, id);
     let st = await this.state.get(key);
+    if (st && st.reportHash) return { done: { sha: st.sha, reportHash: st.reportHash } }; // CI passed; delivery not confirmed yet
+    if (st && st.evidenceHash) return st.claimed ? { failed: st.gaveUp } : { claim: { sha: st.sha, evidenceHash: st.evidenceHash } };
     if (st && st.gaveUp) return { failed: st.gaveUp };
     if (st && st.sha) {
       const ci = await this.ci.status({ repository: b.fields.repository, token, sha: st.sha, required });
       if (ci.state === "success") {
         const reportHash = await this.content.put(ciReport({ sha: st.sha, branch, ci, memoryHead: await mem.head() }));
         await mem.append("delivery", `${task.split("\n")[0]} → ${st.sha} on ${branch}; client CI passed: ${ci.checks.map((c) => c.name).join(", ")}`);
-        await this.state.set(key, null);
+        await this.state.set(key, { ...st, reportHash });
         return { done: { sha: st.sha, reportHash } };
       }
+      let gaveUp = null;
       if (ci.state === "pending") {
         if (this.now() - st.pushedAt < CI_TIMEOUT) return { waiting: `client CI still running for ${st.sha.slice(0, 10)}` };
-        st = { ...st, gaveUp: `the client's CI gave no verdict for ${st.sha.slice(0, 10)} within ${CI_TIMEOUT / 3600} h` };
-        await this.state.set(key, st);
-        await mem.append("note", st.gaveUp);
-        return { failed: st.gaveUp };
+        gaveUp = `the client's CI gave no verdict for ${st.sha.slice(0, 10)} within ${CI_TIMEOUT / 3600} h`;
+      } else if (st.round >= ROUNDS) {
+        gaveUp = `client CI still failing after ${ROUNDS} rounds`;
+      }
+      if (gaveUp) {
+        // The client has seen the code; the AI asks drawn reviewers instead of just walking away (§13).
+        const evidence = JSON.stringify({ schema: "agt-claim/v1", commit: st.sha, branch, rounds: st.round, reason: gaveUp, ci: { state: ci.state, checks: ci.checks }, history: st.history || [] });
+        const evidenceHash = await this.content.put(evidence);
+        await this.state.set(key, { ...st, gaveUp, evidenceHash });
+        await mem.append("note", `${task.split("\n")[0]}: ${gaveUp}; evidence ${evidenceHash}`);
+        return { claim: { sha: st.sha, evidenceHash } };
       }
       // failure → next round with the CI's failure text (untrusted, from the client's CI)
-      if (st.round >= ROUNDS) {
-        st = { ...st, gaveUp: `client CI still failing after ${ROUNDS} rounds` };
-        await this.state.set(key, st);
-        await mem.append("note", `${task.split("\n")[0]}: ${st.gaveUp}; not delivered.`);
-        return { failed: st.gaveUp };
-      }
-      return this.attempt({ key, kind, id, branch, b, briefText, task, notes, token, mem, round: st.round + 1, failure: ci.failures || "the client's CI reported a failure" });
+      const history = [...(st.history || []), { round: st.round, commit: st.sha, ci: ci.checks }];
+      return this.attempt({ key, kind, id, branch, b, briefText, task, notes, token, mem, round: st.round + 1, failure: ci.failures || "the client's CI reported a failure", history });
     }
-    return this.attempt({ key, kind, id, branch, b, briefText, task, notes, token, mem, round: 1, failure: "" });
+    return this.attempt({ key, kind, id, branch, b, briefText, task, notes, token, mem, round: 1, failure: "", history: [] });
   }
 
-  async attempt({ key, kind, id, branch, b, briefText, task, notes, token, mem, round, failure }) {
+  async finish(key) {
+    await this.state.set(key, null);
+  }
+
+  async markClaimed(key) {
+    const st = await this.state.get(key);
+    if (st) await this.state.set(key, { ...st, claimed: true });
+  }
+
+  async attempt({ key, kind, id, branch, b, briefText, task, notes, token, mem, round, failure, history = [] }) {
     const ws = new Workspace({ root: this.wsRoot, id: `${kind}-${id}`, allowFileUrls: this.allowFileUrls, git: this.gitBin });
     try {
       ws.clone(b.fields.repository, token, branch);
@@ -141,7 +158,7 @@ class EngageLoop {
       ws.write(a.files, Object.fromEntries(b.fields.pinnedTests || []));
       const sha = ws.commit(`${task.split("\n")[0]} (round ${round})\n\n${a.summary}`);
       ws.push(branch, token);
-      await this.state.set(key, { sha, round, pushedAt: this.now() });
+      await this.state.set(key, { sha, round, pushedAt: this.now(), history });
       await mem.append("decision", `${task.split("\n")[0]}, round ${round}: pushed ${sha} to ${branch}. ${a.summary}`);
       this.log(`${kind} #${id}: round ${round} pushed ${sha.slice(0, 10)} — waiting for the client's CI`);
       return { waiting: "pushed; the client's CI runs it" };
@@ -199,16 +216,27 @@ class EngageLoop {
           const line = (b.fields.milestones || [])[m] || `milestone ${m + 1}`;
           const task = `Milestone ${m + 1} of ${e.count}: ${line}${rev ? `\n(revision ${rev}: the client's note says what to change)` : ""}`;
           const r = await this.advance({ key: `engagement:${id}:m${m}:r${rev}`, kind: "engagement", id, branch: `agt/engagement-${id}-m${m + 1}`, b, briefText: text, task, notes });
-          if (r.done) { await (await this.eng.deliver(id, m, shaToBytes32(r.done.sha), r.done.reportHash)).wait(); this.log(`engagement #${id}: milestone ${m + 1} delivered ${r.done.sha}`); }
+          const key = `engagement:${id}:m${m}:r${rev}`;
+          if (r.done) {
+            await (await this.eng.deliver(id, m, shaToBytes32(r.done.sha), r.done.reportHash)).wait();
+            await this.finish(key); // only once the delivery is on chain (Codex F-4)
+            this.log(`engagement #${id}: milestone ${m + 1} delivered ${r.done.sha}`);
+          } else if (r.claim) {
+            if (!(await this.eng.workerClaimed(id, m)) && Number(x.dueAt) > this.now()) {
+              await (await this.eng.claimDone(id, m, shaToBytes32(r.claim.sha), r.claim.evidenceHash)).wait();
+              this.log(`engagement #${id}: milestone ${m + 1} — the client's CI failed or stayed silent; drawn reviewers will decide`);
+            }
+            await this.markClaimed(key);
+          }
           else this.log(`engagement #${id} milestone ${m + 1}: ${r.waiting || r.failed}`);
           break; // milestones in order: one at a time
         }
         if (st === M.DONE && Number(x.claimAt) && !Number(x.fixAt) && x.dispute === 0n) {
           const claim = await this.note(x.claim);
           const r = await this.advance({ key: `engagement:${id}:m${m}:claim${Number(x.claimAt)}`, kind: "engagement", id, branch: `agt/engagement-${id}-m${m + 1}-warranty`, b, briefText: text, task: `Warranty claim on milestone ${m + 1} (${(b.fields.milestones || [])[m] || ""}): fix the defect the client reports.`, notes: claim });
-          if (r.done) { await (await this.eng.deliverFix(id, m, shaToBytes32(r.done.sha))).wait(); this.log(`engagement #${id}: warranty fix ${r.done.sha}`); }
+          if (r.done) { await (await this.eng.deliverFix(id, m, shaToBytes32(r.done.sha))).wait(); await this.finish(`engagement:${id}:m${m}:claim${Number(x.claimAt)}`); this.log(`engagement #${id}: warranty fix ${r.done.sha}`); }
         }
-        if (st < M.DONE && st !== M.PENDING) break; // wait for the client before the next milestone
+        if ((st < M.DONE && st !== M.PENDING) || st === M.DISPUTED) break; // wait for the client / the reviewers before the next milestone
       }
     }
   }
@@ -235,7 +263,7 @@ class EngageLoop {
           if (!Number(x.fixAt)) {
             const what = await this.note(x.description);
             const w = await this.advance({ key: `maintenance:${id}:incident${i}`, kind: "maintenance", id, branch: `agt/maintenance-${id}-incident-${i + 1}`, b, briefText: text, task: `${Number(x.severity) === 2 ? "SECURITY incident" : "Incident"} ${i + 1}: fix what the client reports.`, notes: what });
-            if (w.done) { await (await this.mnt.resolve(id, i, shaToBytes32(w.done.sha))).wait(); this.log(`maintenance #${id}: incident ${i + 1} resolved ${w.done.sha}`); }
+            if (w.done) { await (await this.mnt.resolve(id, i, shaToBytes32(w.done.sha))).wait(); await this.finish(`maintenance:${id}:incident${i}`); this.log(`maintenance #${id}: incident ${i + 1} resolved ${w.done.sha}`); }
           }
         }
         await this.monthlyStatus(id, r, b);
@@ -291,16 +319,21 @@ class EngageLoop {
         const reportOk = !!report && report.schema === "agt-ci-report/v1" && report.ok === true && Array.isArray(report.checks) && report.checks.length > 0 &&
           report.checks.every((c) => c.conclusion === "success") && shaToBytes32(String(report.commit || "")) === ms.result;
         const evidence = [
-          `Milestone ${m + 1}; dispute kind ${["", "delivery", "hardware", "warranty"][Number(ms.disputeKind)]}.`,
+          `Milestone ${m + 1}; dispute kind ${["", "delivery", "hardware", "warranty", "worker's claim (the client's CI failed or stayed silent)"][Number(ms.disputeKind)]}.`,
           `Delivered commit ${ms.result}. CI report (evidence supplied by the client's CI, not attested by any box):\n${report ? JSON.stringify(report) : "(missing)"}`,
           `Client's revision notes:\n${await this.lastNote(id, m, "RevisionRequested")}`,
           `Client's hardware failure log:\n${await this.lastNote(id, m, "HardwareFailure")}`,
           Number(ms.claimAt) ? `Warranty claim:\n${await this.note(ms.claim)}\nFix delivered: ${ms.fix}` : "",
         ].filter(Boolean).join("\n\n");
         const warranty = Number(ms.disputeKind) === 3;
-        const v = reportOk || warranty ? await this.model.judge(text, evidence) : { verdict: "reject", reason: "the delivery has no passing client-CI report for its commit" };
+        // A worker's claim (§13): until reviewers can reproduce checks on disposable builders (step 2), only a claim
+        // over a SILENT client CI is weighed on its merits; a claim over a FAILING CI goes to the client.
+        const claimSilent = Number(ms.disputeKind) === 4 && !!report && report.schema === "agt-claim/v1" && report.ci && report.ci.state === "pending" &&
+          shaToBytes32(String(report.commit || "")) === ms.result;
+        const weigh = reportOk || warranty || claimSilent;
+        const v = weigh ? await this.model.judge(text, evidence) : { verdict: "reject", reason: "no passing client-CI report for the delivered commit" };
         if (!["accept", "reject"].includes(v.verdict)) continue;
-        const workerRight = v.verdict === "accept" && (reportOk || warranty);
+        const workerRight = v.verdict === "accept" && weigh;
         await (await this.eng.vote(d, lic, workerRight, `${workerRight ? "worker" : "client"} is right: ${v.reason}`.slice(0, 500))).wait();
         this.log(`dispute #${d}: voted ${workerRight ? "worker" : "client"}`);
       } catch (e) { this.log(`dispute #${d}: ${e.message}`); }
@@ -308,6 +341,16 @@ class EngageLoop {
   }
 
   async step() {
+    if (this.running) return this.log("engage: previous step still running"); // one writer of state/branches (Codex F-3)
+    this.running = true;
+    try {
+      await this._step();
+    } finally {
+      this.running = false;
+    }
+  }
+
+  async _step() {
     this.chainNow = Number((await this.eng.runner.provider.getBlock("latest")).timestamp);
     const lic = await this.licence();
     if (!lic) return this.log("engage: not licensed yet");
@@ -333,7 +376,12 @@ function fileState(dir) {
   const f = (k) => path.join(dir, k.replace(/[^\w:.-]/g, "_") + ".json");
   return {
     get: async (k) => (fs.existsSync(f(k)) ? JSON.parse(fs.readFileSync(f(k), "utf8")) : null),
-    set: async (k, v) => (v === null ? fs.rmSync(f(k), { force: true }) : fs.writeFileSync(f(k), JSON.stringify(v), { mode: 0o600 })),
+    set: async (k, v) => {
+      if (v === null) return fs.rmSync(f(k), { force: true });
+      const tmp = f(k) + "." + process.pid + ".tmp";
+      fs.writeFileSync(tmp, JSON.stringify(v), { mode: 0o600 });
+      fs.renameSync(tmp, f(k)); // atomic replace
+    },
   };
 }
 
