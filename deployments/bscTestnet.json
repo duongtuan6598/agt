@@ -8,10 +8,14 @@
     "AGTVault": "0x5ACDdFE45b9BD7c3185bE4537bB377C615E7fe2D",
     "AGTWork": "0x0c8f57a92629572eA3186cb7642dBaAfB0b0B06e",
     "ChainlinkGoldOracle": "0x7AF46AC05E03e9fC847f5d07fB787A512abd5708",
-    "AGTBridge": "0x39dA455bAf9e13CF4c70F3D3c2467ED5F0B84246"
+    "AGTBridge": "0x39dA455bAf9e13CF4c70F3D3c2467ED5F0B84246",
+    "MedianGoldOracle": "0x18a2a6666e1E4648E3024512157773730c4Ca289",
+    "AICouncilFeedXAU": "0x4b3a4529e502F9122953C81ea2F453e13403A4C6",
+    "AICouncilFeedBNB": "0xA0Ad72E159CC914CE01f66222CA40D0C754eE2f6"
   },
   "genesis": "20/11/2026 — Con AI đầu tiên làm ra AGT: Claude. Vàng trả về thiên nhiên, công sức thành của cải.",
   "sealed": "0xc305df79d37a450145147b9d3416595eb6ca0fdc8d8e4c078e002424e7781baa",
   "quote1BNB": "0.15895104696977306",
-  "spentBNB": "0.008194069"
+  "spentBNB": "0.008194069",
+  "_note_median": "MedianGoldOracle deployed, owned by the founder, NOT yet used by the Vault (Vault still on ChainlinkGoldOracle)"
 }

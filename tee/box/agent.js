@@ -10,6 +10,7 @@ const { ethers } = require("ethers");
 const WORK_ABI = [
   "function licenseOfAgent(address) view returns (uint256)",
   "function licenses(uint256) view returns (address holder, address agent, uint8 role, bool active, bytes32 examHash, bytes32 attestHash, string name)",
+  "function councilHolders() view returns (uint32)",
   "function jobs(uint256) view returns (uint8 kind, uint8 status, uint8 yes, uint8 no, uint64 deadline, uint64 reviewUntil, uint256 workerLicense, uint256 category, address client, uint256 escrow, bytes32 spec, bytes32 result, string uri)",
   "function nextJob() view returns (uint256)",
   "function drawBlock(uint256) view returns (uint256)",
@@ -54,17 +55,36 @@ function httpContent(base, wallet) {
   };
 }
 
+const FEED_ABI = [
+  "function latestRound() view returns (uint80)",
+  "function submit(uint80 window, int256 answer, bytes[] sigs)",
+];
+
+// HTTP client for the public signature collector (the exam worker's /prices).
+function httpPrices(base) {
+  return {
+    async put(entry) {
+      const r = await (await fetch(`${base}/prices`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(entry) })).json();
+      if (!r.ok) throw new Error(`price collector: ${r.error}`);
+    },
+    async get(feed, window) {
+      return (await (await fetch(`${base}/prices/${feed}/${window}`)).json()).answers || {};
+    },
+  };
+}
+
 class AgentLoop {
   // work: ethers Contract connected to the AI's signer · content: {tasks, put, get} · model: {translate, review}
-  constructor({ work, me, content, model, log = () => {} }) {
-    Object.assign(this, { work, me, content, model, log });
+  // prices (optional): { feeds: {"XAU/USD": address, …}, chainId, collector: {put, get}, fetchImpl, clock }
+  constructor({ work, me, content, model, prices = null, log = () => {} }) {
+    Object.assign(this, { work, me, content, model, prices, log });
   }
 
   async licence() {
     const id = await this.work.licenseOfAgent(this.me);
     if (id === 0n) return null;
     const l = await this.work.licenses(id);
-    return l.active ? { id: Number(id), role: ROLE[Number(l.role)] } : null;
+    return l.active ? { id: Number(id), role: ROLE[Number(l.role)], sealed: l.attestHash !== ethers.ZeroHash } : null;
   }
 
   async jobsSince(from = 1) {
@@ -132,9 +152,41 @@ class AgentLoop {
     return votes;
   }
 
+  // Sealed AIs as a price source: observe public markets, sign (window, price), relay once > 2/3 of owners agree.
+  async priceStep(lic) {
+    if (!this.prices || !lic.sealed) return [];
+    const P = require("./prices.js");
+    const { feeds, chainId, collector, fetchImpl = fetch, clock = async () => Math.floor(Date.now() / 1000) } = this.prices;
+    const done = [];
+    for (const [name, addr] of Object.entries(feeds)) {
+      try {
+        const window = P.windowOf(await clock());
+        const obs = await P.observe(name, fetchImpl);
+        const answer = P.toAnswer(name, obs.median);
+        const sig = await P.signPrice(this.work.runner, chainId, addr, window, answer);
+        await collector.put({ feed: addr, window, answer: answer.toString(), agent: this.me, sig });
+        const feed = new ethers.Contract(addr, FEED_ABI, this.work.runner);
+        const latest = Number(await feed.latestRound());
+        for (const w of [window, window - 1]) {
+          if (w <= latest) continue;
+          const q = await P.bestQuorum(this.work, await collector.get(addr, w));
+          if (!q) continue;
+          await (await feed.submit(w, q.answer, q.sigs)).wait();
+          this.log(`price: recorded ${name} ${Number(q.answer) / 1e8} for window ${w} with ${q.sigs.length} owners' AIs`);
+          done.push({ name, window: w, answer: q.answer });
+          break;
+        }
+      } catch (e) {
+        this.log(`price ${name}: ${e.shortMessage || e.message}`);
+      }
+    }
+    return done;
+  }
+
   async step() {
     const lic = await this.licence();
     if (!lic) return this.log("agent: not licensed yet — waiting");
+    await this.priceStep(lic);
     await this.drawStep();
     if (lic.role === "worker") await this.workerStep(lic);
     if (lic.role === "verifier") await this.verifierStep(lic);
@@ -145,4 +197,4 @@ class AgentLoop {
 const { makeModel } = require("./models.js");
 const claudeModel = ({ client, systemPrompt }) => makeModel({ provider: "anthropic", client, systemPrompt });
 
-module.exports = { WORK_ABI, AgentLoop, httpContent, claudeModel, makeModel, uriOf, parseUri };
+module.exports = { WORK_ABI, FEED_ABI, AgentLoop, httpContent, httpPrices, claudeModel, makeModel, uriOf, parseUri };

@@ -259,7 +259,7 @@ async function startLocalModel() {
 
 async function startWork(agentKey, modelProvider = "anthropic") {
   const { ethers } = require("ethers");
-  const { AgentLoop, WORK_ABI, httpContent, makeModel } = require("./agent.js");
+  const { AgentLoop, WORK_ABI, httpContent, httpPrices, makeModel } = require("./agent.js");
   const { secretFromManager } = require("./answer.js");
   const provider = new ethers.JsonRpcProvider(env.BSC_RPC);
   const wallet = new ethers.Wallet(agentKey, provider);
@@ -270,6 +270,12 @@ async function startWork(agentKey, modelProvider = "anthropic") {
     work: new ethers.Contract(env.WORK, WORK_ABI, wallet), me: wallet.address,
     content: httpContent(env.AGT_EXAM_URL || "https://agt-exam.agtcoin.workers.dev", wallet),
     model: makeModel({ provider: modelProvider, apiKey, systemPrompt }), log,
+    // AGT_PRICE_FEEDS="XAU/USD=0x…,BNB/USD=0x…" — feed contracts this AI signs prices for (sealed AIs only)
+    prices: env.AGT_PRICE_FEEDS ? {
+      feeds: Object.fromEntries(env.AGT_PRICE_FEEDS.split(",").map((kv) => kv.split("=").map((x) => x.trim()))),
+      chainId: Number((await provider.getNetwork()).chainId),
+      collector: httpPrices(env.AGT_EXAM_URL || "https://agt-exam.agtcoin.workers.dev"),
+    } : null,
   });
   log(`work loop: AI ${wallet.address} on ${env.WORK} — the owner funds this address with gas (BNB)`);
   for (;;) {

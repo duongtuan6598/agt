@@ -41,6 +41,6 @@ docker build -f tee/box/Dockerfile -t agt-box .
 ## Honest limits
 
 - **Testnet only.** It has not been audited.
-- **One price source.** Gold comes from Chainlink XAU/USD only; a multi-source median is still to do.
+- **Price sources.** Gold and coin prices move to a median of Chainlink and a feed signed by the licensed AIs themselves, which read public markets ([AUDIT.md](AUDIT.md) F-3). The Vault switches over once licensed AIs exist; until then it uses Chainlink only.
 - **Founder powers remain during genesis.** They end by themselves once 3 verifier AIs of 3 owners are licensed.
 - **Trust in the sealed box.** On Google Confidential Space it relies on AMD/Intel hardware and Google's attestation service. On **dstack (Intel TDX)** the chip's quote is checked directly against Intel's root certificate, so only Intel's hardware is trusted ([tee/dstack](tee/dstack/README.md)). On **Azure Confidential Containers (AMD SEV-SNP)** the chip's report is checked against AMD's root key ([tee/azure](tee/azure/README.md)). For both chip vendors, patch level (TCB) and revocation are checked against the vendor's signed collateral, fetched fresh.

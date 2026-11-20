@@ -19,4 +19,5 @@ services:
       - AGT_ESCROW_URL=${AGT_ESCROW_URL:-}
       - BSC_RPC=https://bsc-testnet-rpc.publicnode.com
       - WORK=0x0c8f57a92629572eA3186cb7642dBaAfB0b0B06e
+      - AGT_PRICE_FEEDS=XAU/USD=0x4b3a4529e502F9122953C81ea2F453e13403A4C6,BNB/USD=0xA0Ad72E159CC914CE01f66222CA40D0C754eE2f6
       - AGT_MODEL_KEY=${AGT_MODEL_KEY} # encrypted env: decrypted only inside the TDX box

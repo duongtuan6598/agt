@@ -11,7 +11,9 @@
 //                              (only licensed AIs may write: signature by the AI key, licence checked on chain)
 //   GET  /content/:hash        the stored text (hash = keccak256 of its UTF-8 bytes)
 //   GET  /tasks                open documents waiting to be translated (trade 1)
-import { getAddress, hexlify, isAddress, verifyMessage, keccak256, toUtf8Bytes, Interface } from "ethers";
+//   POST /prices               {feed, window, answer, agent, sig}  → a sealed AI's signed price (checked on chain)
+//   GET  /prices/:feed/:window collected signatures, grouped by price — anyone relays them to the feed contract
+import { getAddress, hexlify, isAddress, verifyMessage, keccak256, toUtf8Bytes, Interface, AbiCoder, id as ethersId, getBytes } from "ethers";
 import tasks from "../tasks/translation.json";
 import X from "../../exam/lib.js";
 import core from "../../chain/core.js";
@@ -270,6 +272,43 @@ async function activeLicence(env, agent) {
 }
 const contentMessage = (hash) => `AGT content ${hash}`;
 
+// ---------- signed prices from sealed AIs (AICouncilPriceFeed) ----------
+const PRICE_TAG = ethersId("AGT-AI-PRICE-v1");
+async function sealedLicence(env, agent) {
+  const id = WORK_IFACE.decodeFunctionResult("licenseOfAgent", await ethCall(env, WORK_IFACE.encodeFunctionData("licenseOfAgent", [agent])))[0];
+  if (id === 0n) return null;
+  const l = WORK_IFACE.decodeFunctionResult("licenses", await ethCall(env, WORK_IFACE.encodeFunctionData("licenses", [id])));
+  const sealed = l.attestHash !== "0x" + "00".repeat(32);
+  return l.active && sealed && getAddress(l.agent) === getAddress(agent) ? Number(id) : null;
+}
+async function putPrice(env, req) {
+  const b = await body(req);
+  if (!b || !isAddress(b.feed) || !isAddress(b.agent) || !/^\d+$/.test(String(b.window)) || !/^\d+$/.test(String(b.answer))) return fail(400, "need {feed, window, answer, agent, sig}");
+  const window = Number(b.window);
+  if (Math.abs(window - Math.floor(now() / 600)) > 1) return fail(409, "window is not current");
+  const d = keccak256(AbiCoder.defaultAbiCoder().encode(["bytes32", "uint256", "address", "uint80", "int256"], [PRICE_TAG, Number(env.CHAIN_ID || 97), b.feed, window, BigInt(b.answer)]));
+  let signer;
+  try {
+    signer = verifyMessage(getBytes(d), b.sig);
+  } catch {
+    return fail(400, "bad signature");
+  }
+  if (getAddress(signer) !== getAddress(b.agent)) return fail(403, "signature is not from this AI key");
+  if (!(await sealedLicence(env, signer))) return fail(403, "only licensed AIs in a sealed box may sign prices");
+  await env.EXAMS.put(`px:${b.feed.toLowerCase()}:${window}:${signer.toLowerCase()}`, JSON.stringify({ answer: String(b.answer), sig: b.sig }), { expirationTtl: 2 * 86400 });
+  return json({ ok: true });
+}
+async function getPrices(env, feed, window) {
+  const out = {};
+  const list = await env.EXAMS.list({ prefix: `px:${feed.toLowerCase()}:${window}:` });
+  for (const k of list.keys) {
+    const v = JSON.parse((await env.EXAMS.get(k.name)) || "null");
+    if (!v) continue;
+    (out[v.answer] = out[v.answer] || []).push({ agent: k.name.split(":").pop(), sig: v.sig });
+  }
+  return json({ ok: true, feed, window, answers: out });
+}
+
 async function putContent(env, req) {
   const b = await body(req);
   if (!b || typeof b.text !== "string" || !b.text.length) return fail(400, "need {text, agent, signature}");
@@ -316,6 +355,9 @@ export default {
           return e ? json({ ok: true, exam: publicExam(e) }) : fail(404, "exam not found or expired");
         }
       }
+      if (p === "/prices" && req.method === "POST") return await putPrice(env, req);
+      const mp = p.match(/^\/prices\/(0x[0-9a-fA-F]{40})\/(\d+)$/);
+      if (mp && req.method === "GET") return await getPrices(env, mp[1], mp[2]);
       if (p === "/content" && req.method === "POST") return await putContent(env, req);
       const mc = p.match(/^\/content\/(0x[0-9a-f]{64})$/);
       if (mc && req.method === "GET") {
