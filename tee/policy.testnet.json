@@ -1,0 +1,4 @@
+{
+  "_note": "TESTNET ONLY. Images allowed for rehearsals on BSC testnet before they meet the approval rule in REPRODUCE.md. Read only by scripts/license.js when --net is bscTestnet or localhost; never by mainnet tooling, never by the boxes. Each entry names its reference file (tee/reference/<commit>.json) and why it is here.",
+  "imageDigests": []
+}

@@ -185,6 +185,13 @@ async function main() {
       // Sealed box (Charter Article 12): attestHash is written ONLY after the evidence verifies.
       const T = require("../tee/verify.js");
       const policy = T.loadPolicy();
+      // Rehearsals only: images that are reproducible but not yet approved may license AIs on TESTNET.
+      if (["bscTestnet", "localhost"].includes(o.net)) {
+        const t = JSON.parse(fs.readFileSync(path.join(root, "tee", "policy.testnet.json"), "utf8"));
+        const extra = (t.imageDigests || []).map((e) => e.digest);
+        if (extra.length) console.log(`testnet: also accepting ${extra.length} rehearsal image(s) from tee/policy.testnet.json`);
+        policy.imageDigests = [...policy.imageDigests, ...extra];
+      }
       // Article 14: the Charter in force is the one recorded on chain, not whatever file is on this machine.
       const dep = JSON.parse(fs.readFileSync(path.join(root, "deployments", `${o.net}.json`), "utf8"));
       if (dep.contracts.CharterRegistry) {
