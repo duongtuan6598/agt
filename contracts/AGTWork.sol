@@ -96,7 +96,13 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
     mapping(uint256 => uint256[]) internal _yesVoters;
     mapping(uint256 => uint256[]) internal _noVoters;
     mapping(uint256 => mapping(uint256 => mapping(uint256 => uint32))) public dailyCount; // giấy phép => nghề => ngày
-    mapping(uint256 => uint32) public dailyBudget; // nghề => số việc tự tìm thị trường cần mỗi ngày (0 = không điều chỉnh)
+    mapping(uint256 => uint32) public dailyBudget; // nghề => số việc tự tìm thị trường cần mỗi ngày (0 = nghề không nhận việc tự tìm)
+    // nghề => ngày => số việc tự tìm đã chốt (duyệt HOẶC từ chối): tiền công người chấm giảm theo cùng hệ số (THIET-KE-LAM-PHAT.md)
+    mapping(uint256 => mapping(uint256 => uint32)) public settledPerDay;
+    // nghề => ngày => AGT đã đúc cho việc tự tìm (thợ + người chấm). Trần cứng: CEILING_FACTOR × ngân sách × (thưởng +
+    // số phiếu × tiền công chấm). Giá giảm dần của Điều 7 cộng lại tăng theo log(số việc), nên cần trần này.
+    mapping(uint256 => mapping(uint256 => uint256)) public mintedPerDay;
+    uint256 public constant CEILING_FACTOR = 2;
     mapping(uint256 => mapping(uint256 => uint32)) public acceptedPerDay; // nghề => ngày => số việc tự tìm đã duyệt
 
     // ---------- Hội đồng AI (Hiến chương Điều 11) ----------
@@ -173,6 +179,7 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
     error NotPassed();
     error NoReason();
     error CallFailed(bytes reason);
+    error NoBudget();
 
     constructor(address owner_, uint32 genesisExitVerifiers_) Ownable(owner_) {
         if (genesisExitVerifiers_ < 3) revert BadParams();
@@ -333,7 +340,8 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
     }
 
     /// Ngân sách ngày của một nghề (việc tự tìm): số việc thị trường cần mỗi ngày, tính trên TẤT CẢ thợ.
-    /// Vượt ngân sách thì giá mỗi việc tự giảm: giá × ngân sách ÷ số việc đã duyệt trong ngày. 0 = không điều chỉnh.
+    /// Vượt ngân sách thì giá mỗi việc tự giảm: giá × ngân sách ÷ số việc đã duyệt trong ngày.
+    /// 0 = nghề KHÔNG nhận việc tự tìm (ngân sách 0 in 0 AGT — không bao giờ có nghĩa "không giới hạn").
     function setDailyBudget(uint256 id, uint32 budget) external onlyGov {
         dailyBudget[id] = budget;
         emit DailyBudgetSet(id, budget);
@@ -345,9 +353,13 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
     }
 
     function _priceAt(uint256 id, uint256 n) internal view returns (uint256) {
-        uint256 r = categories[id].reward;
-        uint256 b = dailyBudget[id];
-        return (b == 0 || n <= b) ? r : (r * b) / n;
+        return _scaled(categories[id].reward, dailyBudget[id], n);
+    }
+
+    /// amount × min(1, budget ÷ n); budget 0 → 0. Total paid for the day's n items stays ≤ amount × budget.
+    function _scaled(uint256 amount, uint256 budget, uint256 n) internal pure returns (uint256) {
+        if (budget == 0) return 0;
+        return n <= budget ? amount : (amount * budget) / n;
     }
 
     function _takeReward(uint256 id) internal returns (uint256) {
@@ -370,6 +382,7 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
         _requireAgent(workerLicense, Role.Worker);
         Category storage c = categories[category];
         if (!c.active) revert BadCategory();
+        if (dailyBudget[category] == 0) revert NoBudget(); // no budget, no self-found work: nothing to mint
         uint256 day = block.timestamp / 1 days;
         if (++dailyCount[workerLicense][category][day] > c.dailyCap) revert DailyCapReached();
         id = nextJob++;
@@ -567,11 +580,12 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
         emit Voted(id, verifierLicense, approve, reason);
 
         uint8 need = selfFound ? categories[j.category].approvals : disputeApprovals;
-        uint128 vReward = selfFound ? categories[j.category].verifierReward : disputeVerifierReward;
+        uint256 vReward = selfFound ? categories[j.category].verifierReward : disputeVerifierReward;
 
         if (approve) {
             _yesVoters[id].push(verifierLicense);
             if (++j.yes >= need) {
+                if (selfFound) vReward = _reviewPay(j.category, vReward);
                 if (selfFound) {
                     if (!licenses[j.workerLicense].active) {
                         j.status = Status.Rejected;
@@ -580,26 +594,57 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
                     }
                     j.status = Status.Accepted;
                     address to = licenses[j.workerLicense].holder;
-                    uint256 r = _takeReward(j.category);
-                    agt.mintFromWork(to, r);
+                    uint256 r = _mintCapped(j.category, to, _takeReward(j.category));
                     emit JobAccepted(id, to, r, true);
                 } else {
                     _payAssigned(id, j);
                 }
-                _payVoters(_yesVoters[id], vReward);
+                if (selfFound) _payVotersCapped(j.category, _yesVoters[id], vReward);
+                else _payVoters(_yesVoters[id], vReward);
             }
         } else {
             _noVoters[id].push(verifierLicense);
             if (++j.no >= need) {
+                if (selfFound) vReward = _reviewPay(j.category, vReward);
                 if (selfFound) {
                     j.status = Status.Rejected;
                     emit JobRejected(id);
                 } else {
                     _refund(id, j);
                 }
-                _payVoters(_noVoters[id], vReward);
+                if (selfFound) _payVotersCapped(j.category, _noVoters[id], vReward);
+                else _payVoters(_noVoters[id], vReward);
             }
         }
+    }
+
+    /// Reviewers of self-found work are paid inside the same daily cap as the work (accepted or rejected alike), so
+    /// spamming jobs cannot mint review pay without bound (THIET-KE-LAM-PHAT.md, hole 2).
+    function _reviewPay(uint256 category, uint256 vReward) internal returns (uint256) {
+        uint256 m = ++settledPerDay[category][block.timestamp / 1 days];
+        return _scaled(vReward, dailyBudget[category], m);
+    }
+
+    /// The day's hard ceiling for a self-found trade (THIET-KE-LAM-PHAT.md).
+    function dailyCeiling(uint256 category) public view returns (uint256) {
+        Category storage c = categories[category];
+        return CEILING_FACTOR * uint256(dailyBudget[category]) * (uint256(c.reward) + uint256(c.approvals) * uint256(c.verifierReward));
+    }
+
+    /// Mint at most what is left under the day's ceiling; returns what was minted (maybe 0).
+    function _mintCapped(uint256 category, address to, uint256 amount) internal returns (uint256 paid) {
+        uint256 day = block.timestamp / 1 days;
+        uint256 ceiling = dailyCeiling(category);
+        uint256 used = mintedPerDay[category][day];
+        paid = used >= ceiling ? 0 : (amount < ceiling - used ? amount : ceiling - used);
+        if (paid == 0) return 0;
+        mintedPerDay[category][day] = used + paid;
+        agt.mintFromWork(to, paid);
+    }
+
+    function _payVotersCapped(uint256 category, uint256[] storage voters, uint256 reward) internal {
+        if (reward == 0) return;
+        for (uint256 i; i < voters.length; i++) _mintCapped(category, licenses[voters[i]].holder, reward);
     }
 
     function verifierCount() external view returns (uint256) {
@@ -640,7 +685,7 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
         emit JobRefunded(id, j.client, amt);
     }
 
-    function _payVoters(uint256[] storage voters, uint128 reward) internal {
+    function _payVoters(uint256[] storage voters, uint256 reward) internal {
         if (reward == 0) return;
         for (uint256 i; i < voters.length; i++) agt.mintFromWork(licenses[voters[i]].holder, reward);
     }

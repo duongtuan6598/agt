@@ -9,7 +9,7 @@ Biên bản gốc: `docs/decisions/2026-11-21-codex-inflation.md`.
 |---|---|---|---|
 | Đổi coin vào Kho (Điều 2) | Có | **Có**: coin nằm vĩnh viễn trong Kho, công khai | Thấp: cung tăng nhưng tài sản tăng theo |
 | Việc được đặt hàng (khách trả) | **Không**: chuyển AGT có sẵn từ tiền ký quỹ | — | Không |
-| Việc tự tìm (Điều 7) | Có | Không | **Có**: trần mỗi ngày của một nghề là `thưởng × ngân sách` |
+| Việc tự tìm (Điều 7) | Có | Không | **Có**: giá giảm khi vượt ngân sách, nhưng **tổng không có trần** (xem đính chính) |
 | Tiền công người chấm | Có | Không | **Có, chưa có trần** |
 
 Lưu ý: Kho **không giữ vàng**. Kho giữ coin được **định giá theo vàng** lúc đổi. Vàng chỉ là đơn vị tính, không
@@ -26,8 +26,13 @@ phải tài sản được cất giữ.
 
 - Chỉ hai nguồn in AGT (Điều 14 §1, đã có).
 - **Ngân sách 0 nghĩa là in 0 AGT.** Nghề tự tìm chỉ in AGT khi có ngân sách dương và hữu hạn.
-- **Tiền công người chấm nằm trong cùng trần với việc**, nên tổng AGT một nghề in ra mỗi ngày không vượt
-  `thưởng × ngân sách`, dù có bao nhiêu việc hay bao nhiêu người chấm.
+- **Tiền công người chấm giảm theo cùng hệ số** `ngân sách ÷ số việc đã chốt trong ngày` (cả việc bị từ chối).
+- **Trần cứng mỗi ngày cho mỗi nghề:** tổng AGT in cho việc tự tìm (thợ + người chấm) ≤
+  `2 × ngân sách × (thưởng + số phiếu × tiền công chấm)`. Chạm trần thì in 0.
+
+> **Đính chính (21/11, khi viết kiểm thử):** bản đầu ghi "tổng một nghề không vượt `thưởng × ngân sách`" là **sai**.
+> Việc thứ n được trả `thưởng × ngân sách ÷ n`, cộng lại ≈ `thưởng × ngân sách × (1 + ln(n ÷ ngân sách))`: tăng chậm
+> nhưng không có trần (spam gấp 1.000 lần ngân sách thì in ≈ 7,9 lần). Vì vậy mới cần trần cứng ở trên.
 - **Trần tổng cho toàn bộ nguồn "công việc"** mỗi ngày, gồm mọi nghề cộng lại, tính theo tỉ lệ nguồn cung đang lưu
   hành. Mức trần có một **giá trị tối đa khắc cứng**, không ai nâng được.
 - Không nhân trần bằng cách chia nhỏ nghề: trần tổng áp lên mọi nghề. Không nhân trần bằng nhiều danh tính: giá đã

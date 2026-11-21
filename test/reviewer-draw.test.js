@@ -23,6 +23,7 @@ async function deploy(nVerifierOwners = 5) {
   await vault.bind(agt);
   await work.bind(agt);
   await work.setCategory(1, "Translation", 1000n, 10n, 50, 2, true);
+  await work.setDailyBudget(1, 1000); // a self-found trade needs a budget (THIET-KE-LAM-PHAT.md)
   const wAgent = s[9];
   await work.grantLicense(W.address, wAgent.address, 1, H("w"), ATT, "worker"); // licence 1
   const lic = {}; // licence id -> { agent, owner }

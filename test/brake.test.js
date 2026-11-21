@@ -33,6 +33,7 @@ async function world({ endGenesis = true } = {}) {
   await vault.setBrake(brake);
   await work.setBrake(brake); // before genesis ends: afterwards Work has no owner at all
   await work.setCategory(1, "translation", E(1), E(0.1), 10, 1, true);
+  await work.setDailyBudget(1, 1000); // a self-found trade needs a budget (THIET-KE-LAM-PHAT.md)
   await work.grantLicense(owners[0].address, workerAI.address, 1, ethers.id("w"), ethers.ZeroHash, "worker"); // licence 1
   for (let i = 0; i < 3; i++) await work.grantLicense(owners[i].address, ais[i].address, 2, ethers.id("v" + i), ATT, "verifier " + i); // 2..4
   return { s, founder, client, owners, ais, workerAI, vault, work, agt, brake, xau, bnb };

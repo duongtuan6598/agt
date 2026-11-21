@@ -34,6 +34,7 @@ async function world() {
   await vault.bind(agt);
   await work.bind(agt);
   await work.setCategory(1, "Open-document translation", 500n, 50n, 20, 2, true);
+  await work.setDailyBudget(1, 1000); // a self-found trade needs a budget (THIET-KE-LAM-PHAT.md)
   await work.grantLicense(W.address, ai.w.address, 1, ethers.id("w"), ATT, "worker AI");
   await work.grantLicense(V1.address, ai.v1.address, 2, ethers.id("1"), ATT, "verifier 1");
   await work.grantLicense(V2.address, ai.v2.address, 2, ethers.id("2"), ATT, "verifier 2");

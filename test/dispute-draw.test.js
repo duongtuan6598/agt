@@ -28,6 +28,7 @@ async function world(nVerifiers = 5) {
   await work.bind(agt);
   await vault.setAsset(ethers.ZeroAddress, true);
   await work.setCategory(1, "translation", 500n, 50n, 20, 2, true);
+  await work.setDailyBudget(1, 1000); // a self-found trade needs a budget (THIET-KE-LAM-PHAT.md)
   await work.setDisputeRules(3, 0n, 3 * DAY);
   await work.grantLicense(W.address, wAI.address, 1, ethers.id("w"), ATT, "worker"); // licence 1
   for (let i = 0; i < nVerifiers; i++) await work.grantLicense(owners[i].address, ais[i].address, 2, ethers.id("v" + i), ATT, "v" + i); // 2..

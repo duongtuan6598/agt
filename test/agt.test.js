@@ -137,6 +137,7 @@ describe("Hạt, bảng giá nghề, giờ chợ vàng", () => {
     const HAT = await agt.HAT();
     for (const n of bang.nghe) {
       await work.setCategory(n.id, n.ten, BigInt(n.thuong) * HAT, BigInt(n.nghiemThu) * HAT, n.tranNgay, n.soPhieu, true);
+      await work.setDailyBudget(n.id, n.nganSachNgay); // a self-found trade needs a budget (THIET-KE-LAM-PHAT.md)
     }
     await work.grantLicense(aiOwnerA.address, AG(aiOwnerA).address, 1, H("thi"), ATT, "Thợ");
     await work.grantLicense(aiOwnerB.address, AG(aiOwnerB).address, 2, H("thi"), ATT, "NT B");
@@ -152,6 +153,7 @@ describe("Hạt, bảng giá nghề, giờ chợ vàng", () => {
   it("chợ vàng đóng (giá vàng cũ) thì Kho đóng, nhưng công việc vẫn chạy", async () => {
     const { vault, usdt, usdtFeed, work, agt, client, aiOwnerA, aiOwnerB, aiOwnerC } = await deploy();
     await work.setCategory(1, "Dịch", 500n * (await agt.HAT()), 0, 5, 2, true);
+    await work.setDailyBudget(1, 1000); // a self-found trade needs a budget (THIET-KE-LAM-PHAT.md)
     await work.grantLicense(aiOwnerA.address, AG(aiOwnerA).address, 1, H("thi"), ATT, "Thợ");
     await work.grantLicense(aiOwnerB.address, AG(aiOwnerB).address, 2, H("thi"), ATT, "NT B");
     await work.grantLicense(aiOwnerC.address, AG(aiOwnerC).address, 2, H("thi"), ATT, "NT C");
@@ -177,6 +179,7 @@ describe("Công việc", () => {
     await work.grantLicense(aiOwnerD.address, AG(aiOwnerD).address, 2, H("bai-thi-nt-D"), ATT, "Nghiệm thu D"); // id 4
     await work.grantLicense(aiOwnerA.address, AGENTS.get("A2").address, 2, H("bai-thi-nt-A"), ATT, "Nghiệm thu A"); // id 5 — cùng chủ với thợ
     await work.setCategory(1, "Dịch tài liệu mở", E(0.001), E(0.0001), 2, 2, true);
+    await work.setDailyBudget(1, 1000); // a self-found trade needs a budget (THIET-KE-LAM-PHAT.md)
     return d;
   }
 

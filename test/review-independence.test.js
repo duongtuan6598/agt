@@ -22,6 +22,7 @@ async function deploy() {
   await work.bind(agt);
   const HAT = await agt.HAT();
   await work.setCategory(1, "Translation", 500n * HAT, 50n * HAT, 20, 2, true); // needs 2 approvals
+  await work.setDailyBudget(1, 1000); // a self-found trade needs a budget (THIET-KE-LAM-PHAT.md)
   await work.grantLicense(W.address, ag.w.address, 1, H("w"), ATT, "worker");
   await work.grantLicense(V.address, ag.v1.address, 2, H("v1"), ATT, "verifier 1 of owner V");
   await work.grantLicense(V.address, ag.v2.address, 2, H("v2"), ATT, "verifier 2 of owner V"); // same owner

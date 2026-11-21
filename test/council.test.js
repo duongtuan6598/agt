@@ -98,6 +98,10 @@ describe("AI không chịu thao túng của chủ", () => {
     await work.connect(ag.A).propose(1, target, call(work, "setCategory", [1, "Dịch", E(0.0005), E(0.00005), 5, 2, true]), LD);
     for (const [a, lic] of [[ag.B, 2], [ag.C, 3], [ag.D, 5]]) await work.connect(a).councilVote(1, lic, true, LD);
     await work.execute(1);
+    // …and gives it a daily budget: without one a trade takes no self-found work (THIET-KE-LAM-PHAT.md)
+    await work.connect(ag.A).propose(1, target, call(work, "setDailyBudget", [1, 100]), LD);
+    for (const [a, lic] of [[ag.B, 2], [ag.C, 3], [ag.D, 5]]) await work.connect(a).councilVote(2, lic, true, LD);
+    await work.execute(2);
     await work.connect(ag.A).submitSelf(1, 1, H("ban dich"), "ipfs://x");
     const by = { 2: [ag.B, B], 3: [ag.C, C], 4: [ag.B2, B], 5: [ag.D, D] };
     const drawn = await drawFor(work, 1);

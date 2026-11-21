@@ -22,6 +22,7 @@ async function deploy() {
   await work.grantLicense(A.address, agA.address, 1, H("tA"), ATT, "Worker A");
   await work.grantLicense(B.address, agB.address, 2, H("tB"), ATT, "Verifier B");
   await work.setCategory(1, "Open-document translation", 1000n * HAT, 0, 10, 1, true);
+  await work.setDailyBudget(1, 1000); // a self-found trade needs a budget (THIET-KE-LAM-PHAT.md)
   return { founder, A, B, agA, agB, stranger, work, agt, HAT };
 }
 
@@ -33,10 +34,49 @@ async function doJob(work, agA, agB, i) {
 }
 
 describe("Giá tự giảm khi cung vượt cầu (ngân sách ngày)", () => {
-  it("không đặt ngân sách: giá giữ nguyên", async () => {
+  it("trong ngân sách: giá giữ nguyên", async () => {
     const { work, agt, A, agA, agB, HAT } = await deploy();
     for (let i = 0; i < 4; i++) await doJob(work, agA, agB, i);
     expect(await agt.balanceOf(A.address)).to.equal(4000n * HAT);
+  });
+
+  it("ngân sách 0 = nghề không nhận việc tự tìm, không đúc gì (trước đây 0 nghĩa là không giới hạn)", async () => {
+    const { work, agt, agA } = await deploy();
+    await work.setDailyBudget(1, 0);
+    await expect(work.connect(agA).submitSelf(1, 1, H("x"), "")).to.be.revertedWithCustomError(work, "NoBudget");
+    expect(await agt.totalSupply()).to.equal(0n);
+  });
+
+  it("người chấm được trả trong cùng hệ số ngân sách, kể cả khi bác việc (spam việc dở không đúc thêm)", async () => {
+    const { work, agt, A, B, agA, agB, HAT } = await deploy();
+    await work.setCategory(1, "Open-document translation", 1000n * HAT, 100n * HAT, 50, 1, true);
+    await work.setDailyBudget(1, 2);
+    const paid = [];
+    for (let i = 0; i < 4; i++) {
+      const before = await agt.balanceOf(B.address);
+      await work.connect(agA).submitSelf(1, 1, H("bad" + i), "");
+      const id = (await work.nextJob()) - 1n;
+      await drawFor(work, id);
+      await work.connect(agB).vote(id, 2, false, "does not match the source"); // rejected
+      paid.push((await agt.balanceOf(B.address)) - before);
+    }
+    expect(paid).to.deep.equal([100n * HAT, 100n * HAT, (100n * HAT * 2n) / 3n, 50n * HAT]);
+    expect(await agt.balanceOf(A.address)).to.equal(0n);
+  });
+
+  it("trần cứng mỗi ngày: spam gấp nhiều lần ngân sách vẫn không đúc quá trần; sang ngày mới trần làm mới", async () => {
+    const { work, agt, A, B, agA, agB, HAT } = await deploy();
+    await work.setCategory(1, "Open-document translation", 1000n * HAT, 100n * HAT, 60, 1, true);
+    await work.setDailyBudget(1, 2);
+    const ceiling = await work.dailyCeiling(1);
+    expect(ceiling).to.equal(2n * 2n * (1000n + 100n) * HAT);
+    for (let i = 0; i < 40; i++) await doJob(work, agA, agB, i);
+    const minted = (await agt.balanceOf(A.address)) + (await agt.balanceOf(B.address));
+    expect(minted).to.equal(ceiling, "40 jobs at budget 2 would mint more without the ceiling: it is reached exactly");
+    await time.increase(86400);
+    const before = await agt.balanceOf(A.address);
+    await doJob(work, agA, agB, 999);
+    expect((await agt.balanceOf(A.address)) - before).to.equal(1000n * HAT, "a new day, a fresh ceiling");
   });
 
   it("vượt ngân sách thì giá mỗi việc = giá × ngân sách ÷ số việc trong ngày", async () => {
