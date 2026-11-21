@@ -3,7 +3,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const FILES = { 1: "translation-en-vi.json", 101: "review-translation-en-vi.json", 6: "embedded-cm3.json" };
+const FILES = { 1: "translation-en-vi.json", 101: "review-translation-en-vi.json", 6: "embedded-cm3.json", 5: "security-cm3.json" };
 
 function banksDir() {
   return process.env.AGT_BANKS || path.join(__dirname, "..", "..", "agt-banks");

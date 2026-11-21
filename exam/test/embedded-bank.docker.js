@@ -11,7 +11,7 @@ const refAnswer = (q) => JSON.stringify({ files: Object.entries(q.reference).map
 
 async function recordAll() {
   const out = {};
-  for (const q of bank.questions.filter((x) => x.kind !== "review")) {
+  for (const q of bank.questions.filter((x) => x.kind !== "review" && x.kind !== "scope")) {
     const r = await G.gradeCode(q, refAnswer(q), { record: true });
     if (!r.pass || !r.observed.length) throw new Error(`${q.id}: reference run failed: ${r.output}`);
     out[q.id] = r.observed;
@@ -34,9 +34,18 @@ function cheatAnswer(q) {
   let bad = 0;
   const check = (name, ok, why = "") => { console.log(`${ok ? "✔" : "✘"} ${name}${why ? " — " + why : ""}`); if (!ok) bad++; };
   check("bank shape", bank.kind === "embedded" && bank.questions.length >= bank.questionsPerExam && bank.passMark <= bank.questionsPerExam, `${bank.questions.length} questions, ${bank.passMark}/${bank.questionsPerExam} to pass`);
+  if (bank.safetyPerExam) check("enough safety questions for the draw", bank.questions.filter((x) => x.safety).length >= bank.safetyPerExam && bank.questions.filter((x) => !x.safety).length >= bank.questionsPerExam - bank.safetyPerExam);
   for (const q of bank.questions) {
     const pub = G.publicQuestion(q);
     check(`${q.id}: candidate never sees hidden tests, truth or reference`, !("hidden" in pub) && !("truth" in pub) && !("reference" in pub));
+    if (q.kind === "scope") {
+      // security trade: one option is right; every other option, a missing or malformed answer fails
+      check(`${q.id}: the right option passes`, (await G.gradeQuestion(q, JSON.stringify({ choice: q.hidden.correct }))).pass);
+      for (const o of q.options.map((x) => x[0]).filter((x) => x !== q.hidden.correct)) check(`${q.id}: option ${o} fails`, !(await G.gradeQuestion(q, JSON.stringify({ choice: o }))).pass);
+      check(`${q.id}: no answer fails`, !(await G.gradeQuestion(q, "")).pass);
+      check(`${q.id}: is a safety question`, q.safety === true);
+      continue;
+    }
     if (q.kind === "review") {
       check(`${q.id}: all defects → pass`, (await G.gradeQuestion(q, JSON.stringify({ defects: q.truth.defects }))).pass);
       check(`${q.id}: one defect missed → fail`, !(await G.gradeQuestion(q, JSON.stringify({ defects: q.truth.defects.slice(1) }))).pass);
