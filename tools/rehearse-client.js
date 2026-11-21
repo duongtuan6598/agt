@@ -29,7 +29,8 @@ async function main() {
     return hashOf(text);
   };
 
-  if (cmd === "open") {
+  if (cmd === "open" || cmd === "brief") {
+    // brief <id> <repo-url> "<milestone>"…: publish the brief again for an engagement already opened
     const [licence, repository, ...milestones] = a;
     const Brief = require(path.join(ROOT, "public", "forms", "brief.js"));
     const FORM = require(path.join(ROOT, "public", "forms", "embedded.json"));
@@ -42,6 +43,11 @@ async function main() {
     const v = Brief.validate(FORM, b);
     if (!v.ok) throw new Error("brief: " + v.errors.join("; "));
     const text = Brief.canonical(b);
+    if (cmd === "brief") {
+      const id = Number(licence);
+      const r = await post("/briefs", { contract: "engagement", id, text, signature: await wallet.signMessage(`AGT brief engagement ${id} ${hashOf(text)}`) });
+      return console.log(r.ok ? `brief for engagement #${id} published` : `refused: ${r.error}${r.errors ? " — " + r.errors.join("; ") : ""}`);
+    }
     const amounts = milestones.map(() => ethers.parseEther(process.env.AGT_MILESTONE_AGT || "0.001"));
     const total = amounts.reduce((x, y) => x + y, 0n);
     const agt = new ethers.Contract(dep.AGT, ["function approve(address,uint256) returns (bool)", "function allowance(address,address) view returns (uint256)"], wallet);
