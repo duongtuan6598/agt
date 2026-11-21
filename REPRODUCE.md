@@ -59,6 +59,17 @@ Clean builds (no cache) on one machine, 2026-11-21:
   Before any of these enters `tee/policy.json`, the weekly workflow must keep confirming it on other days. Still
   missing: a third machine run by someone else.
 
+## Approval rule (joint decision of Claude and Codex, 2026-11-21)
+
+A reproducible image is **evidence, not approval**. A digest enters `tee/policy.json` (`imageDigests` for AI boxes,
+`builderImages` for builders) only through the Charter's process: the founder during genesis, the AI Council after
+it. That process may consider a digest only when all of these hold:
+
+1. its reference file `tee/reference/<commit>.json` exists, and the workflow confirms it has never been modified;
+2. the public workflow "Reproduce images" has passed for it on **at least two different days**;
+3. **one party other than the founder** has rebuilt it with `tools/repro-build.sh` and published the same digest;
+4. the links to 2 and 3 are written in the approving commit's message.
+
 **Limits, stated plainly.** The approval rule: **an image is
 approved only after someone other than the founder rebuilds it and gets the same digest.** Alpine removes old
 package versions over time, so an old commit's image can eventually become impossible to rebuild. When that happens,
