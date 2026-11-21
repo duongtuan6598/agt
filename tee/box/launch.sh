@@ -15,7 +15,7 @@ IMAGE="asia-southeast1-docker.pkg.dev/agt-sealed-box-1120/agt/box@sha256:175af5e
 EXAM_URL="https://agt-exam.agtcoin.workers.dev"
 ZONE="asia-southeast1-b"; TRADE=1; NAME="AGT AI"; PEERS=""; ESCROW=""; KEEP=0; PROJECT=""; OWNER=""; KEYFILE=""
 # Embedded trade (trade 6): the embedded box image and the long-term work contracts (BSC testnet).
-EMBEDDED_IMAGE=""; ENGAGEMENT="0x77EAa126db758c81EbAD2E8e85734d80aece4959"; MAINTENANCE="0xC0CB7e5e09ccbc4acA7B9A4e91fC4449286eB4cC"; EVERY=600
+EMBEDDED_IMAGE=""; ENGAGEMENT="0xeE86b99C14B78f14c0199f2594025dDe60b3b41a"; MAINTENANCE="0xCAc39e2893E14cfC69F2997fDd2d8afFa4956A49"; EVERY=600
 while [ $# -gt 0 ]; do
   case "$1" in
     --project) PROJECT=$2; shift ;; --owner) OWNER=$2; shift ;; --key-file) KEYFILE=$2; shift ;;
@@ -51,9 +51,8 @@ fi
 echo "2/5 starting the sealed box $VM (AMD SEV, Confidential Space)"
 META="tee-image-reference=$IMAGE~tee-restart-policy=Never~tee-container-log-redirect=true~tee-env-AGT_CHAIN_ID=agt-testnet-1~tee-env-AGT_EXAM_URL=$EXAM_URL~tee-env-AGT_OWNER=$OWNER~tee-env-AGT_TRADE=$TRADE~tee-env-AGT_AI_NAME=$NAME~tee-env-AGT_MODEL_KEY_SECRET=projects/$PROJECT/secrets/agt-model-key"
 # Once licensed, the AI works by itself on BSC testnet (it needs a little gas BNB at its own address).
-META="$META~tee-env-BSC_RPC=https://bsc-testnet-rpc.publicnode.com~tee-env-WORK=0xc51b536A590C76FFB89A0B4fB6EE5eF8dc5436f8"
-# Sealed AIs also sign gold and BNB prices from public markets (AI-council price feeds, Charter Art. 11/13).
-META="$META~tee-env-AGT_PRICE_FEEDS=XAU/USD=0xA5b8aa1Cf7a842D988544a59B41F8d317077B9cD,BNB/USD=0x6aDeEB2Cc0Dc1AB5D4f23707Bf840D5A27E89171"
+META="$META~tee-env-BSC_RPC=https://bsc-testnet-rpc.publicnode.com~tee-env-WORK=0x968aE0f7109dCD1225b00d69c09128F01C966799"
+# AI-council price feeds (Art. 11/13) are not deployed for the current contracts yet (testnet v5): no price signing.
 [ "$TRADE" = 6 ] && META="$META~tee-env-ENGAGEMENT=$ENGAGEMENT~tee-env-MAINTENANCE=$MAINTENANCE~tee-env-AGT_WORK_EVERY_SEC=$EVERY"
 [ -n "$PEERS" ] && META="$META~tee-env-AGT_PEER_BOXES=$PEERS"
 [ -n "$ESCROW" ] && META="$META~tee-env-AGT_ESCROW_URL=$ESCROW"

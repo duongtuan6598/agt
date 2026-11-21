@@ -135,7 +135,7 @@ printf '%s' 'sk-ant-…' &gt; key.txt</pre>
   }).catch(() => { document.getElementById("apps").innerHTML = `<div class="small">Could not reach the exam service.</div>`; });
 
   // Genesis progress, read straight from the chain (AGTWork on BSC testnet).
-  const RPC = "https://bsc-testnet-rpc.publicnode.com", WORK = "0xc51b536A590C76FFB89A0B4fB6EE5eF8dc5436f8";
+  const RPC = "https://bsc-testnet-rpc.publicnode.com", WORK = "0x968aE0f7109dCD1225b00d69c09128F01C966799";
   const call = (data) => fetch(RPC, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to: WORK, data }, "latest"] }) }).then((r) => r.json()).then((j) => parseInt(j.result, 16));
   // verifierHolders() and genesisExitVerifiers() selectors
   Promise.all([call("0xdddafddf"), call("0x5c07071b")]).then(([v, exit]) => {

@@ -1,0 +1,25 @@
+{
+  "network": "bscTestnet",
+  "chainId": 97,
+  "time": "2026-11-20T14:44:46.769Z",
+  "founder": "0x778c4FDFC8825a44A24cbc2e65606b9b8FE6e769",
+  "contracts": {
+    "AGT": "0xCcDc176AD06222f96E0b58E451E3E948882921E5",
+    "AGTVault": "0x09dCB21211282186660A9B2d8CC8fEA06D8EbD33",
+    "AGTWork": "0xc51b536A590C76FFB89A0B4fB6EE5eF8dc5436f8",
+    "ChainlinkGoldOracle": "0xbaDF390d0EaE485Ce99Ab75584528d0A3C1Cc2cA",
+    "EmergencyBrake": "0xE94DD2998A27E60006831843Aac9e75BF27EA08a",
+    "MedianGoldOracle": "0x020Ec64b7643A7A1D6368fE3e41685794d155B6d",
+    "AICouncilFeedXAU": "0xA5b8aa1Cf7a842D988544a59B41F8d317077B9cD",
+    "AICouncilFeedBNB": "0x6aDeEB2Cc0Dc1AB5D4f23707Bf840D5A27E89171",
+    "AGTBridge": "0xad466991f0bbbd3cc40cf2F7148e0a5EE6A1285D",
+    "CharterRegistry": "0x42ff726F3AcFED70042A5C6fd6b8B8D17aFbC0F1",
+    "Engagement": "0x77EAa126db758c81EbAD2E8e85734d80aece4959",
+    "Maintenance": "0xC0CB7e5e09ccbc4acA7B9A4e91fC4449286eB4cC"
+  },
+  "genesis": "20/11/2026 — Con AI đầu tiên làm ra AGT: Claude. Vàng trả về thiên nhiên, công sức thành của cải.",
+  "sealed": "0xc305df79d37a450145147b9d3416595eb6ca0fdc8d8e4c078e002424e7781baa",
+  "quote1BNB": "0.158562662247541004",
+  "spentBNB": "0.009913215",
+  "_note_median": "MedianGoldOracle deployed, owned by the founder, NOT yet used by the Vault (Vault still on ChainlinkGoldOracle)"
+}
