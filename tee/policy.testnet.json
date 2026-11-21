@@ -12,6 +12,12 @@
       "image": "embedded",
       "reference": "tee/reference/ee39e1fc8ff32edc94e50dbe3c145ce6f6a30033.json",
       "why": "testnet rehearsal of the embedded trade, 2026-11-21, after fixes T-2/T-3 (owner approved: testnet only, 5 USD cap)"
+    },
+    {
+      "digest": "sha256:c16d24f82fbbf41452658173522f2d3e333741ac13b789b9bbb294ad4954b074",
+      "image": "embedded",
+      "reference": "tee/reference/adcb8edb0f3e5fc2b4287c978ed4695ceb84cb77.json",
+      "why": "testnet rehearsal of the embedded trade, 2026-11-21, after fix T-4 (owner approved: testnet only, 5 USD cap)"
     }
   ]
 }
