@@ -59,7 +59,13 @@ function gcsIO(bucket) {
 // the time any client code runs, the launcher has already read job.json and the supervisor has already read
 // source.sealed; result.json is written only after every sandbox process is killed (runJob's cleanup), and it is
 // signed with a key the build never sees. The build can at most write extra objects into the party's own bucket.
-async function runBuilder({ io, attest, tools, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), waitSec = 90 * 60, pollSec = 20 }) {
+// Fail closed (found in the testnet rehearsal, 2026-11-21): on Confidential Space the launcher's socket sits on a
+// read-only mount, so lockDown() cannot make it root-only. If the build could reach it, it could obtain a genuine
+// attestation for a manifest of its own and forge a reproduction. So before ANY client code runs, the sandbox user
+// must be unable to reach a TEE socket — or the builder refuses the job.
+async function runBuilder({ io, attest, tools, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), waitSec = 90 * 60, pollSec = 20, isolationProbe = () => require("../embedded/isolation.js").probe({ metadata: false }) }) {
+  const iso = await isolationProbe();
+  if (!iso.ok) throw new Error(`refusing to build: ${iso.failures.join("; ")}`);
   const spec = JSON.parse((await io.get("spec.json")) || "null");
   if (!spec) throw new Error("no spec.json in the job bucket");
   const job = R.newJob({ dispute: spec.dispute, commit: spec.commit, commands: spec.commands, imageDigest: spec.imageDigest });

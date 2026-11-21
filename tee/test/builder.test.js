@@ -79,7 +79,13 @@ test("the supervisor: spec → attested job → sealed source → signed result 
     bucket.set("source.sealed", JSON.stringify(R.exportBundle({ gitBin: GIT, gitDir: path.join(src, ".git"), commit, manifest: j.manifest })));
   };
   const attest = async (nonce) => ({ token: sign(claims(nonce)) });
-  const out = await runBuilder({ io, attest, tools: { ...tools, run: (c, a, o) => tools.run(c === "git" ? GIT : c, a, o) }, sleep, pollSec: 0.01 });
+  const isolationProbe = async () => ({ ok: true, failures: [] });
+  // a builder whose sandbox can reach the attestation socket must refuse before anything happens
+  let attested = 0;
+  await assert.rejects(runBuilder({ io, attest: async () => { attested++; }, tools, sleep, pollSec: 0.01, isolationProbe: async () => ({ ok: false, failures: ["the sandbox can reach the TEE socket /run/container_launcher/teeserver.sock"] }) }), /refusing to build/);
+  assert.equal(attested, 0, "no attestation, no job, when isolation fails");
+  assert.equal(bucket.has("job.json"), false);
+  const out = await runBuilder({ io, attest, tools: { ...tools, run: (c, a, o) => tools.run(c === "git" ? GIT : c, a, o) }, sleep, pollSec: 0.01, isolationProbe });
   assert.ok(polls >= 1);
   const res = JSON.parse(bucket.get("result.json"));
   const j = JSON.parse(bucket.get("job.json"));

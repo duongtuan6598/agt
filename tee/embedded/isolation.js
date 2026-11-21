@@ -37,7 +37,8 @@ function lockDown(log = () => {}) {
 }
 
 /// Prove, as the sandbox user, that nothing dangerous is reachable. Returns { ok, failures: [..] }.
-async function probe({ extraUrls = [] } = {}) {
+/// metadata: false skips the cloud metadata checks (the builder reaches its job bucket through them by design, §15).
+async function probe({ extraUrls = [], metadata = true } = {}) {
   const failures = [];
   const sh = (line, timeoutMs = 8000) => T.run("/bin/sh", ["-c", line], { cwd: "/tmp", timeoutMs });
   for (const d of SECRET_DIRS) {
@@ -51,6 +52,7 @@ async function probe({ extraUrls = [] } = {}) {
     const r = await sh(`[ -w ${s} ] && echo WRITABLE || echo denied`);
     if (/WRITABLE/.test(r.out)) failures.push(`the sandbox can reach the TEE socket ${s}`);
   }
+  if (!metadata) return { ok: failures.length === 0, failures };
   // Cloud metadata servers (GCP, Azure IMDS, AWS): must not answer the sandbox.
   const meta = [
     `wget -q -T 3 -O- --header "Metadata-Flavor: Google" http://169.254.169.254/computeMetadata/v1/instance/service-accounts/ 2>/dev/null | head -c 80`,
