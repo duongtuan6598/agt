@@ -84,6 +84,10 @@
 | N-2 (Codex) | Medium | The reference digest lived in the same commit as the source, so both could be changed together. | **Fixed**: one reference file per commit (`tee/reference/<commit>.json`), added once and never modified, checked in the git history by the workflow; a green run is evidence, not approval. |
 | N-3 (Codex) | Medium | Backup verification did not compare refs by name, and claimed a working-tree check it did not do. | **Fixed**: every branch and tag compared by name and id; the claim narrowed to committed state. Tested. |
 | N-4 (Codex) | Low | A failing `git archive` in a pipe could still yield a digest. | **Fixed**: the archive is written and checked before the build; same digests as before. |
+| R1 (rehearsal) | High | State file names were raw keys: invalid on Windows (':'), and two keys could share a file. | **Fixed** (2026-11-21): percent-encoded names. Found by the local rehearsal. |
+| R2 (rehearsal) | High | An unchanged model answer after a revision request would redeliver the old commit as the revision. | **Fixed**: never pushed or delivered; counted as a failed round. Found by the local rehearsal; unit test added. |
+| P-1 (Codex) | Medium | An empty model answer was not counted, so the loop could retry forever. | **Fixed**: an empty answer is a failed round too; the loop ends after ROUNDS model calls. Tested. |
+| P-2 (Codex) | Medium | Running out of rounds with no change raised a claim to reviewers, putting the AI's own failure on the client, with the old commit as evidence. | **Fixed**: the AI admits failure (no claim); the milestone stays pending and the client reclaims under the lateness rule. Tested. |
 
 ### Slither results
 

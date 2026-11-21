@@ -71,7 +71,8 @@ async function world() {
   const model = {
     assess: async () => ({ feasible: true, reason: "embedded C, within the trade", questions: [], days: 7 }),
     engineer: async (w) => { calls.engineer.push(w); return model.next(w); },
-    next: async (w) => ({ files: [{ path: "src/uart.c", content: `/* ${w.task.split("\n")[0]} */\nvoid uart_init(void) {}\n` }], summary: "UART driver", cannot: "" }),
+    // a real model changes the code each round (the answer number makes every answer differ)
+    next: async (w) => ({ files: [{ path: "src/uart.c", content: `/* ${w.task.split("\n")[0]} — answer ${calls.engineer.length} */\nvoid uart_init(void) {}\n` }], summary: "UART driver", cannot: "" }),
     judge: async () => ({ verdict: "accept", reason: "every criterion met" }),
   };
   // The client's CI: by default every pushed commit passes on the first poll; tests script it per call.
@@ -190,10 +191,11 @@ describe("Sealed AI long-term work loop — the client's CI runs N1–N4 (§12)"
     expect(Number((await eng.milestone(id, 0)).state)).to.equal(2);
   });
 
-  it("an answer that changes nothing is never redelivered as a revision; after the last round the AI asks reviewers (found by the local rehearsal)", async () => {
-    const { eng, client, wAI, sealFor, loop, open, content, repo } = await world();
+  it("an answer that changes nothing is never redelivered as a revision; after the last round the AI admits failure, it does not blame the client (rehearsal; Codex P-2)", async () => {
+    const { eng, client, wAI, sealFor, loop, open, content, repo, calls, model } = await world();
     const id = await open();
     sealFor("engagement", id);
+    model.next = async () => ({ files: [{ path: "src/uart.c", content: "/* UART */\nvoid uart_init(void) {}\n" }], summary: "UART driver", cannot: "" }); // always the same
     const ai = loop(wAI);
     for (let i = 0; i < 3; i++) await ai.step();
     const delivered = (await eng.milestone(id, 0)).result;
@@ -204,7 +206,21 @@ describe("Sealed AI long-term work loop — the client's CI runs N1–N4 (§12)"
     expect(head()).to.equal(before, "nothing new was pushed");
     const x = await eng.milestone(id, 0);
     expect(x.result).to.equal(delivered);
-    expect(Number(x.state)).to.equal(5, "not delivered again as the revision; after the last round the AI asked the reviewers (claimDone → Disputed)");
+    expect(Number(x.state)).to.equal(1, "not delivered again, and no claim to reviewers: the milestone stays pending (the client may reclaim when late)");
+    const asked = calls.engineer.length;
+    await ai.step();
+    expect(calls.engineer.length).to.equal(asked, "after giving up, the model is not called again");
+  });
+
+  it("an empty answer is a failed round too, so the loop ends (Codex P-1)", async () => {
+    const { eng, wAI, sealFor, loop, open, calls, model } = await world();
+    const id = await open();
+    sealFor("engagement", id);
+    model.next = async () => ({ files: [], summary: "", cannot: "" });
+    const ai = loop(wAI);
+    for (let i = 0; i < 8; i++) await ai.step();
+    expect(calls.engineer.length).to.equal(3, "ROUNDS model calls, then it stops");
+    expect(Number((await eng.milestone(id, 0)).state)).to.equal(1);
   });
 
   it("warranty claim → fix on its own branch after CI passes; maintenance incident acknowledged at once, fixed after CI", async () => {

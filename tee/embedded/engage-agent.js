@@ -160,12 +160,22 @@ class EngageLoop {
     if (st && st.reportHash) return { done: { sha: st.sha, reportHash: st.reportHash } }; // CI passed; delivery not confirmed yet
     if (st && st.evidenceHash) return st.claimed ? { failed: st.gaveUp } : { claim: { sha: st.sha, evidenceHash: st.evidenceHash } };
     if (st && st.gaveUp) return { failed: st.gaveUp };
+    // A round whose answer was empty or changed nothing (found by the local rehearsal) is a failed round of the AI:
+    // nothing is pushed or delivered, the old commit is never passed off as new work, and when the rounds run out
+    // the AI admits failure. It does NOT ask reviewers: that would put the AI's own failure on the client (Codex
+    // P-2). The client then takes the milestone's money back under the contract's lateness rule.
+    if (st && st.noChange) {
+      if (st.round >= ROUNDS) {
+        const why = `the AI made no change in ${ROUNDS} rounds — it could not do this task`;
+        await this.state.set(key, { ...st, gaveUp: why });
+        await mem.append("note", `${task.split("\n")[0]}: ${why}`);
+        return { failed: why };
+      }
+      const again = `${st.failure ? st.failure + "\n" : ""}Your last answer changed nothing in the repository: make the change the task asks for.`;
+      return this.attempt({ key, kind, id, branch, b, briefText, task, notes, token, mem, round: st.round + 1, failure: again, history: st.history || [] });
+    }
     if (st && st.sha) {
-      // A round whose answer changed nothing is a failed round: its old commit is never delivered again, not even
-      // when that commit's CI passed (a revision the model did not make). Found by the local rehearsal.
-      const ci = st.noChange
-        ? { state: "failure", checks: [], failures: `${st.failure ? st.failure + "\n" : ""}Your last answer changed nothing in the repository: make the change the task asks for.` }
-        : await this.ci.status({ repository: b.fields.repository, token, sha: st.sha, required });
+      const ci = await this.ci.status({ repository: b.fields.repository, token, sha: st.sha, required });
       if (ci.state === "success") {
         const reportHash = await this.content.put(ciReport({ sha: st.sha, branch, ci, memoryHead: await mem.head() }));
         await mem.append("delivery", `${task.split("\n")[0]} → ${st.sha} on ${branch}; client CI passed: ${ci.checks.map((c) => c.name).join(", ")}`);
@@ -177,7 +187,7 @@ class EngageLoop {
         if (this.now() - st.pushedAt < CI_TIMEOUT) return { waiting: `client CI still running for ${st.sha.slice(0, 10)}` };
         gaveUp = `the client's CI gave no verdict for ${st.sha.slice(0, 10)} within ${CI_TIMEOUT / 3600} h`;
       } else if (st.round >= ROUNDS) {
-        gaveUp = st.noChange ? `no change made after ${ROUNDS} rounds` : `client CI still failing after ${ROUNDS} rounds`;
+        gaveUp = `client CI still failing after ${ROUNDS} rounds`;
       }
       if (gaveUp) {
         // The client has seen the code; the AI asks drawn reviewers instead of just walking away (§13).
@@ -215,7 +225,10 @@ class EngageLoop {
         await mem.append("note", `${task.split("\n")[0]}: ${why}`);
         return { failed: why };
       }
-      if (!a.files.length) return { waiting: "the model changed nothing; will try again" };
+      if (!a.files.length) {
+        await this.state.set(key, { round, noChange: true, failure, history });
+        return { waiting: "the model returned no change; counted as a failed round" };
+      }
       let before = null; // an empty repository (or one whose HEAD names a missing branch) has no HEAD yet
       try { before = ws._git(["rev-parse", "--verify", "-q", "HEAD"]).trim(); } catch {}
       ws.write(a.files, Object.fromEntries(b.fields.pinnedTests || []));
@@ -223,7 +236,7 @@ class EngageLoop {
       // Same content as before (found by the local rehearsal): never present the old commit as new work. The round
       // still counts, so a model that keeps changing nothing ends in the reviewers' hands, not in an endless loop.
       if (sha === before) {
-        await this.state.set(key, { sha, round, pushedAt: this.now(), history, noChange: true, failure });
+        await this.state.set(key, { round, noChange: true, failure, history });
         return { waiting: "the model's answer changes nothing in the repository; counted as a failed round" };
       }
       ws.push(branch, token);
