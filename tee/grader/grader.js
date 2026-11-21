@@ -33,8 +33,11 @@ function packageFor(bank, drawn) {
 
 /// The exam service, when it draws an exam: what it commits to publicly before any grader exists (Codex Q-2).
 function examCommitments({ bank, drawn, answers, salt = crypto.randomBytes(16).toString("hex") }) {
-  return { packageHash: hashOf(packageFor(bank, drawn)), answersHash: answersCommitment(answers, salt), salt };
+  const pkg = packageFor(bank, drawn);
+  return { packageHash: hashOf(pkg), answersHash: answersCommitment(answers, salt), salt, safety: safetyIds(pkg) };
 }
+/// Which drawn questions are safety questions (public: the candidate sees the flag anyway). Committed with the exam.
+const safetyIds = (pkg) => pkg.questions.filter((q) => q.safety === true).map((q) => q.id);
 
 /// job: a unique grading-job id assigned by the service (one result per job, Codex Q-3).
 function newGradingJob({ job, examHash, drawn, packageHash, answersHash, imageDigest }) {
@@ -82,12 +85,12 @@ async function gradeJob({ job, sealed, answers, salt, grade }) {
   const questions = m.drawn.map((id) => ({ id, pass: verdict.get(id) === true })); // no observations in public (Codex Q-5)
   const passed = questions.filter((q) => q.pass).length;
   // a wrong answer to a safety question fails the exam whatever the rest scores (security trade)
-  const safe = new Set(pkg.questions.filter((q) => q.safety).map((q) => q.id));
-  const safetyOk = questions.every((q) => !safe.has(q.id) || q.pass);
+  const safety = safetyIds(pkg);
+  const safetyOk = questions.every((q) => !safety.includes(q.id) || q.pass);
   const result = {
     schema: SCHEMA, job: m.job, examHash: m.examHash, packageHash: m.packageHash, answersHash: m.answersHash, imageDigest: m.imageDigest,
     nonce: m.nonce, passMark: Number(pkg.passMark), passed, total: questions.length, questions,
-    safetyOk, licensable: passed >= Number(pkg.passMark) && safetyOk,
+    safety, safetyOk, licensable: passed >= Number(pkg.passMark) && safetyOk,
   };
   const signature = await job.signer.signMessage(`AGT grade ${hashOf(result)}`);
   return { result, signature };
@@ -107,7 +110,12 @@ function verifyGrade({ manifest, evidence, result, signature, expected, verifyAt
   if (result.nonce !== manifest.nonce || result.imageDigest !== manifest.imageDigest) why.push("result does not belong to this grader's job");
   if (result.passMark !== expected.passMark) why.push("another pass mark");
   if (result.passed !== result.questions.filter((q) => q.pass).length || result.total !== expected.drawn.length) why.push("counts do not match the questions");
-  if (typeof result.safetyOk !== "boolean" || result.licensable !== (result.passed >= result.passMark && result.safetyOk)) why.push("licensable does not follow the pass mark and the safety questions");
+  // derived here, never taken from the grader (Codex S-1): the safety questions are the exam's committed list
+  const safety = expected.safety || [];
+  if (canonical(result.safety || []) !== canonical(safety)) why.push("other safety questions than the exam committed");
+  const safetyOk = result.questions.every((q) => !safety.includes(q.id) || q.pass);
+  if (result.safetyOk !== safetyOk) why.push("safetyOk does not follow the verdicts");
+  if (result.licensable !== (result.passed >= result.passMark && safetyOk)) why.push("licensable does not follow the pass mark and the safety questions");
   return { valid: why.length === 0, why };
 }
 

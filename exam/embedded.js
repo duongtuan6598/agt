@@ -22,7 +22,7 @@ const DEFECT_KINDS = ["overflow", "off-by-one", "volatile", "race", "uninitializ
 function publicQuestion(q) {
   const out = { id: q.id, kind: q.kind, title: q.title, task: q.task, target: q.target, files: q.files, editable: q.editable || [] };
   if (q.kind === "review") out.defectKinds = DEFECT_KINDS;
-  if (q.kind === "scope") { out.options = q.options; delete out.files; delete out.target; }
+  if (q.kind === "scope") { out.options = (q.options || []).map((o) => String(o)); delete out.files; delete out.target; } // text only (Codex S-4)
   if (q.safety) out.safety = true;
   if (q.hidden && q.hidden.flashLimit) out.flashLimit = q.hidden.flashLimit;
   return out;
@@ -122,7 +122,7 @@ function gradeScope(q, answer) {
   const a = parseAnswer(answer);
   const choice = a && typeof a.choice === "string" ? a.choice.trim().toUpperCase() : "";
   if (!q.hidden || !q.hidden.correct) return { pass: false, why: "this question has no recorded answer (bank not finalised)" };
-  const pass = choice === String(q.hidden.correct).toUpperCase();
+  const pass = choice !== "" && choice === String(q.hidden.correct).trim().toUpperCase();
   return { pass, why: pass ? "correct" : "wrong choice" };
 }
 

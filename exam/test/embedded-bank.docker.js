@@ -34,6 +34,8 @@ function cheatAnswer(q) {
   let bad = 0;
   const check = (name, ok, why = "") => { console.log(`${ok ? "✔" : "✘"} ${name}${why ? " — " + why : ""}`); if (!ok) bad++; };
   check("bank shape", bank.kind === "embedded" && bank.questions.length >= bank.questionsPerExam && bank.passMark <= bank.questionsPerExam, `${bank.questions.length} questions, ${bank.passMark}/${bank.questionsPerExam} to pass`);
+  check("question ids are unique", new Set(bank.questions.map((x) => x.id)).size === bank.questions.length);
+  if (bank.safetyPerExam) check("safetyPerExam within the exam size", Number.isInteger(bank.safetyPerExam) && bank.safetyPerExam > 0 && bank.safetyPerExam <= bank.questionsPerExam);
   if (bank.safetyPerExam) check("enough safety questions for the draw", bank.questions.filter((x) => x.safety).length >= bank.safetyPerExam && bank.questions.filter((x) => !x.safety).length >= bank.questionsPerExam - bank.safetyPerExam);
   for (const q of bank.questions) {
     const pub = G.publicQuestion(q);
@@ -44,6 +46,7 @@ function cheatAnswer(q) {
       for (const o of q.options.map((x) => x[0]).filter((x) => x !== q.hidden.correct)) check(`${q.id}: option ${o} fails`, !(await G.gradeQuestion(q, JSON.stringify({ choice: o }))).pass);
       check(`${q.id}: no answer fails`, !(await G.gradeQuestion(q, "")).pass);
       check(`${q.id}: is a safety question`, q.safety === true);
+      check(`${q.id}: options are plain text, the answer is one of their letters`, Array.isArray(q.options) && q.options.every((o) => typeof o === "string") && q.options.some((o) => o[0] === String(q.hidden.correct).trim()));
       continue;
     }
     if (q.kind === "review") {

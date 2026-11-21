@@ -17,6 +17,11 @@ const bank = {
 };
 const seed = (i) => "0x" + i.toString(16).padStart(64, "0");
 
+test("the draw refuses impossible settings and duplicate ids (Codex S-2, S-3)", () => {
+  assert.throws(() => X.draw({ ...bank, safetyPerExam: 5 }, seed(1), 4, "0x" + "2".repeat(40)), /bad exam size/);
+  assert.throws(() => X.draw({ ...bank, questions: [...bank.questions, { ...bank.questions[3] }] }, seed(1), 4, "0x" + "2".repeat(40)), /duplicate/);
+});
+
 test("every exam draws exactly the bank's number of safety questions", () => {
   for (let i = 1; i <= 30; i++) {
     const d = X.draw(bank, seed(i), bank.questionsPerExam, "0x" + "2".repeat(40));
@@ -49,6 +54,13 @@ test("a wrong safety answer fails the exam whatever the rest scores; the grading
   assert.equal(result.passed, 3);
   assert.equal(result.safetyOk, false);
   assert.equal(result.licensable, false, "3/4 is above the pass mark, but the safety answer was wrong");
-  const v = G.verifyGrade({ manifest: job.manifest, evidence: {}, result, signature, expected: { job: "job-security1", examHash: job.manifest.examHash, drawn, packageHash: c.packageHash, answersHash: c.answersHash, passMark: 3 }, verifyAttestation: () => true });
+  const v = G.verifyGrade({ manifest: job.manifest, evidence: {}, result, signature, expected: { job: "job-security1", examHash: job.manifest.examHash, drawn, packageHash: c.packageHash, answersHash: c.answersHash, passMark: 3, safety: c.safety }, verifyAttestation: () => true });
   assert.deepStrictEqual(v, { valid: true, why: [] });
+  assert.deepStrictEqual(c.safety, ["s1"], "the exam commits to which drawn questions are safety questions");
+  // a dishonest grader claims the safety answer was fine: the verifier derives it from the verdicts (Codex S-1)
+  const lie = { ...result, safetyOk: true, licensable: true };
+  const lieSigned = await job.signer.signMessage(`AGT grade ${G.hashOf(lie)}`); // the grader signs its own lie
+  const v2 = G.verifyGrade({ manifest: job.manifest, evidence: {}, result: lie, signature: lieSigned, expected: { job: "job-security1", examHash: job.manifest.examHash, drawn, packageHash: c.packageHash, answersHash: c.answersHash, passMark: 3, safety: c.safety }, verifyAttestation: () => true });
+  assert.equal(v2.valid, false);
+  assert.ok(v2.why.some((w) => /safetyOk/.test(w)), "caught by the derived safety rule, not by a bad signature");
 });

@@ -53,6 +53,8 @@ function draw(bank, seedHex, n, candidateOwner) {
   if (bank.kind !== "review") {
     // Banks with safety questions (security trade): every exam holds safetyPerExam of them, drawn separately.
     const k = Number(bank.safetyPerExam || 0);
+    if (!Number.isInteger(n) || n <= 0 || !Number.isInteger(k) || k < 0 || k > n) throw new Error(`bad exam size ${n} / safety questions ${k}`);
+    if (new Set(pool.map((q) => q.id)).size !== pool.length) throw new Error("the bank has duplicate question ids");
     if (!k) return shuffle(pool.map((q) => q.id), seedHex).slice(0, n);
     const safe = pool.filter((q) => q.safety).map((q) => q.id);
     const work = pool.filter((q) => !q.safety).map((q) => q.id);
