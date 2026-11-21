@@ -41,6 +41,13 @@ phải tài sản được cất giữ.
 **Để bên quản trị quyết, trong khung trên:** thưởng và ngân sách của từng nghề, theo nhu cầu đo được (việc được đặt
 hàng và việc treo thưởng cho thấy nhu cầu thật). Mọi thay đổi phải công bố **trước** khi có hiệu lực.
 
+**Sau khi Codex rà (I-1..I-4):**
+- Điều kiện của mỗi ngày (thưởng, tiền công chấm, ngân sách, số phiếu) được **chốt ở lần nộp đầu tiên trong ngày**.
+- Mọi việc tính theo **ngày nộp**, không theo ngày chốt.
+- Đổi thông số giữa ngày chỉ áp cho ngày sau.
+- Người chấm vẫn được trả khi giấy phép của AI thợ bị thu hồi giữa chừng.
+- Gần chạm trần thì **mọi phần chia giảm theo tỉ lệ**, không ai được trả trước.
+
 ## Công bố (Điều 9)
 
 - AGT in ra theo nguồn và theo ngày: Kho / việc tự tìm / tiền công người chấm. Việc được đặt hàng ghi riêng, vì nó

@@ -103,6 +103,17 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
     // số phiếu × tiền công chấm). Giá giảm dần của Điều 7 cộng lại tăng theo log(số việc), nên cần trần này.
     mapping(uint256 => mapping(uint256 => uint256)) public mintedPerDay;
     uint256 public constant CEILING_FACTOR = 2;
+    // The terms of a trade for one day, fixed at that day's first self-found submission (Codex I-1, I-4): pricing,
+    // review pay and the ceiling of every job submitted that day follow these, whatever governance changes later.
+    struct DayTerms {
+        uint128 reward;
+        uint128 verifierReward;
+        uint32 budget;
+        uint8 approvals;
+        bool set;
+    }
+    mapping(uint256 => mapping(uint256 => DayTerms)) public dayTerms; // trade => day => terms
+    mapping(uint256 => uint64) public jobDay; // self-found job => the day it was submitted
     mapping(uint256 => mapping(uint256 => uint32)) public acceptedPerDay; // nghề => ngày => số việc tự tìm đã duyệt
 
     // ---------- Hội đồng AI (Hiến chương Điều 11) ----------
@@ -348,23 +359,18 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
     }
 
     /// Giá việc tự tìm KẾ TIẾP của nghề này trong hôm nay (đã tính tự giảm khi cung vượt cầu).
+    /// The price of the NEXT self-found job of this trade submitted today (falls when supply exceeds demand, Art. 7).
     function currentReward(uint256 id) public view returns (uint256) {
-        return _priceAt(id, uint256(acceptedPerDay[id][block.timestamp / 1 days]) + 1);
-    }
-
-    function _priceAt(uint256 id, uint256 n) internal view returns (uint256) {
-        return _scaled(categories[id].reward, dailyBudget[id], n);
+        uint256 day = block.timestamp / 1 days;
+        DayTerms storage t = dayTerms[id][day];
+        uint256 n = uint256(acceptedPerDay[id][day]) + 1;
+        return t.set ? _scaled(t.reward, t.budget, n) : _scaled(categories[id].reward, dailyBudget[id], n);
     }
 
     /// amount × min(1, budget ÷ n); budget 0 → 0. Total paid for the day's n items stays ≤ amount × budget.
     function _scaled(uint256 amount, uint256 budget, uint256 n) internal pure returns (uint256) {
         if (budget == 0) return 0;
         return n <= budget ? amount : (amount * budget) / n;
-    }
-
-    function _takeReward(uint256 id) internal returns (uint256) {
-        uint256 n = ++acceptedPerDay[id][block.timestamp / 1 days];
-        return _priceAt(id, n);
     }
 
     function setDisputeRules(uint8 approvals, uint128 verifierReward, uint64 window) external onlyGov {
@@ -385,7 +391,10 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
         if (dailyBudget[category] == 0) revert NoBudget(); // no budget, no self-found work: nothing to mint
         uint256 day = block.timestamp / 1 days;
         if (++dailyCount[workerLicense][category][day] > c.dailyCap) revert DailyCapReached();
+        DayTerms storage t = dayTerms[category][day];
+        if (!t.set) dayTerms[category][day] = DayTerms(c.reward, c.verifierReward, dailyBudget[category], c.approvals, true);
         id = nextJob++;
+        jobDay[id] = uint64(day);
         Job storage j = jobs[id];
         j.kind = Kind.SelfFound;
         j.status = Status.Submitted;
@@ -565,8 +574,37 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
     function vote(uint256 id, uint256 verifierLicense, bool approve, string calldata reason) external nonReentrant {
         _requireAgent(verifierLicense, Role.Verifier);
         if (bytes(reason).length == 0) revert NoReason();
+        bool selfFound = _admitVote(id, verifierLicense);
+        emit Voted(id, verifierLicense, approve, reason);
         Job storage j = jobs[id];
-        bool selfFound = j.kind == Kind.SelfFound && j.status == Status.Submitted;
+        uint8 need = selfFound ? categories[j.category].approvals : disputeApprovals;
+        if (approve) {
+            _yesVoters[id].push(verifierLicense);
+            if (++j.yes >= need) {
+                if (selfFound) {
+                    _settleSelf(id, j, true, _yesVoters[id]);
+                } else {
+                    _payAssigned(id, j);
+                    _payVoters(_yesVoters[id], disputeVerifierReward); // assigned-work disputes (open item)
+                }
+            }
+        } else {
+            _noVoters[id].push(verifierLicense);
+            if (++j.no >= need) {
+                if (selfFound) {
+                    _settleSelf(id, j, false, _noVoters[id]);
+                } else {
+                    _refund(id, j);
+                    _payVoters(_noVoters[id], disputeVerifierReward);
+                }
+            }
+        }
+    }
+
+    /// Who may vote on this job now; records the vote. Returns true for self-found work, false for a dispute.
+    function _admitVote(uint256 id, uint256 verifierLicense) internal returns (bool selfFound) {
+        Job storage j = jobs[id];
+        selfFound = j.kind == Kind.SelfFound && j.status == Status.Submitted;
         bool disputed = j.kind == Kind.Assigned && j.status == Status.Disputed;
         if (!selfFound && !disputed) revert BadState();
         address v = licenses[verifierLicense].holder;
@@ -577,74 +615,50 @@ contract AGTWork is Ownable2Step, ReentrancyGuard {
         if (at == 0 || at == type(uint64).max || block.timestamp > at + REVIEW_WINDOW || !assigned[id][drawRound[id]][verifierLicense]) revert NotAllowed();
         voted[id][verifierLicense] = true;
         ownerVoted[id][v] = true;
-        emit Voted(id, verifierLicense, approve, reason);
+    }
 
-        uint8 need = selfFound ? categories[j.category].approvals : disputeApprovals;
-        uint256 vReward = selfFound ? categories[j.category].verifierReward : disputeVerifierReward;
+    /// The day's hard ceiling for a self-found trade, from that day's fixed terms (THIET-KE-LAM-PHAT.md).
+    function dailyCeiling(uint256 category, uint256 day) public view returns (uint256) {
+        DayTerms storage t = dayTerms[category][day];
+        return CEILING_FACTOR * uint256(t.budget) * (uint256(t.reward) + uint256(t.approvals) * uint256(t.verifierReward));
+    }
 
-        if (approve) {
-            _yesVoters[id].push(verifierLicense);
-            if (++j.yes >= need) {
-                if (selfFound) vReward = _reviewPay(j.category, vReward);
-                if (selfFound) {
-                    if (!licenses[j.workerLicense].active) {
-                        j.status = Status.Rejected;
-                        emit JobRejected(id);
-                        return;
-                    }
-                    j.status = Status.Accepted;
-                    address to = licenses[j.workerLicense].holder;
-                    uint256 r = _mintCapped(j.category, to, _takeReward(j.category));
-                    emit JobAccepted(id, to, r, true);
-                } else {
-                    _payAssigned(id, j);
-                }
-                if (selfFound) _payVotersCapped(j.category, _yesVoters[id], vReward);
-                else _payVoters(_yesVoters[id], vReward);
-            }
+    /// Settle a self-found job against the terms of the day it was SUBMITTED (Codex I-1):
+    /// - review pay = the day's review pay x min(1, budget / jobs settled), accepted or rejected alike, and it is paid
+    ///   even when the worker's licence was revoked meanwhile (Codex I-2);
+    /// - worker pay = the day's reward x min(1, budget / jobs accepted) (Art. 7), only for an accepted job of an active
+    ///   licence;
+    /// - if what is left under the day's ceiling is less than the total, every share shrinks in proportion: nobody is
+    ///   paid first (Codex I-3).
+    function _settleSelf(uint256 id, Job storage j, bool approved, uint256[] storage voters) internal {
+        bool pay = approved && licenses[j.workerLicense].active;
+        (uint256 r, uint256 v) = _shares(j.category, jobDay[id], pay, voters.length);
+        if (pay) {
+            j.status = Status.Accepted;
+            address to = licenses[j.workerLicense].holder;
+            if (r > 0) agt.mintFromWork(to, r);
+            emit JobAccepted(id, to, r, true);
         } else {
-            _noVoters[id].push(verifierLicense);
-            if (++j.no >= need) {
-                if (selfFound) vReward = _reviewPay(j.category, vReward);
-                if (selfFound) {
-                    j.status = Status.Rejected;
-                    emit JobRejected(id);
-                } else {
-                    _refund(id, j);
-                }
-                if (selfFound) _payVotersCapped(j.category, _noVoters[id], vReward);
-                else _payVoters(_noVoters[id], vReward);
-            }
+            j.status = Status.Rejected;
+            emit JobRejected(id);
         }
+        if (v > 0) for (uint256 i; i < voters.length; i++) agt.mintFromWork(licenses[voters[i]].holder, v);
     }
 
-    /// Reviewers of self-found work are paid inside the same daily cap as the work (accepted or rejected alike), so
-    /// spamming jobs cannot mint review pay without bound (THIET-KE-LAM-PHAT.md, hole 2).
-    function _reviewPay(uint256 category, uint256 vReward) internal returns (uint256) {
-        uint256 m = ++settledPerDay[category][block.timestamp / 1 days];
-        return _scaled(vReward, dailyBudget[category], m);
-    }
-
-    /// The day's hard ceiling for a self-found trade (THIET-KE-LAM-PHAT.md).
-    function dailyCeiling(uint256 category) public view returns (uint256) {
-        Category storage c = categories[category];
-        return CEILING_FACTOR * uint256(dailyBudget[category]) * (uint256(c.reward) + uint256(c.approvals) * uint256(c.verifierReward));
-    }
-
-    /// Mint at most what is left under the day's ceiling; returns what was minted (maybe 0).
-    function _mintCapped(uint256 category, address to, uint256 amount) internal returns (uint256 paid) {
-        uint256 day = block.timestamp / 1 days;
-        uint256 ceiling = dailyCeiling(category);
-        uint256 used = mintedPerDay[category][day];
-        paid = used >= ceiling ? 0 : (amount < ceiling - used ? amount : ceiling - used);
-        if (paid == 0) return 0;
-        mintedPerDay[category][day] = used + paid;
-        agt.mintFromWork(to, paid);
-    }
-
-    function _payVotersCapped(uint256 category, uint256[] storage voters, uint256 reward) internal {
-        if (reward == 0) return;
-        for (uint256 i; i < voters.length; i++) _mintCapped(category, licenses[voters[i]].holder, reward);
+    /// Worker share r and each reviewer's share v for one settlement, recorded against the day's ceiling.
+    function _shares(uint256 cat, uint256 day, bool pay, uint256 k) internal returns (uint256 r, uint256 v) {
+        DayTerms storage t = dayTerms[cat][day];
+        v = _scaled(t.verifierReward, t.budget, ++settledPerDay[cat][day]);
+        if (pay) r = _scaled(t.reward, t.budget, ++acceptedPerDay[cat][day]);
+        uint256 used = mintedPerDay[cat][day];
+        uint256 ceiling = dailyCeiling(cat, day);
+        uint256 room = used >= ceiling ? 0 : ceiling - used;
+        uint256 total = r + v * k;
+        if (total > room) {
+            r = (r * room) / total; // total > room >= 0 here, so total > 0
+            v = (v * room) / total;
+        }
+        mintedPerDay[cat][day] = used + r + v * k;
     }
 
     function verifierCount() external view returns (uint256) {

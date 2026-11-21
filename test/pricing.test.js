@@ -68,15 +68,60 @@ describe("Giá tự giảm khi cung vượt cầu (ngân sách ngày)", () => {
     const { work, agt, A, B, agA, agB, HAT } = await deploy();
     await work.setCategory(1, "Open-document translation", 1000n * HAT, 100n * HAT, 60, 1, true);
     await work.setDailyBudget(1, 2);
-    const ceiling = await work.dailyCeiling(1);
-    expect(ceiling).to.equal(2n * 2n * (1000n + 100n) * HAT);
     for (let i = 0; i < 40; i++) await doJob(work, agA, agB, i);
+    const day = BigInt(await time.latest()) / 86400n;
+    const ceiling = await work.dailyCeiling(1, day);
+    expect(ceiling).to.equal(2n * 2n * (1000n + 100n) * HAT);
     const minted = (await agt.balanceOf(A.address)) + (await agt.balanceOf(B.address));
-    expect(minted).to.equal(ceiling, "40 jobs at budget 2 would mint more without the ceiling: it is reached exactly");
+    expect(minted <= ceiling).to.equal(true);
+    expect(ceiling - minted < 10n, "40 jobs at budget 2 would mint more without the ceiling: it is reached (to rounding)").to.equal(true);
     await time.increase(86400);
     const before = await agt.balanceOf(A.address);
     await doJob(work, agA, agB, 999);
     expect((await agt.balanceOf(A.address)) - before).to.equal(1000n * HAT, "a new day, a fresh ceiling");
+  });
+
+  it("a job is paid under the terms of the day it was submitted, not the day it settles (Codex I-1, I-4)", async () => {
+    const { work, agt, A, agA, agB, HAT } = await deploy();
+    await work.setCategory(1, "Open-document translation", 1000n * HAT, 0, 10, 1, true);
+    await work.setDailyBudget(1, 5);
+    await work.connect(agA).submitSelf(1, 1, H("late"), "");
+    const late = (await work.nextJob()) - 1n;
+    // governance changes the terms the same day: today's submissions keep today's terms
+    await work.setCategory(1, "Open-document translation", 9000n * HAT, 0, 10, 1, true);
+    await work.setDailyBudget(1, 0); // and stops new self-found work
+    await expect(work.connect(agA).submitSelf(1, 1, H("new"), "")).to.be.revertedWithCustomError(work, "NoBudget");
+    await time.increase(86400); // settles the next day
+    await drawFor(work, late);
+    await work.connect(agB).vote(late, 2, true, "checked");
+    expect(await agt.balanceOf(A.address)).to.equal(1000n * HAT, "yesterday's terms, not today's (9000) nor zero");
+  });
+
+  it("a revoked worker's job is rejected, but its reviewers are still paid (Codex I-2)", async () => {
+    const { work, agt, A, B, agA, agB, HAT } = await deploy();
+    await work.setCategory(1, "Open-document translation", 1000n * HAT, 100n * HAT, 10, 1, true);
+    await work.connect(agA).submitSelf(1, 1, H("x"), "");
+    const id = (await work.nextJob()) - 1n;
+    await work.revokeLicense(1);
+    await drawFor(work, id);
+    await work.connect(agB).vote(id, 2, true, "fine, but the worker is gone");
+    expect(await agt.balanceOf(A.address)).to.equal(0n);
+    expect(await agt.balanceOf(B.address)).to.equal(100n * HAT);
+  });
+
+  it("near the ceiling, worker and reviewers shrink in proportion — nobody is paid first (Codex I-3)", async () => {
+    const { work, agt, A, B, agA, agB, HAT } = await deploy();
+    await work.setCategory(1, "Open-document translation", 1000n * HAT, 1000n * HAT, 60, 1, true);
+    await work.setDailyBudget(1, 1); // ceiling = 2 x 1 x (1000 + 1000) = 4000
+    const got = [];
+    for (let i = 0; i < 3; i++) {
+      const a0 = await agt.balanceOf(A.address), b0 = await agt.balanceOf(B.address);
+      await doJob(work, agA, agB, i);
+      got.push([(await agt.balanceOf(A.address)) - a0, (await agt.balanceOf(B.address)) - b0]);
+    }
+    expect(got[0]).to.deep.equal([1000n * HAT, 1000n * HAT]);
+    expect(got[1]).to.deep.equal([500n * HAT, 500n * HAT]);
+    expect(got[2][0]).to.equal(got[2][1], "the last room is shared equally here (equal shares), not taken by the worker");
   });
 
   it("vượt ngân sách thì giá mỗi việc = giá × ngân sách ÷ số việc trong ngày", async () => {
