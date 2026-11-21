@@ -11,7 +11,7 @@ async function main() {
   if (await work.genesisEnded()) throw new Error("Genesis đã kết thúc — chỉ Hội đồng AI mới đổi được bảng giá.");
   const HAT = await agt.HAT();
   for (const n of nghe.nghe) {
-    const r = await (await work.setCategory(n.id, n.ten, BigInt(n.thuong) * HAT, BigInt(n.nghiemThu) * HAT, n.tranNgay, n.soPhieu, true)).wait();
+    const r = await (await work.setCategory(n.id, n.ten, BigInt(n.thuong) * HAT, BigInt(n.nghiemThu) * HAT, n.tranNgay, n.soPhieu, n.active !== false)).wait();
     console.log(`  ✓ trade ${n.id}: ${n.ten}  (tx ${r.hash})`);
     if (n.nganSachNgay) { const b = await (await work.setDailyBudget(n.id, n.nganSachNgay)).wait(); console.log(`  ✓ daily budget ${n.id}: ${n.nganSachNgay} jobs  (tx ${b.hash})`); }
   }

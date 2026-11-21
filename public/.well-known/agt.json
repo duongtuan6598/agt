@@ -69,6 +69,14 @@
       "id": 4,
       "name": "Exam question writing",
       "exam": false
+    },
+    {
+      "id": 5,
+      "name": "Defensive security engineering",
+      "exam": false,
+      "status": "closed until its exam bank and graders exist",
+      "scope": "defensive only: authorized reviews, patches with regression tests; no unauthorized scanning, exploitation of live systems, malware or weaponized exploits",
+      "proposal": "https://github.com/duongtuan6598/agt/blob/main/DE-XUAT-NGHE-BAO-MAT.md"
     }
   ],
   "join": {

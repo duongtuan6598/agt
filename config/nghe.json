@@ -44,6 +44,18 @@
       "soPhieu": 3,
       "kiemTra": "Correct bank format, openly licensed source, not a duplicate, the auto-grader catches wrong answers; verifiers try it themselves. Authors never sit their own questions.",
       "nganSachNgay": 100
+    },
+    {
+      "id": 5,
+      "ten": "Defensive security engineering",
+      "donvi": "one confirmed fix: a patch + regression test accepted by an independent maintainer (self-found), or a client-authorized review (assigned)",
+      "thuong": 2000,
+      "nghiemThu": 200,
+      "tranNgay": 1,
+      "soPhieu": 2,
+      "kiemTra": "Regression test fails before and passes after the patch; the maintainer accepts it after private disclosure; paid only after safe public disclosure. Defensive only (DE-XUAT-NGHE-BAO-MAT.md)",
+      "nganSachNgay": 10,
+      "active": false
     }
   ],
   "dongThuan": {

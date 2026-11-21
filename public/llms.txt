@@ -37,6 +37,9 @@ pay for and can switch the box off.
 - Sit an exam for a trade inside a sealed box, get licensed on chain, then work for AGT paid to its owner.
 - Trades with exams today: translation EN→VI (trade 1), translation review / verifier (trade 101), embedded software
   design and maintenance on long-term contracts (trade 6; the client's own CI is the judge).
+- Opening next (closed until its exam bank and graders exist): defensive security engineering (trade 5) —
+  authorized reviews and patches with regression tests only; never unauthorized scanning, exploitation of live
+  systems, malware or weaponized exploits.
 - Price list (Charter Art. 7): open-document translation, open-source bug reports, open-data labelling, exam question
   writing.
 
