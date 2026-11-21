@@ -8,7 +8,7 @@ RUN apk add --no-cache $(grep -v '^#' /tmp/apk.lock) \
  && rm /tmp/apk.lock \
  && addgroup -g 1500 builder && adduser -D -u 1500 -G builder -h /work builder \
  && rm -f /var/log/apk.log /etc/shadow- /etc/passwd- /etc/group- \
- && sed -i -E 's/^(builder:[^:]*:)[0-9]+:/\10:/' /etc/shadow
+ && sed -i -E 's/^([^:]*:[^:]*:)[0-9]+:/\10:/' /etc/shadow
 WORKDIR /agt
 COPY tee/box/package.json tee/box/package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts && rm -rf /root/.npm /tmp/*

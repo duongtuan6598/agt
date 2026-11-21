@@ -27,7 +27,7 @@ attest, and with the digest the launch scripts pin.
 | Alpine packages | every version pinned in `tee/apk.lock`; if the mirror has dropped one, the build **fails** instead of producing something else |
 | npm packages | `package-lock.json` with `npm ci` |
 | Timestamps | all set to the commit's time (`SOURCE_DATE_EPOCH`, `rewrite-timestamp=true`) |
-| Logs and dates written during the build | removed (`/var/log/apk.log`, npm logs; the user's password-change date set to 0) |
+| Logs and dates written during the build | removed (`/var/log/apk.log`, npm logs); every user's password-change date set to 0 (the `qemu` package creates a user stamped with the build day) |
 | Layer encoding | gzip, forced; OCI media types; no provenance or SBOM attachments; linux/amd64 |
 
 ## Results
