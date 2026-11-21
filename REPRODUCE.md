@@ -40,9 +40,16 @@ Clean builds (no cache) on one machine, 2026-11-21:
   UTC day), gave `f4773a6f…`. Cause: the `qemu` package's install script creates a user whose password-change date
   is the build day. Fixed at commit d84a044 by zeroing that date for every user. A scan of the rebuilt embedded
   image for the build day's number and date strings then found nothing.
-- **Commit d84a044:** the two-build check of all three images was interrupted because the machine ran low on
-  memory; only one builder build finished (`26c7092c…`). **This check is still to be done, ideally on a machine
-  with more memory, and on two different days.**
+- **Commit d84a044 (current reference):** each image was built twice, and each pair gave the same digest.
+
+  | Image | Digest |
+  |---|---|
+  | builder (`tee/builder/Dockerfile`) | `sha256:26c7092cc6c426a9ed73017908ba398028f184fbc2b6acca77362a5742247ef9` |
+  | embedded AI box (`tee/embedded/Dockerfile`) | `sha256:758c9143241ca5af05d7aed83c53601c4cae3491f3d385879616073a85790aa9` |
+  | general AI box (`tee/box/Dockerfile`) | `sha256:d198da1d35edb7d15ddb4830d818d624e0ed91fa7b6ca76d336cc50a2955c4d5` |
+
+  **Still to do:** a rebuild on another machine and on another day. Until then, none of these goes into
+  `tee/policy.json`.
 
 **Limits, stated plainly.** Two builds on one machine show that nothing in the build depends on the time or the
 machine's state. They do not yet show it across different machines. The approval rule is therefore: **an image is
