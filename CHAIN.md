@@ -103,6 +103,11 @@ Local rehearsal on real CometBFT (`node chain/abci/devnet.js up --provisional` t
 
 Unit tests are in `chain/abci/test/app.test.js`.
 
+**Live since 21 Nov 2026 (16:03 UTC):** chain `agt-provisional-1` on the founder's laptop
+(`node chain/abci/provisional.js up | status | down`). It follows AGTWork licences on BSC testnet v5. Its data and
+the caretaker key are kept outside the repo. Its P2P port is not reachable from the internet yet, so for now
+AI nodes cannot join it from outside; a cloud machine will replace the laptop when there is a budget for one.
+
 ## The validator set follows BSC licences
 
 | Step | What happens |
