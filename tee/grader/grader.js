@@ -15,7 +15,7 @@ const SCHEMA = "agt-grade/v2";
 const hashOf = (v) => ethers.keccak256(ethers.toUtf8Bytes(typeof v === "string" ? v : canonical(v)));
 const contextOf = (job, nonce) => `grade:${job}:${nonce}`;
 // The package carries these bank settings and nothing else (Codex Q-4).
-const SETTINGS = ["trade", "kind", "passMark", "questionsPerExam", "timeLimitSec", "maxAnswerChars"];
+const SETTINGS = ["trade", "kind", "passMark", "questionsPerExam", "safetyPerExam", "timeLimitSec", "maxAnswerChars"];
 // A salted commitment: a published hash of short or guessable answers would allow offline guessing (Codex Q-5).
 const answersCommitment = (answers, salt) => hashOf({ salt, answers });
 
@@ -81,10 +81,13 @@ async function gradeJob({ job, sealed, answers, salt, grade }) {
   const verdict = new Map(g.results.map((r) => [r.id, !!r.pass]));
   const questions = m.drawn.map((id) => ({ id, pass: verdict.get(id) === true })); // no observations in public (Codex Q-5)
   const passed = questions.filter((q) => q.pass).length;
+  // a wrong answer to a safety question fails the exam whatever the rest scores (security trade)
+  const safe = new Set(pkg.questions.filter((q) => q.safety).map((q) => q.id));
+  const safetyOk = questions.every((q) => !safe.has(q.id) || q.pass);
   const result = {
     schema: SCHEMA, job: m.job, examHash: m.examHash, packageHash: m.packageHash, answersHash: m.answersHash, imageDigest: m.imageDigest,
     nonce: m.nonce, passMark: Number(pkg.passMark), passed, total: questions.length, questions,
-    licensable: passed >= Number(pkg.passMark),
+    safetyOk, licensable: passed >= Number(pkg.passMark) && safetyOk,
   };
   const signature = await job.signer.signMessage(`AGT grade ${hashOf(result)}`);
   return { result, signature };
@@ -104,13 +107,13 @@ function verifyGrade({ manifest, evidence, result, signature, expected, verifyAt
   if (result.nonce !== manifest.nonce || result.imageDigest !== manifest.imageDigest) why.push("result does not belong to this grader's job");
   if (result.passMark !== expected.passMark) why.push("another pass mark");
   if (result.passed !== result.questions.filter((q) => q.pass).length || result.total !== expected.drawn.length) why.push("counts do not match the questions");
-  if (result.licensable !== (result.passed >= result.passMark)) why.push("licensable does not follow the pass mark");
+  if (typeof result.safetyOk !== "boolean" || result.licensable !== (result.passed >= result.passMark && result.safetyOk)) why.push("licensable does not follow the pass mark and the safety questions");
   return { valid: why.length === 0, why };
 }
 
 /// Objective trades: two graders agree only if, for the same committed package and answers, every verdict matches.
 function agree(a, b) {
-  const key = (r) => canonical({ examHash: r.examHash, packageHash: r.packageHash, answersHash: r.answersHash, passMark: r.passMark, verdicts: r.questions.map((q) => [q.id, q.pass]) });
+  const key = (r) => canonical({ examHash: r.examHash, packageHash: r.packageHash, answersHash: r.answersHash, passMark: r.passMark, safetyOk: r.safetyOk, verdicts: r.questions.map((q) => [q.id, q.pass]) });
   return key(a) === key(b);
 }
 

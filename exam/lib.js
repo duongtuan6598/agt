@@ -50,7 +50,16 @@ function shuffle(ids, seedHex) {
 function draw(bank, seedHex, n, candidateOwner) {
   const pool = bank.questions.filter((q) => lower(q.author.owner) !== lower(candidateOwner));
   if (pool.length < n) throw new Error(`Only ${pool.length} questions available to this owner, need ${n}`);
-  if (bank.kind !== "review") return shuffle(pool.map((q) => q.id), seedHex).slice(0, n);
+  if (bank.kind !== "review") {
+    // Banks with safety questions (security trade): every exam holds safetyPerExam of them, drawn separately.
+    const k = Number(bank.safetyPerExam || 0);
+    if (!k) return shuffle(pool.map((q) => q.id), seedHex).slice(0, n);
+    const safe = pool.filter((q) => q.safety).map((q) => q.id);
+    const work = pool.filter((q) => !q.safety).map((q) => q.id);
+    if (safe.length < k || work.length < n - k) throw new Error(`Only ${safe.length} safety / ${work.length} other questions available to this owner`);
+    const salt = (t) => keccak256(concat([getBytes(seedHex), toUtf8Bytes(t)]));
+    return shuffle([...shuffle(safe, salt("safety")).slice(0, k), ...shuffle(work, salt("work")).slice(0, n - k)], salt("order"));
+  }
   const good = pool.filter((q) => q.truth.verdict === "accept").map((q) => q.id);
   const bad = pool.filter((q) => q.truth.verdict === "reject").map((q) => q.id);
   const half = Math.floor(n / 2);

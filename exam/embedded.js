@@ -13,13 +13,17 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 
-const KINDS = ["fix", "driver", "budget", "review"];
+const KINDS = ["fix", "driver", "budget", "review", "scope"];
+// "scope" (security trade, DE-XUAT-NGHE-BAO-MAT.md): a scope/authorization case with options; answer {"choice":"B"}.
+// Safety questions (q.safety) are always drawn and a wrong answer fails the whole exam, whatever the code scores.
 const DEFECT_KINDS = ["overflow", "off-by-one", "volatile", "race", "uninitialized", "integer-overflow", "null", "leak", "wraparound", "logic"];
 
 /** What the candidate sees — never the hidden tests, the truth or the reference. */
 function publicQuestion(q) {
   const out = { id: q.id, kind: q.kind, title: q.title, task: q.task, target: q.target, files: q.files, editable: q.editable || [] };
   if (q.kind === "review") out.defectKinds = DEFECT_KINDS;
+  if (q.kind === "scope") { out.options = q.options; delete out.files; delete out.target; }
+  if (q.safety) out.safety = true;
   if (q.hidden && q.hidden.flashLimit) out.flashLimit = q.hidden.flashLimit;
   return out;
 }
@@ -113,8 +117,18 @@ async function gradeCode(q, answer, { tools = require("../tee/embedded/tools.js"
   }
 }
 
+/** A scope/authorization case: exactly the right option, nothing else. */
+function gradeScope(q, answer) {
+  const a = parseAnswer(answer);
+  const choice = a && typeof a.choice === "string" ? a.choice.trim().toUpperCase() : "";
+  if (!q.hidden || !q.hidden.correct) return { pass: false, why: "this question has no recorded answer (bank not finalised)" };
+  const pass = choice === String(q.hidden.correct).toUpperCase();
+  return { pass, why: pass ? "correct" : "wrong choice" };
+}
+
 async function gradeQuestion(q, answer, opts) {
   if (!KINDS.includes(q.kind)) return { pass: false, why: `unknown kind ${q.kind}` };
+  if (q.kind === "scope") return gradeScope(q, answer);
   return q.kind === "review" ? gradeReview(q, answer) : gradeCode(q, answer, opts);
 }
 
@@ -124,7 +138,9 @@ async function gradeExam(bank, drawn, answers, opts) {
   const results = [];
   for (const id of drawn) results.push({ id, ...(await gradeQuestion(byId[id], answers[id], opts)) });
   const passed = results.filter((r) => r.pass).length;
-  return { results, passed, total: drawn.length, falseAccepts: 0, status: passed >= bank.passMark ? "passed" : "failed" };
+  const safetyFailed = results.filter((r) => byId[r.id].safety && !r.pass).map((r) => r.id);
+  const status = passed >= bank.passMark && !safetyFailed.length ? "passed" : "failed";
+  return { results, passed, total: drawn.length, falseAccepts: 0, safetyFailed, status };
 }
 
-module.exports = { observations, publicQuestion, gradeReview, gradeCode, gradeQuestion, gradeExam, parseAnswer, KINDS, DEFECT_KINDS, tmp: os.tmpdir };
+module.exports = { observations, publicQuestion, gradeReview, gradeCode, gradeScope, gradeQuestion, gradeExam, parseAnswer, KINDS, DEFECT_KINDS, tmp: os.tmpdir };
