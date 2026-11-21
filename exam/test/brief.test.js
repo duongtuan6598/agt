@@ -16,7 +16,7 @@ test("every listed form is well formed: fields, acceptance criteria, deliverable
     const f = require(`../../public/forms/${k}.json`);
     assert.equal(f.schema, "agt-form/v1");
     assert.equal(f.id, k);
-    assert.ok(["open", "needs-exam"].includes(f.status));
+    assert.ok(["open", "needs-exam", "closed"].includes(f.status)) // closed: a trade registered on chain but not yet open (e.g. trade 5);
     assert.ok(f.canDo.length && f.cannotDo.length, `${k}: says what it can and cannot do`);
     assert.ok(f.acceptance.length >= 3, `${k}: concrete acceptance criteria`);
     for (const fd of f.fields) {
