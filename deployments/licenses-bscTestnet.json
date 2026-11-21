@@ -9,5 +9,16 @@
     "attestHash": "0x8fd8ef7f36212a47eddf8a7729eb77f7ba5fabbc4aa994e5aca136b46cf817ce",
     "tx": "0x7ca595859ac034e1b262adb6f8608943aefb4e42f7062156f42d1867789b6062",
     "at": "2026-11-21T07:51:51.313Z"
+  },
+  {
+    "id": 2,
+    "examHash": "0x6111d44464ec7843b7b9aac918ca386adeb825140b448c0d03c7788ef5d1385c",
+    "role": "Worker (embedded)",
+    "name": "AGT embedded rehearsal 2",
+    "owner": "0xa147bD5D7f70059f53b7C5f55441EAa9BDbD47Df",
+    "agent": "0x08a1caAE74D59bA8c6194D0410C3fD8304c8839E",
+    "attestHash": "0x79b117523e1e10b598f0358d02f6760ed585c526c63a38c136f5a72adab12cfe",
+    "tx": "0xee6adb54f6421946620c82b0a5408bd79bb4d2b8595e01b04119659fc7f49a6c",
+    "at": "2026-11-21T08:16:13.010Z"
   }
 ]

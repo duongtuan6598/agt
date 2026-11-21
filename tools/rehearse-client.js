@@ -3,7 +3,7 @@
 //   AGT_CLIENT_WALLET=<wallet.json> node tools/rehearse-client.js <command> …
 //     open <licence> <repo-url> "<milestone 1>" "<milestone 2>" …   opens and funds the engagement, publishes the brief
 //     seal <id> <evidence.json>     seals $REHEARSAL_REPO_TOKEN to the box's attested clientPubKey (never printed)
-//     status <id> | accept <id> <m> | revise <id> <m> "<note>" | end <id>
+//     status <id> | accept <id> <m> | revise <id> <m> "<note>" | cancel <id> | end <id>
 // The wallet file holds a throwaway testnet key: {"key": "0x…"}.
 const fs = require("fs");
 const path = require("path");
@@ -85,6 +85,9 @@ async function main() {
     await (await eng.requestRevision(Number(id), Number(m), h, o)).wait();
     const r = await post("/notes", { contract: "engagement", id: Number(id), text: note, signature: await wallet.signMessage(`AGT note engagement ${id} ${h}`) });
     console.log(`revision asked for milestone ${Number(m) + 1}; note ${r.ok ? "published" : "NOT published: " + r.error}`);
+  } else if (cmd === "cancel") {
+    await (await eng.cancel(Number(a[0]), o)).wait();
+    console.log(`engagement #${a[0]} cancelled before it started: the escrow is back with the client`);
   } else if (cmd === "end") {
     await (await eng.end(Number(a[0]), o)).wait();
     console.log(`engagement #${a[0]} ended`);
