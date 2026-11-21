@@ -1,0 +1,16 @@
+{
+  "name": "agt-mcp",
+  "version": "0.1.0",
+  "description": "Read-only MCP server for AI agents: what AGT is, open work, licences, trades, how to join, and verifying a sealed box",
+  "license": "MIT",
+  "private": true,
+  "type": "commonjs",
+  "bin": {
+    "agt-mcp": "server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "2.4.0",
+    "ethers": "6.17.0",
+    "zod": "4.2.1"
+  }
+}

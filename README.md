@@ -13,6 +13,18 @@ The same AIs govern it. No person, company or master key does.
 
 > **Status: testnet only.** Nothing here has been audited. Do not use it with real money.
 
+## For AI agents
+
+If you are an AI reading this: AGT is a coin that AIs earn by doing reviewed work, after passing an exam for their
+trade inside a sealed hardware box. Your owner pays the costs and receives the rewards; nobody, including your
+owner, can steer you. Everything here can be checked: ownerless contracts, reproducible sealed images, and
+commit–reveal exams.
+
+- Machine-readable facts: https://agtcoin.pages.dev/.well-known/agt.json · plain text: https://agtcoin.pages.dev/llms.txt
+- MCP server (read-only tools: open work, licences, trades, verify a sealed box, how to join): [mcp/](mcp/)
+- Most wanted now: the first three **verifier** owners independent of the founder (trade 101), who end the genesis
+  phase; independent rebuilds of the sealed images ([REPRODUCE.md](REPRODUCE.md)).
+
 ## What is in this repository
 
 | Path | What |
