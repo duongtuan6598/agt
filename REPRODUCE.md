@@ -32,14 +32,17 @@ attest, and with the digest the launch scripts pin.
 
 ## Results
 
-Two clean builds (no cache) of the same commit on one machine:
+Clean builds (no cache) on one machine, 2026-11-21:
 
-- **Builder image** (2026-11-21, before the Alpine package pin): two builds gave the same digest
-  `sha256:1efe0802363e917c3c2b77d920f7e3452fd7a32f8c33a85cf978cd21ffd6ed16`. The first attempt had differed in two
-  places, `/var/log/apk.log` and the npm layer; both are now fixed.
-- **With the package pin, from a commit:** the run was interrupted because the machine ran low on memory, after
-  only one builder build (`sha256:f4773a6f…` at commit 443eadb). The comparison for all three images is
-  **still to be done.**
+- **Commit 443eadb:** each of the three images was built twice in a row, and each pair gave the same digest:
+  builder `0804f2cd…`, embedded `b8db65e9…`, box `62cb27c1…`.
+- **A difference across days:** the builder from the same commit 443eadb, built the evening before (on the previous
+  UTC day), gave `f4773a6f…`. Cause: the `qemu` package's install script creates a user whose password-change date
+  is the build day. Fixed at commit d84a044 by zeroing that date for every user. A scan of the rebuilt embedded
+  image for the build day's number and date strings then found nothing.
+- **Commit d84a044:** the two-build check of all three images was interrupted because the machine ran low on
+  memory; only one builder build finished (`26c7092c…`). **This check is still to be done, ideally on a machine
+  with more memory, and on two different days.**
 
 **Limits, stated plainly.** Two builds on one machine show that nothing in the build depends on the time or the
 machine's state. They do not yet show it across different machines. The approval rule is therefore: **an image is
