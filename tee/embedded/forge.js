@@ -85,4 +85,23 @@ async function ciStatus({ repository, token, sha, required, fetchImpl = fetch })
   return { state, checks: checks.map(({ name, conclusion, url }) => ({ name, conclusion, url })), failures };
 }
 
-module.exports = { ciStatus, repoOf, APIS };
+/// "private" | "public" | "unknown" — used before handing over anything in plain text (Codex N-1).
+async function repoVisibility({ repository, token, fetchImpl = fetch }) {
+  const r = repoOf(repository);
+  try {
+    if (r.kind === "github") {
+      const res = await fetchImpl(`${r.api}/repos/${r.path}`, { headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "User-Agent": "agt-sealed-ai" }, redirect: "error" });
+      if (!res.ok) return "unknown";
+      const j = await res.json();
+      return j.private === true ? "private" : j.private === false ? "public" : "unknown";
+    }
+    const res = await fetchImpl(`${r.api}/projects/${encodeURIComponent(r.path)}`, { headers: { "PRIVATE-TOKEN": token, "User-Agent": "agt-sealed-ai" }, redirect: "error" });
+    if (!res.ok) return "unknown";
+    const v = (await res.json()).visibility;
+    return v === "private" ? "private" : v === "public" || v === "internal" ? "public" : "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
+module.exports = { ciStatus, repoOf, repoVisibility, APIS };

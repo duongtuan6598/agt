@@ -1,5 +1,5 @@
 {
-  "_": "Digests produced by tools/repro-build.sh from this commit (REPRODUCE.md). Any machine must get the same ones.",
+  "_": "Digests tools/repro-build.sh must produce from this commit on any machine. Added once, never modified (the workflow checks the git history).",
   "commit": "d84a04433c25c5827c5f8c9c450b98f74ccd7558",
   "buildkit": "v0.34.2",
   "images": {

@@ -1,13 +1,16 @@
-# Rebuild the AGT images on a machine nobody in AGT owns, and compare with tee/reference-digests.json.
-# Anyone can run it (Actions → "Reproduce images" → Run workflow) and read the full log. It also runs every week,
-# so the check is repeated on other days and other hardware. No third-party actions; read-only permissions.
+# Rebuild the AGT images on a machine nobody in AGT owns, and compare with the reference digests.
+# Reference files (tee/reference/<commit>.json) are added once and never modified; this workflow checks that in the
+# git history, so a digest cannot be quietly changed together with the source (Codex N-2). A green run is evidence
+# of reproducibility, not an approval: approval is policy.json, through the Charter's process.
+# Anyone can run it (Actions -> "Reproduce images" -> Run workflow) and read the log. Weekly, so it repeats on other
+# days and hardware. No third-party actions; read-only permissions.
 name: Reproduce images
 
 on:
   workflow_dispatch:
     inputs:
       commit:
-        description: "Commit to rebuild (empty = the one in tee/reference-digests.json)"
+        description: "Commit to rebuild (must have tee/reference/<commit>.json; empty = the newest reference)"
         required: false
   schedule:
     - cron: "17 3 * * 1"
@@ -27,23 +30,34 @@ jobs:
         run: |
           git clone --quiet "https://github.com/${GITHUB_REPOSITORY}.git" agt
           cd agt && git checkout --quiet "${GITHUB_SHA}"
-      - name: BuildKit pinned to the reference version
+      - name: Every reference file was added once and never changed
         run: |
-          V=$(node -p 'require("./agt/tee/reference-digests.json").buildkit')
-          docker buildx create --name repro --driver docker-container --driver-opt "image=moby/buildkit:${V}" --use
-          docker buildx inspect --bootstrap | grep -i "buildkit version"
-      - name: Rebuild ${{ matrix.image }} and compare
+          cd agt
+          for f in tee/reference/*.json; do
+            n=$(git log --format=%H --follow -- "$f" | wc -l)
+            [ "$n" = "1" ] || { echo "✘ $f was modified after it was added ($n commits)"; exit 1; }
+          done
+          echo "✔ reference files are append-only"
+      - name: BuildKit pinned to the reference version
         env:
           INPUT_COMMIT: ${{ github.event.inputs.commit }}
         run: |
           cd agt
-          REF=tee/reference-digests.json
-          COMMIT=${INPUT_COMMIT:-$(node -p "require('./$REF').commit")}
+          if [ -n "$INPUT_COMMIT" ]; then REF="tee/reference/$(git rev-parse --verify "$INPUT_COMMIT^{commit}").json"
+          else REF=$(for f in tee/reference/*.json; do echo "$(git log -1 --format=%ct -- "$f") $f"; done | sort -n | tail -1 | cut -d' ' -f2); fi
+          [ -f "$REF" ] || { echo "no reference file $REF"; exit 1; }
+          echo "REF=$REF" >> "$GITHUB_ENV"
+          V=$(node -p "require('./$REF').buildkit")
+          docker buildx create --name repro --driver docker-container --driver-opt "image=moby/buildkit:${V}" --use
+          docker buildx inspect --bootstrap | grep -i "buildkit version"
+      - name: Rebuild ${{ matrix.image }} and compare
+        run: |
+          cd agt
+          COMMIT=$(node -p "require('./$REF').commit")
           EXPECT=$(node -p "require('./$REF').images['${{ matrix.image }}']")
           GOT=$(sh tools/repro-build.sh "$COMMIT" "tee/${{ matrix.image }}/Dockerfile" "$RUNNER_TEMP/image.tar")
           echo "commit   $COMMIT"
           echo "expected $EXPECT"
           echo "got      $GOT"
           node tools/oci-layers.js "$RUNNER_TEMP/image.tar"
-          if [ "$COMMIT" != "$(node -p "require('./$REF').commit")" ]; then echo "(a different commit than the reference: digest printed, not compared)"; exit 0; fi
           [ "$GOT" = "$EXPECT" ] && echo "✔ ${{ matrix.image }}: identical — reproducible on this machine" || { echo "✘ ${{ matrix.image }}: DIFFERENT digest"; exit 1; }

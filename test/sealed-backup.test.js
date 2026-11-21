@@ -38,3 +38,21 @@ test("backup → verify → restore gives back every commit; wrong passphrase or
   assert.throws(() => B.backup(repo, out, PASS), /uncommitted/);
   fs.rmSync(tmp, { recursive: true, force: true });
 });
+
+test("verify notices a tag or branch the backup does not have (Codex N-3)", () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "agtbak-r-"));
+  const repo = path.join(tmp, "bank");
+  fs.mkdirSync(repo);
+  git(["init", "-q"], repo);
+  fs.writeFileSync(path.join(repo, "a.json"), "{}");
+  git(["add", "-A"], repo); git(["commit", "-q", "-m", "1"], repo);
+  const out = path.join(tmp, "b.agtbak");
+  B.backup(repo, out, PASS);
+  assert.equal(B.verify(out, repo, PASS).ok, true);
+  git(["tag", "v1"], repo); // same commits, one more ref
+  assert.equal(B.verify(out, repo, PASS).ok, false, "a missing tag is a difference");
+  git(["tag", "-d", "v1"], repo);
+  git(["branch", "side"], repo);
+  assert.equal(B.verify(out, repo, PASS).ok, false, "a missing branch is a difference");
+  fs.rmSync(tmp, { recursive: true, force: true });
+});

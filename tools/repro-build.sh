@@ -8,8 +8,16 @@
 set -eu
 COMMIT=$(git rev-parse --verify "$1^{commit}"); DF=$2; OUT=$3
 EPOCH=$(git log -1 --format=%ct "$COMMIT")
-# The build context is the commit's tar itself, streamed to BuildKit: the exact bytes and file modes as committed,
-# on every OS (unpacking on Windows would turn LF into CRLF and lose the executable bits).
-git -c core.autocrlf=false -c core.eol=lf -c tar.umask=022 archive --format=tar "$COMMIT" | docker buildx build --no-cache --pull=false --platform linux/amd64 -f "$DF"   --build-arg SOURCE_DATE_EPOCH="$EPOCH"   --output "type=oci,dest=$OUT,rewrite-timestamp=true,compression=gzip,force-compression=true,oci-mediatypes=true"   --provenance=false --sbom=false - >&2
+# The build context is the commit's tar itself, given to BuildKit as is: the exact bytes and file modes as committed,
+# on every OS (unpacking on Windows would turn LF into CRLF and change modes). Written and checked first, so a failed
+# archive can never become a half context (Codex N-4).
+TAR=$(mktemp)
+trap 'rm -f "$TAR"' EXIT
+git -c core.autocrlf=false -c core.eol=lf -c tar.umask=022 archive --format=tar -o "$TAR" "$COMMIT"
+tar -tf "$TAR" "$DF" >/dev/null
+docker buildx build --no-cache --pull=false --platform linux/amd64 -f "$DF" \
+  --build-arg SOURCE_DATE_EPOCH="$EPOCH" \
+  --output "type=oci,dest=$OUT,rewrite-timestamp=true,compression=gzip,force-compression=true,oci-mediatypes=true" \
+  --provenance=false --sbom=false - < "$TAR" >&2
 F=""; case "$OUT" in [A-Za-z]:*) F=--force-local;; esac  # Windows paths
 tar $F -xOf "$OUT" index.json | node -e 'let t="";process.stdin.on("data",d=>t+=d).on("end",()=>console.log(JSON.parse(t).manifests[0].digest))'

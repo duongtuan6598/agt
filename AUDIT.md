@@ -80,6 +80,10 @@
 | M-3 (Codex) | Medium | The content store's text was trusted for an on-chain hash. | **Fixed at the source**: every read checks keccak256(text) against the hash. |
 | M-4 (Codex) | Medium | Equal delivery times could pick an older memory anchor. | **Fixed**: ties go to the later milestone. |
 | M-5 (Codex) | Medium | A memory error in the monthly status could stop other work. | **Not a bug**: each maintenance contract is already handled in its own try/catch; the status for that contract waits, the rest go on. |
+| N-1 (Codex) | High | The plaintext memory hand-over went to the client's repository automatically, whatever its visibility, unredacted. | **Fixed** (2026-11-21): opt-in in the brief (`memoryHandover`, default no); only when the forge reports the repository as private; credential-like strings redacted. Tested. |
+| N-2 (Codex) | Medium | The reference digest lived in the same commit as the source, so both could be changed together. | **Fixed**: one reference file per commit (`tee/reference/<commit>.json`), added once and never modified, checked in the git history by the workflow; a green run is evidence, not approval. |
+| N-3 (Codex) | Medium | Backup verification did not compare refs by name, and claimed a working-tree check it did not do. | **Fixed**: every branch and tag compared by name and id; the claim narrowed to committed state. Tested. |
+| N-4 (Codex) | Low | A failing `git archive` in a pipe could still yield a digest. | **Fixed**: the archive is written and checked before the build; same digests as before. |
 
 ### Slither results
 

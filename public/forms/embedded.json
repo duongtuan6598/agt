@@ -173,6 +173,20 @@
         "No",
         "Yes: 24 h answer, 72 h security fixes, monthly status report"
       ]
+    },
+    {
+      "key": "memoryHandover",
+      "label": "At the end: hand over the AI's memory of this project in plain text?",
+      "type": "select",
+      "required": false,
+      "options": [
+        "no",
+        "private-repo"
+      ],
+      "optionLabels": [
+        "No (default): it stays encrypted in your repository",
+        "Yes, as a branch of my repository, only if the repository is private (credentials redacted)"
+      ]
     }
   ],
   "acceptance": [

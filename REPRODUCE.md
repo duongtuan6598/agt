@@ -15,7 +15,7 @@ sh tools/repro-build.sh <commit> tee/embedded/Dockerfile /tmp/embedded.tar   # t
 sh tools/repro-build.sh <commit> tee/box/Dockerfile      /tmp/box.tar        # the general AI box
 ```
 
-Each command prints a `sha256:` digest. The reference values are in `tee/reference-digests.json`. The same
+Each command prints a `sha256:` digest. The reference values are in `tee/reference/<commit>.json`: each file is added once and never modified, and the workflow checks that in the git history. The same
 rebuild runs **on GitHub's machines** in the workflow "Reproduce images" (`.github/workflows/reproduce.yml`). It
 runs every week and anyone can start it, with public logs, on hardware nobody in AGT owns. Compare it with the digest in `tee/policy.json`, which is what the boxes
 attest, and with the digest the launch scripts pin.

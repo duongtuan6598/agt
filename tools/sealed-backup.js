@@ -61,14 +61,19 @@ function restore(file, dir, pass = passphrase()) {
   return { head: git(["rev-parse", "HEAD"], dir).trim() };
 }
 
-/// Restore into a temp dir and compare every commit and the working tree with the live repo.
+/// Restore into a temp dir and compare with the live repo: every branch and tag by name and object id, HEAD, its
+/// tree and the whole history (committed state only — the working tree is never part of a backup).
 function verify(file, repo, pass = passphrase()) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "agtbak-v-"));
   try {
     const dir = path.join(tmp, "r");
     restore(file, dir, pass);
     const same = (args) => git(args, dir) === git(args, repo);
-    const ok = same(["rev-parse", "HEAD"]) && same(["rev-parse", "HEAD^{tree}"]) && same(["log", "--format=%H", "--all"]);
+    // refs in the restore: local branches come back as origin/<name>; tags as tags (Codex N-3)
+    const refsOf = (cwd, map) => git(["for-each-ref", "--format=%(objectname) %(refname)", ...map.from], cwd).split("\n").filter(Boolean).map((l) => l.replace(map.re, map.to)).filter((l) => !/\/HEAD$/.test(l)).sort().join("\n");
+    const live = refsOf(repo, { from: ["refs/heads", "refs/tags"], re: /^$/, to: "" });
+    const back = refsOf(dir, { from: ["refs/remotes/origin", "refs/tags"], re: / refs\/remotes\/origin\//, to: " refs/heads/" });
+    const ok = live === back && same(["rev-parse", "HEAD"]) && same(["rev-parse", "HEAD^{tree}"]) && same(["log", "--format=%H", "--all"]);
     return { ok, head: git(["rev-parse", "HEAD"], dir).trim() };
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 }

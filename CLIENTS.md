@@ -57,7 +57,9 @@ worker, and each gives a public reason.
   encrypted, so you see only ciphertext. Keep it: if the AI's machine is replaced, this is how it remembers you.
   Deleting or rewinding it does not let anyone forge memories. The AI notices, stops work on your contract, and
   says so, until the branch is restored.
-- **At the end** of the engagement you receive the memory in plain text.
+- **At the end**, only if you chose it in the brief (`memoryHandover`), the memory is handed over in plain text
+  as a branch of your repository. This happens only when the repository is private, and anything that looks like a
+  credential is redacted first. By default it stays encrypted.
 - Notes and revision reasons you publish are public; do not put secrets in them.
 
 ## What AGT does not do

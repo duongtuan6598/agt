@@ -13,6 +13,15 @@ const Brief = require("../../public/forms/brief.js");
 const FORM = require("../../public/forms/embedded.json");
 const S = require("./secrets.js");
 const { EngagementMemory } = require("./memory.js");
+
+/// Remove what looks like a credential before any plaintext leaves the box (Codex N-1).
+function redact(text) {
+  return text
+    .replace(/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g, "[redacted private key]")
+    .replace(/\b(gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}|xox[abposr]-[A-Za-z0-9-]{10,})\b/g, "[redacted token]")
+    // key = value / "key": "value", also inside JSON-escaped text (\"key\": \"value\"); already redacted values stay
+    .replace(/((?:password|passwd|secret|api[_-]?key|token)\\?["']?\s*[:=]\s*\\?["']?)(?!\[redacted)[^\s"'\\,}]{6,}/gi, "$1[redacted]");
+}
 const { Workspace, shaToBytes32 } = require("./workspace.js");
 const { ciStatus } = require("./forge.js");
 const R = require("./builder.js");
@@ -42,8 +51,8 @@ class EngageLoop {
   // verifyBuilder(manifest, evidence) → true only for an approved builder image in a genuine TEE (default: none yet)
   // memStoreFor({kind, id, repository, token}) → store: where the memory ciphertext lives (§16: the client's own
   // repository, tee/embedded/repo-memory.js). Without it, memStore (tests) is used.
-  constructor({ eng, mnt, me, chainId, content, sealed, model, ci, keys, memStore, memStoreFor = null, state, repro = null, verifyBuilder = () => false, wsRoot = "/var/agt/ws", log = () => {}, allowFileUrls = false, gitBin }) {
-    Object.assign(this, { eng, mnt, me, chainId, content, sealed, model, keys, memStore, memStoreFor, state, repro, verifyBuilder, wsRoot, log, allowFileUrls, gitBin });
+  constructor({ eng, mnt, me, chainId, content, sealed, model, ci, keys, memStore, memStoreFor = null, visibility = null, state, repro = null, verifyBuilder = () => false, wsRoot = "/var/agt/ws", log = () => {}, allowFileUrls = false, gitBin }) {
+    Object.assign(this, { eng, mnt, me, chainId, content, sealed, model, keys, memStore, memStoreFor, visibility, state, repro, verifyBuilder, wsRoot, log, allowFileUrls, gitBin });
     this.ci = ci || { status: ciStatus };
     this.chainNow = 0;
   }
@@ -260,10 +269,14 @@ class EngageLoop {
       if (!e.ended || !Number(e.startedAt) || (await this.state.get(`export:engagement:${id}`))) continue;
       try {
         const { b } = await this.brief(e.brief);
+        // Codex N-1: only if the client asked for it in the brief, and only into a PRIVATE repository, redacted.
+        if (b.fields.memoryHandover !== "private-repo") { await this.state.set(`export:engagement:${id}`, { skipped: "not requested" }); continue; }
         const token = await this.token("engagement", id);
         if (!token) continue;
+        const vis = await (this.visibility || require("./forge.js").repoVisibility)({ repository: b.fields.repository, token });
+        if (vis !== "private") { this.log(`engagement #${id}: memory hand-over waits — the repository is ${vis}, not private`); continue; }
         const mem = await this.openMemory("engagement", id, b.fields.repository, token);
-        const text = JSON.stringify({ schema: "agt-memory-export/v1", engagement: id, ...(await mem.export()) }, null, 2) + "\n";
+        const text = redact(JSON.stringify({ schema: "agt-memory-export/v1", engagement: id, ...(await mem.export()) }, null, 2)) + "\n";
         try {
           this.memStoreFor({ kind: "engagement", id, repository: b.fields.repository, token }).exportPlain(`agt/memory-export-${id}`, "agt-memory.json", text);
         } catch (err) {
@@ -528,4 +541,4 @@ function fileState(dir) {
   };
 }
 
-module.exports = { EngageLoop, httpSealed, httpRepro, fileState, ciReport, ROUNDS, CI_TIMEOUT };
+module.exports = { redact, EngageLoop, httpSealed, httpRepro, fileState, ciReport, ROUNDS, CI_TIMEOUT };
