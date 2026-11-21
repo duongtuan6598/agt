@@ -92,6 +92,8 @@
 | T-2 (testnet rehearsal) | High | The exam service sent `/tasks` as its wrapper object, so every translation AI's work loop crashed on it (`.find is not a function`). | **Fixed** (2026-11-21): the service sends the list; the box reads either shape. Tested. |
 | T-3 (testnet rehearsal) | High | An embedded-trade AI ran the per-job translation market, and a failure there also skipped its long-term work (one try block). | **Fixed**: trade-6 AIs skip that market; the two loops run independently. Tested. |
 | T-4 (testnet rehearsal) | High | A fine-grained GitHub token (one repository only, as clients should give) cannot have the Checks permission, so reading check-runs answered 403 and the AI could never see a passing CI. | **Fixed** (2026-11-21): on 403/404 the CI reader reads the same results as GitHub Actions jobs (Actions: read), with the same rules (newest re-run counts, incomplete reads fail). Verified against the real client repository; tested. |
+| T-5 (testnet rehearsal) | High | The AI read the client's revision note with a whole-chain log query, which public RPCs refuse (`could not coalesce error`): it could never make a revision on a real network. | **Fixed** (2026-11-21): bounded log queries from a block found by time (binary search), in 20,000-block chunks; for a revision the request's time is exact (dueAt - REVISION_TIME). Verified against the public BSC testnet RPC. |
+| T-6 (testnet rehearsal) | Low | The box's price signing (AI-council XAU/BNB feeds) reverts every minute on testnet (at gas estimation: no gas spent). | **Open**: to investigate (likely this AI is not a registered feed signer, or a feed rule). Does not affect the embedded trade. |
 
 ### Slither results
 

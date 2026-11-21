@@ -27,6 +27,8 @@ const { ciStatus } = require("./forge.js");
 const R = require("./builder.js");
 
 const ROUNDS = 3;
+const REVISION_TIME = 14 * 86400; // Engagement.REVISION_TIME
+const LOG_CHUNK = 20000; // blocks per log query (public RPCs refuse whole-chain queries)
 const CI_TIMEOUT = 6 * 3600; // seconds without a CI verdict before the attempt is abandoned
 const M = { PENDING: 1, DELIVERED: 2, HWTEST: 3, DONE: 4, DISPUTED: 5 };
 
@@ -280,10 +282,30 @@ class EngageLoop {
     }
   }
 
-  async lastNote(id, m, eventName) {
-    const evs = await this.eng.queryFilter(this.eng.filters[eventName](id));
+  /// The newest note of one kind for a milestone. Never a whole-chain log query: public RPCs refuse it (found in the
+  /// testnet rehearsal, T-5). From `since` (unix time; default: the engagement's start) to now, in bounded chunks.
+  async lastNote(id, m, eventName, since = null) {
+    const provider = this.eng.runner.provider;
+    if (since === null) since = Number((await this.eng.engagements(id)).startedAt) || 0;
+    const latest = await provider.getBlockNumber();
+    const from = Math.max(0, (await this.blockAt(since)) - 20);
+    const evs = [];
+    for (let a = from; a <= latest; a += LOG_CHUNK) evs.push(...(await this.eng.queryFilter(this.eng.filters[eventName](id), a, Math.min(latest, a + LOG_CHUNK - 1))));
     const mine = evs.filter((x) => Number(x.args.m) === m);
     return mine.length ? this.note(mine[mine.length - 1].args.reason || mine[mine.length - 1].args.log) : "";
+  }
+
+  /// The first block at or after unix time `ts` (binary search on block timestamps).
+  async blockAt(ts) {
+    const provider = this.eng.runner.provider;
+    let lo = 0, hi = await provider.getBlockNumber();
+    if (ts <= 0) return 0;
+    while (lo < hi) {
+      const mid = Math.floor((lo + hi) / 2);
+      const b = await provider.getBlock(mid);
+      if (Number(b.timestamp) < ts) lo = mid + 1; else hi = mid;
+    }
+    return lo;
   }
 
   /// §16: when an engagement has ended, hand the client its memory in plain text, once, in their own repository
@@ -324,7 +346,8 @@ class EngageLoop {
         if (st === M.PENDING && Number(x.dueAt) <= this.now()) { this.log(`engagement #${id}: milestone ${m + 1} is overdue — the client may take it back`); break; }
         if (st === M.PENDING) {
           const rev = Number(x.revisions);
-          const notes = rev ? await this.lastNote(id, m, "RevisionRequested") : "";
+          // a revision sets dueAt = (time of the request) + REVISION_TIME: the request's block is known exactly
+          const notes = rev ? await this.lastNote(id, m, "RevisionRequested", Number(x.dueAt) - REVISION_TIME - 120) : "";
           const line = (b.fields.milestones || [])[m] || `milestone ${m + 1}`;
           const task = `Milestone ${m + 1} of ${e.count}: ${line}${rev ? `\n(revision ${rev}: the client's note says what to change)` : ""}`;
           const r = await this.advance({ key: `engagement:${id}:m${m}:r${rev}`, kind: "engagement", id, branch: `agt/engagement-${id}-m${m + 1}`, b, briefText: text, task, notes });
