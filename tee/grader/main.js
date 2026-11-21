@@ -7,16 +7,14 @@
 // candidate's code that could reach it could obtain a genuine attestation for a manifest of its own.
 //
 // io (the exam service, or a test double):
-//   nextJob() → { examHash, drawn: [ids], answers: {id: text} } | null
+//   nextJob() → { job, examHash, drawn, packageHash, answersHash, salt, answers } | null   (the exam's commitments)
 //   postJob({ manifest, evidence, signature })     the custodian verifies the grader, then seals the package
-//   getPackage(nonce) → { box, packageHash } | null
+//   getPackage(nonce) → { box } | null
 //   postResult(nonce, { result, signature })
 const http = require("http");
 const fs = require("fs");
-const { ethers } = require("ethers");
 const G = require("./grader.js");
 const T = require("../verify.js");
-const { canonical } = require("../embedded/builder.js");
 
 const SOCK = "/run/container_launcher/teeserver.sock";
 const log = (...a) => console.log(new Date().toISOString(), "[grader]", ...a);
@@ -41,17 +39,16 @@ async function gradeOne({ io, attest, grade, imageDigest, isolationProbe, sleep 
   if (!iso.ok) throw new Error(`refusing to grade: ${iso.failures.join("; ")}`);
   const ex = await io.nextJob();
   if (!ex) return null;
-  const job = G.newGradingJob({ examHash: ex.examHash, drawn: ex.drawn, answers: ex.answers, imageDigest });
+  const job = G.newGradingJob({ job: ex.job, examHash: ex.examHash, drawn: ex.drawn, packageHash: ex.packageHash, answersHash: ex.answersHash, imageDigest });
   const evidence = await attest(T.nonceOf(job.manifest));
-  const signature = await job.signer.signMessage(`AGT grading job ${ethers.keccak256(ethers.toUtf8Bytes(canonical(job.manifest)))}`);
-  await io.postJob({ manifest: job.manifest, evidence, signature });
+  await io.postJob({ manifest: job.manifest, evidence, signature: await G.signJob(job) });
   let sealed = null;
   for (let waited = 0; !sealed && waited < waitSec; waited += pollSec) {
     sealed = await io.getPackage(job.manifest.nonce);
     if (!sealed) await sleep(pollSec * 1000);
   }
   if (!sealed) throw new Error(`no package for exam ${ex.examHash} in time`);
-  const out = await G.gradeJob({ job, sealed, answers: ex.answers, grade });
+  const out = await G.gradeJob({ job, sealed, answers: ex.answers, salt: ex.salt, grade });
   await io.postResult(job.manifest.nonce, out);
   log(`exam ${ex.examHash.slice(0, 12)}…: ${out.result.passed}/${out.result.total} — signed`);
   return out;

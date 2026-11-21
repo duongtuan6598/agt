@@ -24,19 +24,22 @@ const verifyGrader = makeVerifyGrader({ jwks, policy });
 
 const bank = { trade: 6, kind: "embedded", passMark: 2, questions: ["q1", "q2", "q3", "q4"].map((id) => ({ id, hidden: { expect: [`secret-${id}`] } })) };
 const exam = { examHash: "0x" + "c".repeat(64), drawn: ["q1", "q3", "q4"], answers: { q1: "a", q3: "b", q4: "c" } };
-const grade = async (pkg, ids) => ({ passed: 2, total: ids.length, results: ids.map((id) => ({ id, pass: id !== "q3", observed: Math.random() })) });
+const commit = G.examCommitments({ bank, drawn: exam.drawn, answers: exam.answers });
+const grade = async (pkg, ids) => ({ results: ids.map((id) => ({ id, pass: id !== "q3" })) });
 
-// the exam service + custodian, in memory
+// the exam service + custodian, in memory: each grading job has its own id; the custodian verifies before sealing
 function service() {
   const jobs = new Map();
   const results = [];
+  let n = 0;
+  const expectedFor = (job) => ({ job, examHash: exam.examHash, drawn: exam.drawn, packageHash: commit.packageHash, answersHash: commit.answersHash, passMark: bank.passMark });
   return {
-    results,
+    results, expectedFor,
     io: {
-      nextJob: async () => exam,
-      postJob: async ({ manifest, evidence }) => {
-        if (!verifyGrader(manifest, evidence)) throw new Error("custodian: not an attested, approved grader — nothing sealed");
-        jobs.set(manifest.nonce, { manifest, evidence, sealed: G.sealPackage({ bank, manifest }) });
+      nextJob: async () => ({ job: `job-${String(++n).padStart(8, "0")}`, ...exam, packageHash: commit.packageHash, answersHash: commit.answersHash, salt: commit.salt }),
+      postJob: async ({ manifest, evidence, signature }) => {
+        const sealed = G.sealPackage({ bank, manifest, evidence, jobSignature: signature, expected: expectedFor(manifest.job), verifyGrader });
+        jobs.set(manifest.nonce, { manifest, evidence, sealed });
       },
       getPackage: async (nonce) => (jobs.get(nonce) || {}).sealed || null,
       postResult: async (nonce, out) => results.push({ ...jobs.get(nonce), ...out }),
@@ -50,7 +53,7 @@ test("two attested graders grade the same exam; anyone can verify each; they agr
   for (let i = 0; i < 2; i++) await gradeOne({ io: s.io, attest: attest(), grade, imageDigest: GRADER, isolationProbe: ok, pollSec: 0 });
   assert.equal(s.results.length, 2);
   for (const r of s.results) {
-    const v = G.verifyGrade({ manifest: r.manifest, evidence: r.evidence, result: r.result, signature: r.signature, expected: { examHash: exam.examHash, answersHash: G.hashOf(exam.answers), drawn: exam.drawn }, verifyAttestation: verifyGrader });
+    const v = G.verifyGrade({ manifest: r.manifest, evidence: r.evidence, result: r.result, signature: r.signature, expected: s.expectedFor(r.manifest.job), verifyAttestation: verifyGrader });
     assert.deepStrictEqual(v, { valid: true, why: [] });
   }
   assert.equal(G.agree(s.results[0].result, s.results[1].result), true);
@@ -58,7 +61,7 @@ test("two attested graders grade the same exam; anyone can verify each; they agr
 
 test("the custodian seals nothing for an unapproved image or a builder image", async () => {
   const s = service();
-  await assert.rejects(gradeOne({ io: s.io, attest: attest("sha256:" + "1".repeat(64)), grade, imageDigest: "sha256:" + "1".repeat(64), isolationProbe: ok, pollSec: 0 }), /not an attested, approved grader/);
+  await assert.rejects(gradeOne({ io: s.io, attest: attest("sha256:" + "1".repeat(64)), grade, imageDigest: "sha256:" + "1".repeat(64), isolationProbe: ok, pollSec: 0 }), /refusing to seal: not an attested, approved grader/);
   assert.equal(makeVerifyBuilder({ jwks, policy: { ...policy, builderImages: [GRADER] } })({ agt: "grader-v1" }, {}), false, "a grader manifest is never a builder");
 });
 
