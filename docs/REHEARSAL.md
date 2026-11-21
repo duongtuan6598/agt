@@ -44,7 +44,7 @@ Real in this run: a chain (hardhat node), every contract, the exam service (`exa
 reading that chain), the client's git repository, and the sealed box's own wiring (`tee/box/engage-wiring.js`,
 shared with `start.js`). Fake: the TEE, the model, the client's CI.
 
-**2026-11-21: 14/14 checks passed.** Scenario steps 2–8 and 12 above, without TEE or money: brief through the exam
+**2026-11-21: 14/14 checks passed.** Scenario steps 2–7 and 12 above (step 8, reviewers after a failing CI, is covered by the unit tests only), without TEE or money: brief through the exam
 service, sealed access, acceptance, delivery after CI, the report anchoring the memory, a replaced VM reading its
 memory back, a rewound memory stopping work, a revision, and the hand-over at the end.
 
