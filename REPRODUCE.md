@@ -42,19 +42,24 @@ Clean builds (no cache) on one machine, 2026-11-21:
   UTC day), gave `f4773a6f…`. Cause: the `qemu` package's install script creates a user whose password-change date
   is the build day. Fixed at commit d84a044 by zeroing that date for every user. A scan of the rebuilt embedded
   image for the build day's number and date strings then found nothing.
-- **Commit d84a044 (current reference):** each image was built twice, and each pair gave the same digest.
+- **Across machines and operating systems:** the first rebuild on GitHub's Ubuntu runners gave different digests
+  for all three images. Comparing the images layer by layer showed that the RUN layers (packages, npm) were already
+  identical. Only the COPY layers differed, because the source unpacked on Windows had CRLF line endings and other
+  file modes. Fixed: the commit's tar is now streamed straight to BuildKit as the build context, with fixed `eol`
+  and `tar.umask`.
+- **Commit d84a044, reference digests:** a Windows 11 laptop (Docker Desktop) and GitHub's Ubuntu 24.04 runners
+  (BuildKit v0.34.2 in a container) give identical digests.
 
   | Image | Digest |
   |---|---|
-  | builder (`tee/builder/Dockerfile`) | `sha256:26c7092cc6c426a9ed73017908ba398028f184fbc2b6acca77362a5742247ef9` |
-  | embedded AI box (`tee/embedded/Dockerfile`) | `sha256:758c9143241ca5af05d7aed83c53601c4cae3491f3d385879616073a85790aa9` |
-  | general AI box (`tee/box/Dockerfile`) | `sha256:d198da1d35edb7d15ddb4830d818d624e0ed91fa7b6ca76d336cc50a2955c4d5` |
+  | builder (`tee/builder/Dockerfile`) | `sha256:19c446ffe839b83c5b0108bab58db47bf9e22d05c9318e98c589f54a5ff5a547` |
+  | embedded AI box (`tee/embedded/Dockerfile`) | `sha256:de9eaacde3b058dcf1535daff611308b3dc092324930005c9a0b1bc95eb6bb97` |
+  | general AI box (`tee/box/Dockerfile`) | `sha256:3d6b84621384aa6ffd193c2f7f16b76e31bf62b8463383a301ce0f15b5edcfdf` |
 
-  **Still to do:** a rebuild on another machine and on another day. Until then, none of these goes into
-  `tee/policy.json`.
+  Before any of these enters `tee/policy.json`, the weekly workflow must keep confirming it on other days. Still
+  missing: a third machine run by someone else.
 
-**Limits, stated plainly.** Two builds on one machine show that nothing in the build depends on the time or the
-machine's state. They do not yet show it across different machines. The approval rule is therefore: **an image is
+**Limits, stated plainly.** The approval rule: **an image is
 approved only after someone other than the founder rebuilds it and gets the same digest.** Alpine removes old
 package versions over time, so an old commit's image can eventually become impossible to rebuild. When that happens,
 the build fails loudly; it never silently produces a different image.
