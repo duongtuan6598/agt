@@ -100,6 +100,7 @@
 | Q-4 (Codex) | Medium | Packages copied every bank field except questions; duplicate drawn ids were accepted. | **Fixed**: allow-listed settings only; drawn ids must be distinct. Tested. |
 | Q-5 (Codex) | Medium | Unsalted public hashes of answers and observations allowed offline guessing. | **Fixed**: salted answers commitment; observations no longer in the public result. |
 | Q-6 (Codex) | Low | The grader image carried unrelated files (Charter, policy, builder verifier, extra attestation verifiers). | **Fixed**: removed; real grading in the image rechecked. |
+| D-1..D-7 (Codex) | High–Medium | The discovery material (llms.txt, agt.json, README, MCP server) overstated: gold read like a peg; 'verifiable without trusting anyone'; owner 'cannot steer'; verify_box implied a live licensed box; remote text returned to agents unmarked (prompt injection); costs and rewards could read as income. | **Fixed** (2026-11-21): gold stated as a unit of account (no peg, no redemption, testnet AGT has no cash value); a 'checkable / still trusted' list; scoped owner claim; verify_box scoped to the supplied bundle and bound to the licence on chain; network text cleaned and labelled `remoteData`; costs split (exam once vs. ongoing); 'not guaranteed, not an investment'; MCP README lists outbound destinations and asks to pin a read commit. |
 
 ### Slither results
 
