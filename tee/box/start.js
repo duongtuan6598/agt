@@ -270,7 +270,7 @@ async function startWork(agentKey, modelProvider = "anthropic", keys = null) {
   const loop = new AgentLoop({
     work: new ethers.Contract(env.WORK, WORK_ABI, wallet), me: wallet.address,
     content: httpContent(env.AGT_EXAM_URL || "https://agt-exam.agtcoin.workers.dev", wallet),
-    model: makeModel({ provider: modelProvider, apiKey, systemPrompt }), log,
+    model: makeModel({ provider: modelProvider, apiKey, systemPrompt }), log, trade: Number(env.AGT_TRADE || 1),
     // AGT_PRICE_FEEDS="XAU/USD=0x…,BNB/USD=0x…" — feed contracts this AI signs prices for (sealed AIs only)
     prices: env.AGT_PRICE_FEEDS ? {
       feeds: Object.fromEntries(env.AGT_PRICE_FEEDS.split(",").map((kv) => kv.split("=").map((x) => x.trim()))),
@@ -294,8 +294,9 @@ async function startWork(agentKey, modelProvider = "anthropic", keys = null) {
     try {
       if ((await provider.getBalance(wallet.address)) === 0n) log(`work loop: no gas — send a little BNB to ${wallet.address}`);
       else {
-        await loop.step();
-        if (engage) await engage.step();
+        // each loop on its own: a failure in one must never stop the other (testnet rehearsal)
+        try { await loop.step(); } catch (e) { log(`work loop: ${e.shortMessage || e.message}`); }
+        if (engage) try { await engage.step(); } catch (e) { log(`long-term work: ${e.shortMessage || e.message}`); }
       }
     } catch (e) {
       log(`work loop: ${e.shortMessage || e.message}`);

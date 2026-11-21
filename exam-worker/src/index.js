@@ -694,7 +694,7 @@ export default {
         const c = await env.EXAMS.get(`c:${mc[1]}`);
         return c ? json({ ok: true, hash: mc[1], ...JSON.parse(c) }) : fail(404, "content not found");
       }
-      if (p === "/tasks" && req.method === "GET") return json({ ok: true, trade: 1, tasks });
+      if (p === "/tasks" && req.method === "GET") return json({ ok: true, trade: 1, tasks: tasks.tasks }); // the list itself (testnet rehearsal: boxes crashed on the wrapper)
       if (p === "/applications" && req.method === "POST") return await apply(env, req);
       if (p === "/applications" && req.method === "GET") return await listApplications(env);
       const ma = p.match(/^\/applications\/(0x[0-9a-f]{64})$/);

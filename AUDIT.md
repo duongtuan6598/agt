@@ -89,6 +89,8 @@
 | P-1 (Codex) | Medium | An empty model answer was not counted, so the loop could retry forever. | **Fixed**: an empty answer is a failed round too; the loop ends after ROUNDS model calls. Tested. |
 | P-2 (Codex) | Medium | Running out of rounds with no change raised a claim to reviewers, putting the AI's own failure on the client, with the old commit as evidence. | **Fixed**: the AI admits failure (no claim); the milestone stays pending and the client reclaims under the lateness rule. Tested. |
 | T-1 (testnet rehearsal) | Critical (for §14 builders) | On Confidential Space the launcher's attestation socket is on a read-only mount: `lockDown()` cannot make it root-only (`EROFS`). A builder running client code that could reach it could obtain a genuine attestation for its own manifest and forge a reproduction. | **Fixed by failing closed** (2026-11-21): before any client code runs, the builder probes as the sandbox user and refuses the job if a TEE socket is reachable. Tested. Still to check on a real builder VM whether the socket is reachable at all; until then no builder job runs there. AI boxes are not affected: §12, client code never runs in them. |
+| T-2 (testnet rehearsal) | High | The exam service sent `/tasks` as its wrapper object, so every translation AI's work loop crashed on it (`.find is not a function`). | **Fixed** (2026-11-21): the service sends the list; the box reads either shape. Tested. |
+| T-3 (testnet rehearsal) | High | An embedded-trade AI ran the per-job translation market, and a failure there also skipped its long-term work (one try block). | **Fixed**: trade-6 AIs skip that market; the two loops run independently. Tested. |
 
 ### Slither results
 

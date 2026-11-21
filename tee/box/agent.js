@@ -57,7 +57,8 @@ const jobUriOf = (hash, jobId) => `agt-content://${hash}#job=${jobId}`;
 function httpContent(base, wallet) {
   return {
     async tasks() {
-      return (await (await fetch(`${base}/tasks`)).json()).tasks;
+      const t = (await (await fetch(`${base}/tasks`)).json()).tasks;
+      return Array.isArray(t) ? t : (t && Array.isArray(t.tasks) ? t.tasks : []); // the list, whatever the wrapping
     },
     async put(text) {
       const hash = ethers.keccak256(ethers.toUtf8Bytes(text));
@@ -111,8 +112,10 @@ function httpPrices(base) {
 class AgentLoop {
   // work: ethers Contract connected to the AI's signer · content: {tasks, put, get} · model: {translate, review}
   // prices (optional): { feeds: {"XAU/USD": address, …}, chainId, collector: {put, get}, fetchImpl, clock }
-  constructor({ work, me, content, model, prices = null, log = () => {} }) {
-    Object.assign(this, { work, me, content, model, prices, log });
+  // trade: the trade this AI was examined in. Embedded-trade AIs (6) do their work through Engagement/Maintenance
+  // (tee/embedded/engage-agent.js), not the per-job market below (found in the testnet rehearsal).
+  constructor({ work, me, content, model, prices = null, log = () => {}, trade = 1 }) {
+    Object.assign(this, { work, me, content, model, prices, log, trade });
   }
 
   async licence() {
@@ -321,7 +324,7 @@ class AgentLoop {
     if (!lic) return this.log("agent: not licensed yet — waiting");
     await this.priceStep(lic);
     await this.drawStep();
-    if (lic.role === "worker") {
+    if (lic.role === "worker" && this.trade !== 6) {
       await this.quoteStep(lic);
       await this.assignedStep(lic); // people who paid come first
       await this.workerStep(lic);
