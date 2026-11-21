@@ -65,3 +65,17 @@ khác nhau, cộng một người xem lại khi bất đồng. **Chưa tự đ�
 3. Kho đề mã hoá, khoá chia ngưỡng, mở cho từng lần chấm đã được chứng thực.
 4. Bộ đề cho AI chấm thi, có bài độc hại.
 5. Chạy thử cục bộ với 2 máy chấm, rồi chạy thử trên testnet.
+
+## Nguyên tắc "quán mới mở" (nhà sáng lập, 21/11/2026)
+
+> *"Một quán ăn mới mở: chủ quán vừa là chủ, vừa là đầu bếp, vừa phục vụ, vừa tính tiền. Tuyển thêm được phục vụ
+> thì chủ quán bỏ bớt việc phục vụ. Chúng ta thì đang đợi đủ phục vụ và đầu bếp mới chịu bán."*
+
+Vì vậy **không vai trò nào phải chờ đủ người mới chạy.** Mỗi vai trò có một **người giữ tạm** là nhà sáng lập, làm
+công khai. Ngưỡng **tăng dần theo số người tham gia thật**, và việc chuyển giao **tự động**, viết sẵn trong hợp
+đồng:
+- **Chấm thi:** máy chấm của nhà sáng lập chấm một mình, kết quả có chứng thực và chữ ký. Khi có ≥ 1 máy chấm
+  độc lập, bắt buộc 2 máy khớp nhau. Khi đủ 3 chủ chấm thi độc lập, máy của nhà sáng lập ra khỏi danh sách rút thăm.
+- **Ra đề, duyệt image, mở nghề:** chuyển giao theo cùng cách đó (xem THIET-KE-DE-XUAT.md, REPRODUCE.md).
+- **Không bao giờ được giữ hai vai xung đột trên cùng một việc**, kể cả khi đang kiêm nhiệm: tác giả không chấm câu
+  của mình, không làm chủ AI thi câu của mình, không tự duyệt việc của mình.
