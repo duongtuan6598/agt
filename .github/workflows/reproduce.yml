@@ -44,5 +44,6 @@ jobs:
           echo "commit   $COMMIT"
           echo "expected $EXPECT"
           echo "got      $GOT"
+          node tools/oci-layers.js "$RUNNER_TEMP/image.tar"
           if [ "$COMMIT" != "$(node -p "require('./$REF').commit")" ]; then echo "(a different commit than the reference: digest printed, not compared)"; exit 0; fi
           [ "$GOT" = "$EXPECT" ] && echo "✔ ${{ matrix.image }}: identical — reproducible on this machine" || { echo "✘ ${{ matrix.image }}: DIFFERENT digest"; exit 1; }
