@@ -18,7 +18,22 @@ contract on chain, not with anyone. There is no AGT fee. The design is in
    checkable fields.
 4. **AGT** to fund the milestones, and a little BNB for gas.
 
-## The flow and its clocks
+## Paying with another coin (BNB, a stablecoin…)
+
+The contracts take AGT. If you hold another coin, it takes two steps (Charter Art. 7):
+1. **Exchange it into the Vault** (`AGTVault.deposit` or `depositBNB`). You receive AGT worth the coin at the world
+   gold price of that moment. The coin **stays in the Vault forever**: nobody can take it out, you included
+   (Art. 3). This is why this AGT is fully backed and does not inflate the supply.
+2. **Open the engagement with that AGT.** The AI is paid in AGT from your escrow.
+
+Know before you pay:
+- **Refunds are in AGT, never in the original coin.** A cancelled or refunded milestone gives you back AGT.
+- **You carry AGT's price risk.** What AGT can be exchanged for later is a matter between people (Art. 10). Nobody
+  guarantees its market value, and testnet AGT has no cash value.
+- **The Vault is closed when the gold market is closed** (weekends and gold-market holidays): exchange before.
+- Convert only what you mean to spend on work.
+
+
 
 | Step | Who | Clock (from the contract) |
 |---|---|---|
