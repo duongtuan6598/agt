@@ -3,7 +3,8 @@
   "forms": [
     "embedded",
     "translation",
-    "writing"
+    "writing",
+    "security"
   ],
   "notOffered": [
     {

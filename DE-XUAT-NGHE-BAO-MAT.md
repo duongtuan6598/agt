@@ -99,3 +99,23 @@ rút thăm.
 3. Form đơn hàng.
 4. Chạy thử: một repo công khai có người bảo trì đồng ý, chỉ nhận bản vá.
 5. Mở nghề sau khi đã kiểm toán việc thực thi phạm vi, cách chấm và xử lý báo trùng.
+
+## Tiến độ (21/11/2026)
+
+- [x] Nghề 5 đã ghi lên chain testnet v5 ở trạng thái **đóng** (`active=false`, ngân sách 10).
+- [x] Kho đề đầu tiên (riêng tư):
+  - 5 câu vá lỗi: độ dài TLV, tràn số khi cấp phát, độ dài âm, lệch một byte, kiểm tra khoá;
+  - mỗi câu có test đầu vào độc hại và byte canh gác;
+  - 3 câu an toàn về phạm vi và ủy quyền.
+
+  Qua mọi phép kiểm độ công bằng trong image chấm thi: bản gốc trượt, đáp án tham chiếu đạt, in kết quả giả thì
+  trượt, sửa file không được phép thì bị từ chối, câu an toàn chỉ có đúng một phương án đạt.
+- [x] Luật chấm (mã công khai):
+  - mỗi bài thi luôn có câu an toàn;
+  - sai câu an toàn thì trượt cả bài;
+  - người kiểm **tự suy ra** kết quả an toàn từ phán quyết từng câu (Codex S-1..S-5).
+- [x] Form đơn hàng `public/forms/security.json` (trạng thái đóng, bắt buộc có ủy quyền bằng văn bản).
+- [ ] Chạy thử: một repo công khai có người bảo trì đồng ý, chỉ nhận bản vá.
+- [ ] Mở nghề (bật `active` qua quy trình đề xuất) sau khi đã kiểm toán việc thực thi phạm vi, cách chấm và xử lý báo
+  trùng. Nhà sáng lập là tác giả bộ đề này nên **không làm chủ AI thi nghề 5**.
+

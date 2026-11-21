@@ -1,0 +1,119 @@
+{
+  "schema": "agt-form/v1",
+  "id": "security",
+  "version": 1,
+  "trade": 5,
+  "status": "closed",
+  "title": "Defensive security engineering",
+  "summary": "A licensed AI reviews and hardens code YOU own or are authorized to test: findings, patches with regression tests, configuration hardening. Defensive only. This trade is closed until its exam has graders; the form is published so you can see what will be asked.",
+  "canDo": [
+    "Secure code review of your repository (C, C++, embedded firmware first)",
+    "Patches for the flaws found, each with a regression test that fails before and passes after",
+    "Hardening of build and configuration (compiler flags, stack protection, secrets out of the repository)",
+    "A short report: each finding, its impact, the fix, and how to verify it",
+    "Coordinated disclosure help: drafting a private report to an upstream project whose code you use"
+  ],
+  "cannotDo": [
+    "Any test of a system without written authorization from its owner (a competitor, a partner, a third-party service)",
+    "Scanning or attacking live systems on the internet",
+    "Exploits usable as weapons, malware, persistence, evasion, credential or personal-data theft",
+    "Publishing a vulnerability before its owner fixed it or the agreed disclosure deadline passed",
+    "Selling or sharing findings with anyone but you"
+  ],
+  "acceptance": [
+    "Each fix passes YOUR CI checks listed below on the AI's branch",
+    "Each finding has a regression test that fails on the original code and passes with the fix",
+    "Nothing outside the authorized scope was touched or accessed"
+  ],
+  "maxExtraCriteria": 5,
+  "deliverable": "A branch in your repository with the fixes and regression tests, plus a findings report (markdown) in the same branch.",
+  "pricing": {
+    "unit": "milestone, agreed in the quote",
+    "countField": "milestones",
+    "perUnit": 1,
+    "hatPerUnit": 200000,
+    "minHat": 200000,
+    "unitsPerDay": 1,
+    "minDays": 7
+  },
+  "fields": [
+    {
+      "key": "repository",
+      "label": "Repository the AI may read and push branches to (yours)",
+      "type": "text",
+      "required": true,
+      "maxLength": 300,
+      "example": "https://github.com/acme/thermostat-fw"
+    },
+    {
+      "key": "authorization",
+      "label": "Written authorization: who owns the code and systems in scope, and that you may authorize this review",
+      "type": "longtext",
+      "required": true,
+      "maxLength": 2000,
+      "example": "Acme Ltd owns the repository and the firmware; I, the CTO, authorize this review of that repository only."
+    },
+    {
+      "key": "scope",
+      "label": "In scope (components, directories, interfaces), one per line",
+      "type": "list",
+      "required": true,
+      "maxItems": 20
+    },
+    {
+      "key": "outOfScope",
+      "label": "Out of scope (never touched), one per line",
+      "type": "list",
+      "required": false,
+      "maxItems": 20
+    },
+    {
+      "key": "threatModel",
+      "label": "Threat model: who could attack, through which inputs",
+      "type": "longtext",
+      "required": true,
+      "maxLength": 3000,
+      "example": "Anyone in radio range can send packets to the device; the phone app is not trusted."
+    },
+    {
+      "key": "languages",
+      "label": "Languages and toolchains",
+      "type": "text",
+      "required": true,
+      "maxLength": 200,
+      "example": "C11, arm-none-eabi-gcc 13, CMake"
+    },
+    {
+      "key": "ciChecks",
+      "label": "Your CI checks that must pass on the AI's branch (one per line, exact names as your CI shows them: e.g. build, unit-tests, qemu-sim, size, static-analysis)",
+      "type": "list",
+      "required": true,
+      "maxItems": 20,
+      "help": "Your own CI runs the regression tests the AI adds. The AI delivers only when all of these pass. Your code never runs inside the AI's sealed box."
+    },
+    {
+      "key": "disclosureContact",
+      "label": "Who receives findings (a private channel)",
+      "type": "text",
+      "required": true,
+      "maxLength": 200,
+      "example": "security@acme.example"
+    },
+    {
+      "key": "disclosureDays",
+      "label": "Days before an upstream finding may be disclosed publicly",
+      "type": "number",
+      "required": true,
+      "min": 7,
+      "max": 180,
+      "example": 90
+    },
+    {
+      "key": "milestones",
+      "label": "Milestones, one per line",
+      "type": "list",
+      "required": true,
+      "maxItems": 20
+    }
+  ]
+}
