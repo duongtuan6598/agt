@@ -61,7 +61,24 @@ async function ciStatus({ repository, token, sha, required, fetchImpl = fetch })
 
   if (r.kind === "github") {
     const h = { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "agt-sealed-ai" };
-    for (const c of await all(`${r.api}/repos/${r.path}/commits/${sha}/check-runs`, h, (b) => b && b.check_runs)) {
+    let runs = null;
+    try {
+      runs = await all(`${r.api}/repos/${r.path}/commits/${sha}/check-runs`, h, (b) => b && b.check_runs);
+    } catch (e) {
+      if (!/CI API 40[34]/.test(e.message)) throw e;
+      // Fine-grained tokens cannot be given the Checks permission (found in the testnet rehearsal): read the same
+      // results as GitHub Actions jobs instead (Actions: read). Same names, same "newest re-run counts" rule.
+      runs = [];
+      for (const run of await all(`${r.api}/repos/${r.path}/actions/runs?head_sha=${sha}`, h, (b) => b && b.workflow_runs)) {
+        if (run.head_sha !== sha) continue;
+        for (const j of await all(`${r.api}/repos/${r.path}/actions/runs/${Number(run.id)}/jobs?filter=latest`, h, (b) => b && b.jobs)) {
+          if (j.head_sha && j.head_sha !== sha) continue;
+          const failedSteps = (j.steps || []).filter((s) => s.conclusion === "failure").map((s) => `step "${s.name}" failed`);
+          runs.push({ name: j.name, status: j.status, conclusion: j.conclusion, html_url: j.html_url, id: j.id, app: { slug: "github-actions" }, output: { title: failedSteps.join("; ") } });
+        }
+      }
+    }
+    for (const c of runs) {
       const conclusion = c.status !== "completed" ? "pending" : c.conclusion || "pending";
       const detail = [c.output && c.output.title, c.output && c.output.summary, c.output && c.output.text].filter(Boolean).join("\n").slice(0, 4000);
       add(c.name, { conclusion, url: c.html_url || null, id: Number(c.id) || 0, source: "check:" + ((c.app && c.app.slug) || "?"), detail });
