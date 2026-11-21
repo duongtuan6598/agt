@@ -106,6 +106,12 @@ const normSnap = (v) => ({
 const snapOfState = (s) => normSnap({ holders: s.valset.holders, validators: s.valset.validators.map((v) => ({ id: s.licIds[v.agent], ...v })) });
 const sameSnap = (a, b) => C.hashOf(normSnap(a)) === C.hashOf(normSnap(b));
 
+// Provisional chain (docs/decisions/2026-11-21-three-provisional-chain.md, Claude + Codex + Gemini): a founder-run
+// CARETAKER validator may keep the chain alive until CARETAKER_UNTIL independent owners have a bound, licensed AI.
+// It is outside the licence rules, counts toward no threshold, and is removed for good by the state machine itself
+// in the block where that number is reached — it never comes back, even if licences are later revoked.
+const CARETAKER_UNTIL = 4;
+
 // Who holds a CometBFT vote: per owner, the bound AI with the lowest licence id → { pubKey: agent }.
 function activeSet(s) {
   const best = {};
@@ -117,6 +123,8 @@ function activeSet(s) {
   }
   const out = {};
   for (const b of Object.values(best)) out[b.pk] = b.agent;
+  const c = s.caretaker;
+  if (c && !c.retired && Object.keys(out).length < CARETAKER_UNTIL) out[c.pubKey] = c.agent;
   return out;
 }
 
@@ -141,6 +149,7 @@ class AGTApp {
   }
 
   applyAny(s, tx, { fromProposer = false } = {}) {
+    if (s.provisional && !["valset", "bind"].includes(tx.type)) throw new Error("provisional chain: no balances, no transfers, no withdrawals");
     if (tx.type === "credit") {
       if (!fromProposer) throw new Error("credits only come from the proposer");
       if (Number(tx.nonce) !== s.nextIn) throw new Error("credits out of order");
@@ -199,6 +208,11 @@ class AGTApp {
     const raw = Buffer.from(req.app_state_bytes).toString("utf8");
     if (!raw) throw new Error("genesis has no AGT app_state (validators, BSC bridge) — wrong genesis file");
     const g = JSON.parse(raw);
+    const provisional = g.provisional === true;
+    if (g.caretaker && !provisional) throw new Error("a caretaker validator is allowed only on a provisional chain");
+    if (provisional && lower(g.bsc.bridge) !== ethers.ZeroAddress) throw new Error("a provisional chain carries no balances: its genesis names no bridge");
+    if (g.caretaker && Buffer.from(String(g.caretaker.pubKey), "base64").length !== 32) throw new Error("bad caretaker ed25519 key");
+    if (!g.validators.length && !g.caretaker) throw new Error("no validator at genesis");
     const owners = new Set();
     const cmt = {};
     for (const v of g.validators) {
@@ -210,6 +224,9 @@ class AGTApp {
       cmt[cmtAddress(v.pubKey)] = { agent, holder, pubKey: v.pubKey };
     }
     const s = C.genesis({ chainId: req.chain_id, bsc: g.bsc, valset: { holders: g.holders, validators: g.validators } });
+    s.provisional = provisional;
+    s.caretaker = g.caretaker ? { pubKey: g.caretaker.pubKey, agent: "caretaker:" + String(g.caretaker.label || "founder").slice(0, 40), retired: false } : null;
+    if (s.caretaker) cmt[cmtAddress(s.caretaker.pubKey)] = { agent: s.caretaker.agent, holder: "caretaker", pubKey: s.caretaker.pubKey };
     s.cmt = cmt;
     s.binds = Object.fromEntries(Object.values(cmt).map((v) => [v.agent, v.pubKey]));
     s.licIds = Object.fromEntries(g.validators.map((v, i) => [lower(v.agent), Number(v.id ?? i + 1)]));
@@ -219,10 +236,10 @@ class AGTApp {
     s.pendingWage = 0n;
     this.state = s;
     this.check = structuredClone(s);
-    log(`InitChain ${req.chain_id}: ${g.validators.length} AI validators, ${g.holders} owners`);
+    log(`InitChain ${req.chain_id}: ${g.validators.length} AI validators, ${g.holders} owners${provisional ? " · PROVISIONAL (no balances)" : ""}${s.caretaker ? " · caretaker " + s.caretaker.agent : ""}`);
     return {
       consensus_params: null,
-      validators: g.validators.map((v) => ({ pub_key: { ed25519: Buffer.from(v.pubKey, "base64") }, power: "1" })), // 1 owner = 1 vote
+      validators: Object.keys(s.active).map((pk) => ({ pub_key: { ed25519: Buffer.from(pk, "base64") }, power: "1" })), // 1 owner = 1 vote
       app_hash: appHash(s),
     };
   }
@@ -258,7 +275,7 @@ class AGTApp {
     } catch (e) {
       log("BSC licences unavailable, keeping the current validator set:", e.message);
     }
-    try {
+    if (!s.provisional) try {
       for (const l of await this.bsc.locksFrom(s.nextIn)) {
         if (l.nonce !== s.nextIn) break;
         const tx = { type: "credit", nonce: l.nonce, to: l.to, amount: l.amount.toString() };
@@ -351,6 +368,7 @@ class AGTApp {
 
     // 3. Validator set follows the licences: add newly bound AIs, remove revoked ones (power 0).
     const next = activeSet(s);
+    if (s.caretaker && !s.caretaker.retired && !(s.caretaker.pubKey in next)) s.caretaker.retired = true; // one way
     const validator_updates = [];
     if (Object.keys(next).length > 0) {
       for (const pk of Object.keys(s.active)) if (!(pk in next)) validator_updates.push({ pub_key: { ed25519: Buffer.from(pk, "base64") }, power: "0" });

@@ -74,6 +74,35 @@ Devnet result (20 Nov 2026):
 - With one AI stopped, blocks stayed final on 3/4.
 - Wages totalled 3 Hat for 3 txs (the offline AI earned less), and supply on the chain = locked − withdrawn.
 
+## Provisional chain with a caretaker (decided by Claude, Codex and Gemini, 2026-11-21)
+
+Following the founder's rule (a restaurant that just opened does not wait for its staff), the chain can run **now**,
+before any licensed AI exists, as a **provisional** chain:
+
+- **No balances.** Its genesis names no bridge (`bsc.bridge = 0x0`), and every credit, transfer, withdrawal or fee
+  change is refused. BSC stays the only ledger.
+- **One caretaker validator**, run by the founder and named in genesis (`caretaker`). It is allowed only on a
+  provisional chain. It is outside the licence rules and counts toward no threshold.
+- **Automatic handover, written in the state machine.** Licensed AIs join as usual, by snapshot and bind. In the
+  block where 4 independent owners have bound licensed AIs, the caretaker gets power 0. It never comes back, even if
+  licences are revoked later. If a handover could not be done safely, the remedy is a new public genesis, never a
+  founder exception.
+- **The threshold, stated precisely.** CometBFT finalises with more than 2/3 of the voting power. With 4 validators
+  of power 1, a block needs 3 signatures and the chain tolerates 1 faulty validator (3f+1 with f = 1). That is the
+  first safety threshold. 21 owners is the decentralisation milestone.
+
+Local rehearsal on real CometBFT (`node chain/abci/devnet.js up --provisional` then `demo-provisional`),
+21 Nov 2026:
+
+1. The caretaker alone produced blocks.
+2. Licences #1, #2 and #3 each bound and joined, with the caretaker still in.
+3. Licence #4 bound, and the caretaker left in that same block.
+4. The founder's node was switched off and the chain went on with the 4 AIs.
+5. A transfer was refused.
+6. Licence #1 was revoked and the caretaker did not come back.
+
+Unit tests are in `chain/abci/test/app.test.js`.
+
 ## The validator set follows BSC licences
 
 | Step | What happens |

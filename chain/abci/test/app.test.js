@@ -158,3 +158,57 @@ test("a forged licence snapshot is rejected; strangers and stolen keys cannot bi
   assert.equal(app.CheckTx({ tx: bindTx(ghost) }).code, 1, "an AI without a licence cannot bind");
   assert.equal(app.CheckTx({ tx: bindTx(ais[1], ais[0].pub) }).code, 1, "cannot take over another AI's consensus key");
 });
+
+// ---------- provisional chain with a caretaker (Claude + Codex + Gemini, 2026-11-21) ----------
+function setupProvisional() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agt-prov-"));
+  const lockFile = path.join(dir, "locks.json");
+  fs.writeFileSync(lockFile, JSON.stringify([{ nonce: 1, to: W("x").address, amount: "1000" }]));
+  const vsFile = path.join(dir, "valset.json");
+  const writeVs = (holders, validators) => fs.writeFileSync(vsFile, JSON.stringify({ holders, validators }));
+  writeVs(0, []);
+  const app = new AGTApp({ STATE_FILE: path.join(dir, "s.json"), LOCKS_FILE: lockFile, VALSET_FILE: vsFile });
+  const caretaker = { pubKey: crypto.randomBytes(32).toString("base64"), label: "founder" };
+  const appState = { provisional: true, caretaker, bsc: { chainId: 97, bridge: ethers.ZeroAddress }, holders: 0, validators: [] };
+  return { app, appState, caretaker, writeVs };
+}
+
+test("provisional genesis: only with no bridge; a caretaker only on a provisional chain; it starts as the one validator", () => {
+  const { app, appState } = setupProvisional();
+  assert.throws(() => init(app, { ...appState, provisional: false }), /caretaker validator is allowed only on a provisional chain/);
+  assert.throws(() => init(app, { ...appState, bsc: { chainId: 97, bridge: "0x44f0733C93b11D064eA015183c7DC8665b4a2416" } }), /names no bridge/);
+  const r = init(app, appState);
+  assert.deepEqual(r.validators.map((v) => [v.pub_key.ed25519.toString("base64"), v.power]), [[appState.caretaker.pubKey, "1"]]);
+});
+
+test("a provisional chain carries no balances: no credits proposed, no transfers accepted", async () => {
+  const { app, appState } = setupProvisional();
+  init(app, appState);
+  const p = await app.PrepareProposal({ txs: [], max_tx_bytes: "1048576", height: "1" });
+  assert.equal(p.txs.filter((b) => JSON.parse(b.toString()).type === "credit").length, 0);
+  const t = B({ type: "transfer", from: W("x").address, to: W("y").address, amount: "1", fee: "1", nonce: 0 });
+  assert.equal(app.CheckTx({ tx: t }).code, 1);
+});
+
+test("the caretaker stays until 4 independent owners have bound licensed AIs, then leaves for good", async () => {
+  const { app, appState, caretaker, writeVs } = setupProvisional();
+  init(app, appState);
+  const ais = [1, 2, 3, 4].map((n) => newAi(100 + n));
+  const lic = ais.map((a, i) => ({ id: i + 1, agent: a.key.address, holder: a.owner.address }));
+  for (let k = 1; k <= 3; k++) {
+    writeVs(k, lic.slice(0, k));
+    await round(app);
+    const r = await round(app, [bindTx(ais[k - 1])]);
+    assert.deepEqual(powerOf(r), [[ais[k - 1].pub, "1"]], `AI ${k} joins, the caretaker stays`);
+    assert.ok(caretaker.pubKey in app.state.active);
+  }
+  writeVs(4, lic);
+  await round(app);
+  const r4 = await round(app, [bindTx(ais[3])]);
+  assert.deepEqual(new Set(powerOf(r4).map(([pk, p]) => pk + ":" + p)), new Set([ais[3].pub + ":1", caretaker.pubKey + ":0"]), "the 4th owner joins in the same block the caretaker leaves");
+  assert.equal(app.state.caretaker.retired, true);
+  writeVs(3, lic.slice(1));
+  const r5 = await round(app);
+  assert.deepEqual(powerOf(r5), [[ais[0].pub, "0"]], "a revoked licence leaves; the caretaker does NOT come back");
+  assert.ok(!(caretaker.pubKey in app.state.active));
+});

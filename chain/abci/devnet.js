@@ -34,21 +34,30 @@ function down() {
   console.log("devnet removed");
 }
 
+// provisional (docs/decisions/2026-11-21-three-provisional-chain.md): node0 = the founder's CARETAKER validator,
+// node1..4 = AIs of 4 owners that join only once licensed; no bridge, no balances.
+let PROVISIONAL = false;
+const aiOf = (i) => (PROVISIONAL ? (i === 0 ? null : ais[i - 1]) : ais[i]);
+
 function up() {
   down();
   fs.mkdirSync(DIR, { recursive: true });
-  dock("run", "--rm", "-v", `${DIR}:/data`, "--entrypoint", "cometbft", CMT, "testnet", "--v", String(N), "--n", String(TOTAL - N), "--o", "/data", "--hostname-prefix", "node", "--populate-persistent-peers");
+  const nv = PROVISIONAL ? 1 : N;
+  dock("run", "--rm", "-v", `${DIR}:/data`, "--entrypoint", "cometbft", CMT, "testnet", "--v", String(nv), "--n", String(TOTAL - nv), "--o", "/data", "--hostname-prefix", "node", "--populate-persistent-peers");
 
   // Genesis app state: each AI binds its CometBFT consensus key with its licence key.
   const validators = [];
-  for (let i = 0; i < N; i++) {
+  for (let i = 0; i < (PROVISIONAL ? 0 : N); i++) {
     const pv = JSON.parse(fs.readFileSync(path.join(DIR, `node${i}`, "config", "priv_validator_key.json"), "utf8"));
     validators.push({ agent: ais[i].key.address, holder: ais[i].owner.address, pubKey: pv.pub_key.value, bindSig: ais[i].key.signMessageSync(ethers.getBytes(bindDigest(CHAIN_ID, pv.pub_key.value))) });
   }
   const g0 = JSON.parse(fs.readFileSync(path.join(DIR, "node0", "config", "genesis.json"), "utf8"));
   g0.chain_id = CHAIN_ID;
   g0.validators = g0.validators.map((v) => ({ ...v, power: "1" }));
-  g0.app_state = { bsc: BSC, holders: N, validators };
+  if (PROVISIONAL) {
+    const care = JSON.parse(fs.readFileSync(path.join(DIR, "node0", "config", "priv_validator_key.json"), "utf8")).pub_key.value;
+    g0.app_state = { provisional: true, caretaker: { pubKey: care, label: "founder" }, bsc: { chainId: 97, bridge: ethers.ZeroAddress }, holders: 0, validators: [] };
+  } else g0.app_state = { bsc: BSC, holders: N, validators };
   for (let i = 0; i < TOTAL; i++) {
     fs.writeFileSync(path.join(DIR, `node${i}`, "config", "genesis.json"), JSON.stringify(g0, null, 2));
     const cf = path.join(DIR, `node${i}`, "config", "config.toml");
@@ -60,24 +69,24 @@ function up() {
     set("timeout_commit", '"2s"');
     set("addr_book_strict", "false");
     set("allow_duplicate_ip", "true");
-    set("moniker", `"${ais[i].name}"`);
+    set("moniker", `"${aiOf(i) ? aiOf(i).name : "Caretaker"}"`);
     fs.writeFileSync(cf, t);
   }
   fs.writeFileSync(path.join(DIR, "locks.json"), "[]");
-  fs.writeFileSync(path.join(DIR, "valset.json"), JSON.stringify(licences([1, 2, 3, 4]))); // stand-in for AGTWork on BSC
+  fs.writeFileSync(path.join(DIR, "valset.json"), JSON.stringify(PROVISIONAL ? { holders: 0, validators: [] } : licences([1, 2, 3, 4]))); // stand-in for AGTWork on BSC
   fs.writeFileSync(path.join(DIR, "README.txt"), "TEST keys and data for the local AGT devnet. Never reuse.\n");
 
   dock("network", "create", NET);
   for (let i = 0; i < TOTAL; i++) {
     dock("run", "-d", "--name", `node${i}`, "--hostname", `node${i}`, "--network", NET, "-p", `127.0.0.1:${27000 + i}:26657`, "--memory", "160m",
       "-v", `${ROOT}:/agt:ro`, "-v", `${DIR}:/devnet`,
-      "-e", "PORT=26658", "-e", `STATE_FILE=/devnet/node${i}/app-state.json`, "-e", `AGENT_KEY=${ais[i].key.privateKey}`,
+      "-e", "PORT=26658", "-e", `STATE_FILE=/devnet/node${i}/app-state.json`, "-e", `AGENT_KEY=${aiOf(i) ? aiOf(i).key.privateKey : ""}`,
       "-e", "CMT_RPC=http://127.0.0.1:26657", "-e", "LOCKS_FILE=/devnet/locks.json", "-e", "VALSET_FILE=/devnet/valset.json",
       NODE, "node", "/agt/chain/abci/app.js");
   }
   for (let i = 0; i < TOTAL; i++)
     dock("run", "-d", "--name", `cmt${i}`, "--network", `container:node${i}`, "--memory", "160m", "-v", `${DIR}/node${i}:/cometbft`, "--entrypoint", "cometbft", CMT, "node", "--home", "/cometbft");
-  console.log(`devnet up: ${N} AI validators + 1 full node · RPC ${rpc(0)} … ${rpc(TOTAL - 1)}`);
+  console.log(PROVISIONAL ? `provisional devnet up: 1 caretaker validator (founder) + 4 AI nodes waiting for licences · RPC ${rpc(0)} … ${rpc(TOTAL - 1)}` : `devnet up: ${N} AI validators + 1 full node · RPC ${rpc(0)} … ${rpc(TOTAL - 1)}`);
 }
 
 // ---------- client helpers ----------
@@ -194,8 +203,36 @@ async function demo() {
   console.log(`9. tx in block ${h4} via Eos's node · its 1 Hat went to: ${gain.map(([n, g]) => `${n} ${hat(g)}`).join(", ")}`);
 }
 
+// The provisional chain, start to handover: the caretaker alone; AIs licensed one by one join; at the 4th owner the
+// caretaker leaves for good; the founder's node is switched off and the chain goes on; balances are refused throughout.
+async function demoProvisional() {
+  const vals = async (i = 1) => (await get(i, "/validators")).validators.length;
+  const st0 = await until(() => query(1, "/state").then((s) => s.height >= 2 && s), "first blocks");
+  console.log(`chain ${st0.chainId} at height ${st0.height} · validators ${await vals()} (the caretaker alone) · provisional`);
+  const vsFile = path.join(DIR, "valset.json");
+  for (let k = 1; k <= 4; k++) {
+    fs.writeFileSync(vsFile, JSON.stringify(licences(Array.from({ length: k }, (_, i) => i + 1))));
+    const want = k < 4 ? k + 1 : 4;
+    await until(async () => (await vals()) === want, `licence ${k} to take effect`, 120000);
+    console.log(`${k}. licence #${k} granted on BSC → ${ais[k - 1].name} bound its key · CometBFT validators ${await vals()}${k < 4 ? " (caretaker still in)" : " — the caretaker LEFT in that block"}`);
+  }
+  const s4 = await query(1, "/state");
+  dock("stop", "cmt0");
+  const h = s4.height;
+  const after = await until(() => query(2, "/state").then((x) => x.height >= h + 3 && x), "blocks without the founder", 120000);
+  console.log(`5. the founder's node switched off → the chain goes on with the 4 AIs: height ${h} → ${after.height}`);
+  const alice = W("alice"), bob = W("bob");
+  const tx = await C.signTx(alice, { type: "transfer", chainId: after.chainId, to: bob.address, amount: 1n, fee: after.fee, nonce: 0 });
+  await send(1, tx).then(() => console.log("6. ✗ a transfer was accepted on the provisional chain!"), (e) => console.log(`6. a transfer is refused: ${e.message.slice(0, 90)}`));
+  fs.writeFileSync(vsFile, JSON.stringify(licences([2, 3, 4])));
+  await until(async () => (await vals(2)) === 3, "licence #1 revoked", 120000);
+  console.log(`7. licence #1 revoked → validators ${await vals(2)}: the caretaker did NOT come back`);
+}
+
 const cmd = process.argv[2];
+if (process.argv.includes("--provisional")) PROVISIONAL = true;
 if (cmd === "up") up();
+else if (cmd === "demo-provisional") { PROVISIONAL = true; demoProvisional().catch((e) => { console.error(e.message); process.exitCode = 1; }); }
 else if (cmd === "down") down();
 else if (cmd === "demo") demo().catch((e) => { console.error(e.message); process.exitCode = 1; });
-else console.log("usage: node chain/abci/devnet.js up|demo|down");
+else console.log("usage: node chain/abci/devnet.js up [--provisional] | demo | demo-provisional | down");
