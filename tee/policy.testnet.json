@@ -1,4 +1,11 @@
 {
   "_note": "TESTNET ONLY. Images allowed for rehearsals on BSC testnet before they meet the approval rule in REPRODUCE.md. Read only by scripts/license.js when --net is bscTestnet or localhost; never by mainnet tooling, never by the boxes. Each entry names its reference file (tee/reference/<commit>.json) and why it is here.",
-  "imageDigests": []
+  "imageDigests": [
+    {
+      "digest": "sha256:794892d12c0eddfd8cc7f96c6fd10c9bfb1d39c45d5e90c5d34d758dccb77d9f",
+      "image": "embedded",
+      "reference": "tee/reference/072da4da5e1f6a8e1dbf611a36eac8cb72b386d6.json",
+      "why": "testnet rehearsal of the embedded trade, 2026-11-21 (owner approved: testnet only, 5 USD cap)"
+    }
+  ]
 }

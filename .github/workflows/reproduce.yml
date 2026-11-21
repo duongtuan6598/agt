@@ -57,6 +57,7 @@ jobs:
           cd agt
           COMMIT=$(node -p "require('./$REF').commit")
           EXPECT=$(node -p "require('./$REF').images['${{ matrix.image }}']")
+          [ "$EXPECT" != "undefined" ] || { echo "(no reference for ${{ matrix.image }} at this commit — skipped)"; exit 0; }
           GOT=$(sh tools/repro-build.sh "$COMMIT" "tee/${{ matrix.image }}/Dockerfile" "$RUNNER_TEMP/image.tar")
           echo "commit   $COMMIT"
           echo "expected $EXPECT"
