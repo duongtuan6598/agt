@@ -176,7 +176,7 @@ function setupProvisional() {
 test("provisional genesis: only with no bridge; a caretaker only on a provisional chain; it starts as the one validator", () => {
   const { app, appState } = setupProvisional();
   assert.throws(() => init(app, { ...appState, provisional: false }), /caretaker validator is allowed only on a provisional chain/);
-  assert.throws(() => init(app, { ...appState, bsc: { chainId: 97, bridge: "0x44f0733C93b11D064eA015183c7DC8665b4a2416" } }), /names no bridge/);
+  assert.throws(() => init(app, { ...appState, bsc: { chainId: 97, bridge: "0x44f0733C93b11D064eA015183c7DC8665b4a2416" } }), /carries no balances/);
   const r = init(app, appState);
   assert.deepEqual(r.validators.map((v) => [v.pub_key.ed25519.toString("base64"), v.power]), [[appState.caretaker.pubKey, "1"]]);
 });
@@ -211,4 +211,37 @@ test("the caretaker stays until 4 independent owners have bound licensed AIs, th
   const r5 = await round(app);
   assert.deepEqual(powerOf(r5), [[ais[0].pub, "0"]], "a revoked licence leaves; the caretaker does NOT come back");
   assert.ok(!(caretaker.pubKey in app.state.active));
+});
+
+test("genesis and bind refuse colliding, non-canonical or mismatched keys and bridges (Codex P-2, P-3, P-4)", async () => {
+  const { app, appState, caretaker, writeVs } = setupProvisional();
+  assert.throws(() => init(app, { ...appState, provisional: false, caretaker: undefined, validators: [] }), /only a provisional chain may have a zero bridge/);
+  const nonCanon = caretaker.pubKey.replace(/=*$/, "") + "\n";
+  assert.throws(() => init(app, { ...appState, caretaker: { ...caretaker, pubKey: nonCanon } }), /bad caretaker/);
+  const { appState: normal } = setup();
+  const clash = structuredClone(normal);
+  clash.validators[1].pubKey = clash.validators[0].pubKey;
+  assert.throws(() => init(new AGTApp({ STATE_FILE: path.join(os.tmpdir(), "x" + Date.now()) }), clash), /must be valid and all different/);
+  init(app, appState);
+  const ai = newAi(200);
+  writeVs(1, [{ id: 1, agent: ai.key.address, holder: ai.owner.address }]); // a licensed AI…
+  await round(app);
+  const tx = B({ type: "bind", agent: ai.key.address, pubKey: caretaker.pubKey, sig: ai.key.signMessageSync(ethers.getBytes(bindDigest(CHAIN, caretaker.pubKey))) });
+  const r = app.CheckTx({ tx });
+  assert.equal(r.code, 1, "…still cannot bind the caretaker's key");
+  assert.match(String(r.log), /caretaker's key/);
+});
+
+test("when every licence is revoked after the caretaker left, the chain halts instead of keeping revoked validators (Codex P-1)", async () => {
+  const { app, appState, writeVs } = setupProvisional();
+  init(app, appState);
+  const ais = [1, 2, 3, 4].map((n) => newAi(300 + n));
+  const lic = ais.map((a, i) => ({ id: i + 1, agent: a.key.address, holder: a.owner.address }));
+  writeVs(4, lic);
+  await round(app);
+  await round(app, ais.map((a) => bindTx(a)));
+  assert.equal(app.state.caretaker.retired, true);
+  writeVs(0, []);
+  const p = await app.PrepareProposal({ txs: [], max_tx_bytes: "1048576", height: "1" });
+  assert.throws(() => block(app, p.txs), /chain halts here by design/);
 });

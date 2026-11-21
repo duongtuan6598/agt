@@ -110,7 +110,11 @@ const sameSnap = (a, b) => C.hashOf(normSnap(a)) === C.hashOf(normSnap(b));
 // CARETAKER validator may keep the chain alive until CARETAKER_UNTIL independent owners have a bound, licensed AI.
 // It is outside the licence rules, counts toward no threshold, and is removed for good by the state machine itself
 // in the block where that number is reached — it never comes back, even if licences are later revoked.
+// A provisional chain stays provisional for good, caretaker or not: balances come only with a new genesis that names a
+// bridge, after the cutover conditions and a Charter Art. 14 amendment (by design; Gemini P-3 asked otherwise).
 const CARETAKER_UNTIL = 4;
+// A consensus key is exactly 32 bytes in CANONICAL base64: one key, one spelling (Codex P-4).
+const isKey = (k) => typeof k === "string" && Buffer.from(k, "base64").length === 32 && Buffer.from(k, "base64").toString("base64") === k;
 
 // Who holds a CometBFT vote: per owner, the bound AI with the lowest licence id → { pubKey: agent }.
 function activeSet(s) {
@@ -187,7 +191,8 @@ class AGTApp {
       const agent = lower(tx.agent);
       const v = s.valset.validators.find((x) => x.agent === agent);
       if (!v) throw new Error("not a licensed AI in a sealed box");
-      if (Buffer.from(String(tx.pubKey), "base64").length !== 32) throw new Error("bad ed25519 key");
+      if (!isKey(tx.pubKey)) throw new Error("bad ed25519 key");
+      if (s.caretaker && tx.pubKey === s.caretaker.pubKey) throw new Error("that is the caretaker's key"); // Codex P-2
       if (lower(ethers.verifyMessage(ethers.getBytes(bindDigest(s.chainId, tx.pubKey)), tx.sig)) !== agent) throw new Error("binding not signed by the AI's licence key");
       if (s.binds[agent] === tx.pubKey) throw new Error("already bound");
       if (Object.entries(s.binds).some(([a, pk]) => pk === tx.pubKey && a !== agent)) throw new Error("key bound by another AI");
@@ -209,9 +214,13 @@ class AGTApp {
     if (!raw) throw new Error("genesis has no AGT app_state (validators, BSC bridge) — wrong genesis file");
     const g = JSON.parse(raw);
     const provisional = g.provisional === true;
+    if (!g.bsc || !ethers.isAddress(g.bsc.bridge)) throw new Error("genesis names no valid bridge address");
     if (g.caretaker && !provisional) throw new Error("a caretaker validator is allowed only on a provisional chain");
-    if (provisional && lower(g.bsc.bridge) !== ethers.ZeroAddress) throw new Error("a provisional chain carries no balances: its genesis names no bridge");
-    if (g.caretaker && Buffer.from(String(g.caretaker.pubKey), "base64").length !== 32) throw new Error("bad caretaker ed25519 key");
+    // provisional ⇔ no bridge (Codex P-3): a chain with balances names its bridge; a provisional one names none
+    if (provisional !== (lower(g.bsc.bridge) === ethers.ZeroAddress)) throw new Error("a provisional chain carries no balances (zero bridge), and only a provisional chain may have a zero bridge");
+    if (g.caretaker && !isKey(g.caretaker.pubKey)) throw new Error("bad caretaker ed25519 key");
+    const keys = [...g.validators.map((v) => v.pubKey), ...(g.caretaker ? [g.caretaker.pubKey] : [])];
+    if (keys.some((k) => !isKey(k)) || new Set(keys).size !== keys.length) throw new Error("genesis consensus keys must be valid and all different"); // Codex P-2
     if (!g.validators.length && !g.caretaker) throw new Error("no validator at genesis");
     const owners = new Set();
     const cmt = {};
@@ -369,11 +378,15 @@ class AGTApp {
     // 3. Validator set follows the licences: add newly bound AIs, remove revoked ones (power 0).
     const next = activeSet(s);
     if (s.caretaker && !s.caretaker.retired && !(s.caretaker.pubKey in next)) s.caretaker.retired = true; // one way
+    // No legitimate validator left (every licence revoked, caretaker gone): never keep revoked ones signing
+    // (Codex P-1). Every node reaches this in the same block and stops; the remedy is a new public genesis.
+    if (!Object.keys(next).length) throw new Error("no licensed validator left: the chain halts here by design — restart from a new public genesis");
     const validator_updates = [];
-    if (Object.keys(next).length > 0) {
+    {
       for (const pk of Object.keys(s.active)) if (!(pk in next)) validator_updates.push({ pub_key: { ed25519: Buffer.from(pk, "base64") }, power: "0" });
       for (const pk of Object.keys(next)) if (!(pk in s.active)) validator_updates.push({ pub_key: { ed25519: Buffer.from(pk, "base64") }, power: "1" });
       s.active = next;
+      validator_updates.sort((x, y) => Buffer.compare(x.pub_key.ed25519, y.pub_key.ed25519)); // fixed order (Gemini P-5)
     }
     for (const u of validator_updates) {
       const pk = u.pub_key.ed25519.toString("base64");
