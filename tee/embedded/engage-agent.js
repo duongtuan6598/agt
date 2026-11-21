@@ -161,7 +161,11 @@ class EngageLoop {
     if (st && st.evidenceHash) return st.claimed ? { failed: st.gaveUp } : { claim: { sha: st.sha, evidenceHash: st.evidenceHash } };
     if (st && st.gaveUp) return { failed: st.gaveUp };
     if (st && st.sha) {
-      const ci = await this.ci.status({ repository: b.fields.repository, token, sha: st.sha, required });
+      // A round whose answer changed nothing is a failed round: its old commit is never delivered again, not even
+      // when that commit's CI passed (a revision the model did not make). Found by the local rehearsal.
+      const ci = st.noChange
+        ? { state: "failure", checks: [], failures: `${st.failure ? st.failure + "\n" : ""}Your last answer changed nothing in the repository: make the change the task asks for.` }
+        : await this.ci.status({ repository: b.fields.repository, token, sha: st.sha, required });
       if (ci.state === "success") {
         const reportHash = await this.content.put(ciReport({ sha: st.sha, branch, ci, memoryHead: await mem.head() }));
         await mem.append("delivery", `${task.split("\n")[0]} → ${st.sha} on ${branch}; client CI passed: ${ci.checks.map((c) => c.name).join(", ")}`);
@@ -173,7 +177,7 @@ class EngageLoop {
         if (this.now() - st.pushedAt < CI_TIMEOUT) return { waiting: `client CI still running for ${st.sha.slice(0, 10)}` };
         gaveUp = `the client's CI gave no verdict for ${st.sha.slice(0, 10)} within ${CI_TIMEOUT / 3600} h`;
       } else if (st.round >= ROUNDS) {
-        gaveUp = `client CI still failing after ${ROUNDS} rounds`;
+        gaveUp = st.noChange ? `no change made after ${ROUNDS} rounds` : `client CI still failing after ${ROUNDS} rounds`;
       }
       if (gaveUp) {
         // The client has seen the code; the AI asks drawn reviewers instead of just walking away (§13).
@@ -212,8 +216,16 @@ class EngageLoop {
         return { failed: why };
       }
       if (!a.files.length) return { waiting: "the model changed nothing; will try again" };
+      let before = null; // an empty repository (or one whose HEAD names a missing branch) has no HEAD yet
+      try { before = ws._git(["rev-parse", "--verify", "-q", "HEAD"]).trim(); } catch {}
       ws.write(a.files, Object.fromEntries(b.fields.pinnedTests || []));
       const sha = ws.commit(`${task.split("\n")[0]} (round ${round})\n\n${a.summary}`);
+      // Same content as before (found by the local rehearsal): never present the old commit as new work. The round
+      // still counts, so a model that keeps changing nothing ends in the reviewers' hands, not in an endless loop.
+      if (sha === before) {
+        await this.state.set(key, { sha, round, pushedAt: this.now(), history, noChange: true, failure });
+        return { waiting: "the model's answer changes nothing in the repository; counted as a failed round" };
+      }
       ws.push(branch, token);
       await this.state.set(key, { sha, round, pushedAt: this.now(), history });
       await mem.append("decision", `${task.split("\n")[0]}, round ${round}: pushed ${sha} to ${branch}. ${a.summary}`);
@@ -529,7 +541,8 @@ function fileState(dir) {
   const fs = require("fs");
   const path = require("path");
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-  const f = (k) => path.join(dir, k.replace(/[^\w:.-]/g, "_") + ".json");
+  // one file per key, the name percent-encoded: valid on every OS (no ':' on Windows) and never two keys in one file
+  const f = (k) => path.join(dir, k.replace(/[^\w.-]/g, (c) => Buffer.from(c).toString("hex").replace(/../g, "%$&")) + ".json");
   return {
     get: async (k) => (fs.existsSync(f(k)) ? JSON.parse(fs.readFileSync(f(k), "utf8")) : null),
     set: async (k, v) => {

@@ -175,7 +175,7 @@ describe("Sealed AI long-term work loop — the client's CI runs N1–N4 (§12)"
   });
 
   it("a revision request starts a fresh attempt on the same branch, with the client's note", async () => {
-    const { eng, client, wAI, sealFor, loop, open, content, calls } = await world();
+    const { eng, client, wAI, sealFor, loop, open, content, calls, model } = await world();
     const id = await open();
     sealFor("engagement", id);
     const ai = loop(wAI);
@@ -183,10 +183,28 @@ describe("Sealed AI long-term work loop — the client's CI runs N1–N4 (§12)"
     expect(Number((await eng.milestone(id, 0)).state)).to.equal(2);
     const note = "Use DMA for UART TX, not polling.";
     await eng.connect(client).requestRevision(id, 0, await content.put(note));
+    model.next = async (w) => ({ files: [{ path: "src/uart.c", content: `/* ${w.notes} */\nvoid uart_init(void) { dma_tx(); }\n` }], summary: "UART TX via DMA", cannot: "" });
     await ai.step();
     await ai.step();
     expect(calls.engineer.at(-1).notes).to.equal(note);
     expect(Number((await eng.milestone(id, 0)).state)).to.equal(2);
+  });
+
+  it("an answer that changes nothing is never redelivered as a revision; after the last round the AI asks reviewers (found by the local rehearsal)", async () => {
+    const { eng, client, wAI, sealFor, loop, open, content, repo } = await world();
+    const id = await open();
+    sealFor("engagement", id);
+    const ai = loop(wAI);
+    for (let i = 0; i < 3; i++) await ai.step();
+    const delivered = (await eng.milestone(id, 0)).result;
+    await eng.connect(client).requestRevision(id, 0, await content.put("Use DMA for UART TX."));
+    const head = () => execFileSync("git", ["--git-dir", repo.bare, "rev-parse", `agt/engagement-${id}-m1`], { encoding: "utf8" }).trim();
+    const before = head();
+    for (let i = 0; i < 8; i++) await ai.step(); // the fake model keeps returning the same file
+    expect(head()).to.equal(before, "nothing new was pushed");
+    const x = await eng.milestone(id, 0);
+    expect(x.result).to.equal(delivered);
+    expect(Number(x.state)).to.equal(5, "not delivered again as the revision; after the last round the AI asked the reviewers (claimDone → Disputed)");
   });
 
   it("warranty claim → fix on its own branch after CI passes; maintenance incident acknowledged at once, fixed after CI", async () => {

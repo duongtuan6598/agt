@@ -280,31 +280,14 @@ async function startWork(agentKey, modelProvider = "anthropic", keys = null) {
   });
   log(`work loop: AI ${wallet.address} on ${env.WORK} — the owner funds this address with gas (BNB)`);
   // Long-term work (embedded trade): only in the embedded box image, when the contracts are configured.
-  let engage = null;
-  const engagePath = path.join(__dirname, "..", "embedded", "engage-agent.js");
   // §12 (joint decision of Claude and Codex): the client's code never runs in this box; its own CI runs N1–N4.
   // The TEE sockets are still locked to root as defence in depth (tee/embedded/isolation.js).
-  if (env.ENGAGEMENT && env.MAINTENANCE && keys && fs.existsSync(engagePath)) {
+  let engage = null;
+  if (env.ENGAGEMENT && env.MAINTENANCE && keys && fs.existsSync(path.join(__dirname, "..", "embedded", "engage-agent.js"))) {
     require("../embedded/isolation.js").lockDown(log);
-    const { EngageLoop, httpSealed, httpRepro, fileState } = require(engagePath);
     // §14–§15: builders are trusted only with an attested image on policy.builderImages (none approved yet)
     const verifyBuilder = require("../builder/verify-builder.js").makeVerifyBuilder({ jwks: await T.fetchJwks(), policy: POLICY, log });
-    const abi = (n) => require(path.join(__dirname, "..", "..", "public", "abi", n + ".json"));
-    const memDir = "/var/agt/memory";
-    fs.mkdirSync(memDir, { recursive: true, mode: 0o700 });
-    const { RepoMemoryStore } = require(path.join(path.dirname(engagePath), "repo-memory.js"));
-    engage = new EngageLoop({
-      eng: new ethers.Contract(env.ENGAGEMENT, abi("Engagement"), wallet), mnt: new ethers.Contract(env.MAINTENANCE, abi("Maintenance"), wallet),
-      me: wallet.address, chainId: Number((await provider.getNetwork()).chainId),
-      content: httpContent(env.AGT_EXAM_URL || "https://agt-exam.agtcoin.workers.dev", wallet),
-      sealed: httpSealed(env.AGT_EXAM_URL || "https://agt-exam.agtcoin.workers.dev"),
-      model: makeModel({ provider: modelProvider, apiKey, systemPrompt }), keys, state: fileState("/var/agt/state"),
-      repro: httpRepro(env.AGT_EXAM_URL || "https://agt-exam.agtcoin.workers.dev", wallet), verifyBuilder,
-      // memory (§16): ciphertext in the client's own repository, branch agt/memory; the key comes back by escrow,
-      // so a replaced VM reads it all again. The local git dir is only a cache.
-      memStoreFor: ({ kind, id, repository, token }) => new RepoMemoryStore({ dir: path.join(memDir, `${kind}-${id}.git`), url: repository, token }),
-      log,
-    });
+    engage = await require("./engage-wiring.js").makeEngage({ env, wallet, model: makeModel({ provider: modelProvider, apiKey, systemPrompt }), keys, verifyBuilder, log });
     log(`long-term work: Engagement ${env.ENGAGEMENT}, Maintenance ${env.MAINTENANCE}`);
   }
   for (;;) {

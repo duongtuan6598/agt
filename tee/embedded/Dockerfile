@@ -29,7 +29,7 @@ COPY tee/embedded/tools.js tee/embedded/secrets.js tee/embedded/memory.js tee/em
 COPY public/abi public/abi
 COPY tee/builder/verify-builder.js tee/builder/
 COPY tee/embedded/fixtures tee/embedded/fixtures
-COPY tee/box/start.js tee/box/answer.js tee/box/agent.js tee/box/models.js tee/box/models.json tee/box/prices.js tee/box/system-prompt.txt tee/box/
+COPY tee/box/start.js tee/box/engage-wiring.js tee/box/answer.js tee/box/agent.js tee/box/models.js tee/box/models.json tee/box/prices.js tee/box/system-prompt.txt tee/box/
 
 # Confidential Space launch policy: the operator may only point the box at public data.
 # It cannot override the command, cannot inject keys, and logs never contain secrets.

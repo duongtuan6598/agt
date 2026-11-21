@@ -37,3 +37,20 @@ calls. It needs the owner's explicit approval, and the payer is the party who wa
 - Money moves in a way the contract text does not describe.
 - The AI works on after a memory rollback, or delivers while the client's CI fails.
 - A cloud resource is left running after a builder job.
+
+## Local rehearsal (no cost) — `node tools/rehearse-local.js`
+
+Real in this run: a chain (hardhat node), every contract, the exam service (`exam-worker` under `wrangler dev`,
+reading that chain), the client's git repository, and the sealed box's own wiring (`tee/box/engage-wiring.js`,
+shared with `start.js`). Fake: the TEE, the model, the client's CI.
+
+**2026-11-21: 14/14 checks passed.** Scenario steps 2–8 and 12 above, without TEE or money: brief through the exam
+service, sealed access, acceptance, delivery after CI, the report anchoring the memory, a replaced VM reading its
+memory back, a rewound memory stopping work, a revision, and the hand-over at the end.
+
+The first runs found **two real bugs** that the unit tests had missed:
+1. State file names were the raw keys (`engagement:1:m0:r0`), which are invalid on Windows; two keys could also
+   share one file. Now the names are percent-encoded.
+2. When the model's answer after a revision request changed nothing, the old commit was about to be delivered again
+   as if it were the revision. Now an unchanged answer counts as a failed round. It is never delivered, and after
+   the last round the AI asks the reviewers (§13).
