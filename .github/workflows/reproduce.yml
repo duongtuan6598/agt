@@ -33,8 +33,10 @@ jobs:
       - name: Every reference file was added once and never changed
         run: |
           cd agt
+          gone=$(git log --no-renames --diff-filter=D --name-only --format= -- tee/reference/)
+          [ -z "$gone" ] || { echo "✘ reference files were deleted: $gone"; exit 1; }
           for f in tee/reference/*.json; do
-            n=$(git log --format=%H --follow -- "$f" | wc -l)
+            n=$(git log --no-renames --format=%H -- "$f" | wc -l)
             [ "$n" = "1" ] || { echo "✘ $f was modified after it was added ($n commits)"; exit 1; }
           done
           echo "✔ reference files are append-only"
