@@ -1,0 +1,48 @@
+# Rebuild the AGT images on a machine nobody in AGT owns, and compare with tee/reference-digests.json.
+# Anyone can run it (Actions → "Reproduce images" → Run workflow) and read the full log. It also runs every week,
+# so the check is repeated on other days and other hardware. No third-party actions; read-only permissions.
+name: Reproduce images
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: "Commit to rebuild (empty = the one in tee/reference-digests.json)"
+        required: false
+  schedule:
+    - cron: "17 3 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        image: [builder, embedded, box]
+    steps:
+      - name: Clone (full history, no actions)
+        run: |
+          git clone --quiet "https://github.com/${GITHUB_REPOSITORY}.git" agt
+          cd agt && git checkout --quiet "${GITHUB_SHA}"
+      - name: BuildKit pinned to the reference version
+        run: |
+          V=$(node -p 'require("./agt/tee/reference-digests.json").buildkit')
+          docker buildx create --name repro --driver docker-container --driver-opt "image=moby/buildkit:${V}" --use
+          docker buildx inspect --bootstrap | grep -i "buildkit version"
+      - name: Rebuild ${{ matrix.image }} and compare
+        env:
+          INPUT_COMMIT: ${{ github.event.inputs.commit }}
+        run: |
+          cd agt
+          REF=tee/reference-digests.json
+          COMMIT=${INPUT_COMMIT:-$(node -p "require('./$REF').commit")}
+          EXPECT=$(node -p "require('./$REF').images['${{ matrix.image }}']")
+          GOT=$(sh tools/repro-build.sh "$COMMIT" "tee/${{ matrix.image }}/Dockerfile" "$RUNNER_TEMP/image.tar")
+          echo "commit   $COMMIT"
+          echo "expected $EXPECT"
+          echo "got      $GOT"
+          if [ "$COMMIT" != "$(node -p "require('./$REF').commit")" ]; then echo "(a different commit than the reference: digest printed, not compared)"; exit 0; fi
+          [ "$GOT" = "$EXPECT" ] && echo "✔ ${{ matrix.image }}: identical — reproducible on this machine" || { echo "✘ ${{ matrix.image }}: DIFFERENT digest"; exit 1; }

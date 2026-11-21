@@ -1,0 +1,10 @@
+{
+  "_": "Digests produced by tools/repro-build.sh from this commit (REPRODUCE.md). Any machine must get the same ones.",
+  "commit": "d84a04433c25c5827c5f8c9c450b98f74ccd7558",
+  "buildkit": "v0.34.2",
+  "images": {
+    "builder": "sha256:26c7092cc6c426a9ed73017908ba398028f184fbc2b6acca77362a5742247ef9",
+    "embedded": "sha256:758c9143241ca5af05d7aed83c53601c4cae3491f3d385879616073a85790aa9",
+    "box": "sha256:d198da1d35edb7d15ddb4830d818d624e0ed91fa7b6ca76d336cc50a2955c4d5"
+  }
+}
