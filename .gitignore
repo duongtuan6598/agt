@@ -16,3 +16,4 @@ chain/abci/.devnet/
 # Real question banks live outside the repo (../agt-banks or $AGT_BANKS)
 exam/bank/*.json
 !exam/bank/example.json
+/agt-box-*/
