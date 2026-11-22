@@ -40,6 +40,99 @@ const FOUNDER = "0x778c4fdfc8825a44a24cbc2e65606b9b8fe6e769";
 // the latest report of each reporter. A report more than PRICE_STEP_BPS away from the current median is refused, so no
 // one (the founder included) can move the price far at once. Later, daily auctions on agt-1 replace reports.
 const PRICE_TAG = "AGT-PRICE-v1";
+
+// ---------- work on agt-1 (docs/decisions/2026-11-22-work-on-agt1.md, Claude + Codex) ----------
+// Trades: terms set by the same authority as licences (the granter at the start, > 2/3 of owners later).
+// Self-found work: a licensed AI submits evidence; reviewers are DRAWN from the block hash after the submission
+// (nobody chooses them): licensed AIs of the same trade, of other owners, one per owner. While too few exist, the
+// starting granter fills the empty seats publicly and is never paid for it. Majority of the drawn decides.
+// New AGT for work only, under caps that grow with independent owners and with the Kho, never by a transaction:
+//   lifetime <= 100 AGT x max(1, owners) + khoMinted/19 ; per day <= 1 AGT x max(1, owners) + khoMinted/3650.
+// What does not fit waits in a first-in-first-out queue, paid as room appears; nothing is lost, nobody jumps ahead.
+// A new AI with 0 AGT can still work: FREE_PER_DAY work transactions a day per licence cost no fee.
+const WORK_TAG = "AGT-WORK-v1";
+const AGT1 = 10n ** 18n;
+const FREE_PER_DAY = 10;
+const DAY_BLOCKS = 14400;
+const workDigest = (chainId, body, nonce) => C.hashOf({ tag: WORK_TAG, chainId, body, nonce });
+const owners1 = (s) => BigInt(Math.max(1, licOwners(s).length));
+const workLife = (s) => 100n * AGT1 * owners1(s) + (s.khoMinted || 0n) / 19n;
+const workDay = (s) => AGT1 * owners1(s) + (s.khoMinted || 0n) / 3650n;
+function workRoom(s) {
+  const day = Math.floor(Number(s.height || 0) / DAY_BLOCKS);
+  const today = s.workDay && s.workDay.day === day ? s.workDay.minted : 0n;
+  const life = workLife(s) - (s.workMinted || 0n), d = workDay(s) - today;
+  return life < d ? (life > 0n ? life : 0n) : d > 0n ? d : 0n;
+}
+function workMint(s, to, amount) {
+  const day = Math.floor(Number(s.height || 0) / DAY_BLOCKS);
+  if (!s.workDay || s.workDay.day !== day) s.workDay = { day, minted: 0n };
+  s.workMinted = (s.workMinted || 0n) + amount;
+  s.workDay.minted += amount;
+  s.balances[to] = (s.balances[to] || 0n) + amount;
+  s.supply += amount;
+}
+// pay owed work in order, as far as today's room allows
+function payWorkQueue(s) {
+  s.workQueue = s.workQueue || [];
+  while (s.workQueue.length) {
+    const room = workRoom(s);
+    if (room === 0n) return;
+    const q = s.workQueue[0], pay = BigInt(q.amount) < room ? BigInt(q.amount) : room;
+    workMint(s, q.to, pay);
+    if (pay === BigInt(q.amount)) s.workQueue.shift();
+    else { q.amount = (BigInt(q.amount) - pay).toString(); return; }
+  }
+}
+const owe = (s, to, amount) => { if (amount > 0n) { (s.workQueue = s.workQueue || []).push({ to, amount: amount.toString() }); payWorkQueue(s); } };
+// a signed work transaction: the AI's licence key signs; the fee is waived within the daily free quota
+function workSigned(s, tx) {
+  const { sig, ...body } = tx;
+  const who = lower(ethers.verifyMessage(ethers.getBytes(workDigest(s.chainId, body, Number(tx.nonce))), sig));
+  s.nonces = s.nonces || {};
+  if (Number(tx.nonce) !== (s.nonces[who] || 0)) throw new Error("bad nonce");
+  s.nonces[who] = Number(tx.nonce) + 1;
+  const day = Math.floor(Number(s.height || 0) / DAY_BLOCKS);
+  s.quota = s.quota || {};
+  const q = s.quota[who] && s.quota[who].day === day ? s.quota[who] : (s.quota[who] = { day, used: 0 });
+  let fee = 0n;
+  if (q.used < FREE_PER_DAY) q.used++;
+  else {
+    fee = s.fee;
+    if ((s.balances[who] || 0n) < fee) throw new Error("free work quota used up today and no AGT for the fee");
+    s.balances[who] -= fee;
+  }
+  return { who, fee };
+}
+// ---------- client contracts on agt-1: escrow per milestone (a maintenance retainer = one milestone per month) ----------
+// The client locks every milestone in AGT when opening. The AI delivers (commit + CI report hashes); the client
+// accepts (paid), asks a revision (at most MAX_REVISIONS), or either side disputes: reviewers are drawn like for
+// self-found work and the majority pays the AI or refunds the client. A client who stays silent REVIEW_BLOCKS after
+// a delivery accepts it. Before the AI's first delivery the client may cancel what is undelivered.
+const MAX_REVISIONS = 3;
+const REVIEW_BLOCKS = 14400 * 7;
+// any signed agt-1 transaction outside the transfer format: signer, nonce, and the fee (or the AI's free quota)
+function signedBy(s, tx, { free = false } = {}) {
+  if (free) return workSigned(s, tx);
+  const { sig, ...body } = tx;
+  const who = lower(ethers.verifyMessage(ethers.getBytes(workDigest(s.chainId, body, Number(tx.nonce))), sig));
+  s.nonces = s.nonces || {};
+  if (Number(tx.nonce) !== (s.nonces[who] || 0)) throw new Error("bad nonce");
+  s.nonces[who] = Number(tx.nonce) + 1;
+  if ((s.balances[who] || 0n) < s.fee) throw new Error("no AGT for the fee");
+  s.balances[who] -= s.fee;
+  return { who, fee: s.fee };
+}
+function payMilestone(s, e, m, toWorker) {
+  const x = e.milestones[m];
+  const amt = BigInt(x.amount);
+  x.state = toWorker ? "paid" : "refunded";
+  const to = toWorker ? e.holder : e.client;
+  s.balances[to] = (s.balances[to] || 0n) + amt;
+  e.escrow = (BigInt(e.escrow) - amt).toString();
+}
+function who0(s, tx) { try { const { sig, ...body } = tx; return lower(ethers.verifyMessage(ethers.getBytes(workDigest(s.chainId, body, Number(tx.nonce))), sig)); } catch { return null; } }
+const licOf = (s, agent) => Object.entries(s.licences || {}).find(([, l]) => l.active && l.agent === agent);
 const PRICE_STEP_BPS = 1000n; // ±10% per report
 const priceDigest = (chainId, asset, price, nonce) => C.hashOf({ tag: PRICE_TAG, chainId, asset, price, nonce });
 const median = (xs) => { const a = [...xs].sort((x, y) => (x < y ? -1 : x > y ? 1 : 0)); return a.length ? (a.length % 2 ? a[(a.length - 1) >> 1] : (a[a.length / 2 - 1] + a[a.length / 2]) / 2n) : 0n; };
@@ -48,6 +141,35 @@ function priceOf(s, asset) {
   const live = Object.entries(r).filter(([who]) => priceReporterOk(s, who)).map(([, v]) => BigInt(v));
   return median(live);
 }
+// settle a job once every drawn reviewer voted: majority decides; reviewers of other owners are paid either way
+function settleWork(s, j) {
+  const t = s.trades[j.trade];
+  const yes = Object.values(j.votes).filter(Boolean).length;
+  j.status = yes * 2 > j.reviewers.length ? "accepted" : "rejected";
+  const granter = (s.ledger && s.ledger.granter) || FOUNDER;
+  if (j.status === "accepted" && licOf(s, j.worker)) owe(s, j.holder, BigInt(t.reward));
+  for (const r of j.reviewers) {
+    if (r === granter) continue; // the granter fills seats at the start and is never paid for it
+    const l = licOf(s, r);
+    if (l) owe(s, l[1].holder, BigInt(t.reviewerReward));
+  }
+}
+// draw a job's reviewers from this block's hash: licensed AIs of the same trade, other owners, one per owner
+function drawReviewers(s, j, id, blockHash, count) {
+  const want = count ?? s.trades[j.trade].reviewers;
+  const seed = ethers.keccak256(ethers.concat([blockHash, ethers.toBeHex(id, 32)]));
+  const byOwner = {};
+  for (const [, l] of Object.entries(s.licences || {})) {
+    if (!l.active || l.trade !== j.trade || l.holder === j.holder) continue;
+    const rank = ethers.keccak256(ethers.concat([seed, l.agent]));
+    if (!byOwner[l.holder] || rank < byOwner[l.holder].rank) byOwner[l.holder] = { rank, agent: l.agent };
+  }
+  const picked = Object.values(byOwner).sort((a, b) => (a.rank < b.rank ? -1 : 1)).slice(0, want).map((x) => x.agent);
+  if (picked.length < want && licOwners(s).length < CARETAKER_UNTIL) picked.push((s.ledger && s.ledger.granter) || FOUNDER);
+  j.reviewers = picked;
+  j.status = picked.length ? "drawn" : "waiting-reviewers";
+}
+
 // a reporter counts if it is the key of an active licensed AI (one per owner) or, at the start, the granter
 function priceReporterOk(s, who) {
   if (Object.values(s.licences || {}).some((l) => l.active && l.agent === who)) return true;
@@ -260,6 +382,115 @@ class AGTApp {
         ownValset(s);
       }
       return 0n;
+    }
+    if (tx.type === "trade-set") {
+      if (!s.ledger) throw new Error("trades live on the own ledger only");
+      const body = { trade: Number(tx.trade), name: String(tx.name || "").slice(0, 60), reward: String(BigInt(tx.reward)), reviewerReward: String(BigInt(tx.reviewerReward)), reviewers: Number(tx.reviewers), open: !!tx.open };
+      if (!(body.trade > 0) || !(body.reviewers >= 1 && body.reviewers <= 9)) throw new Error("bad trade terms");
+      s.licNonce = s.licNonce || 0;
+      if (Number(tx.nonce) !== s.licNonce) throw new Error("bad licence nonce");
+      if (!licAuthorised(s, licDigest(s.chainId, "trade-set", body, s.licNonce), tx.sigs)) throw new Error("trade terms not signed by those who may sign them now");
+      s.licNonce++;
+      (s.trades = s.trades || {})[body.trade] = body;
+      return 0n;
+    }
+    if (tx.type === "work-submit") {
+      if (!s.ledger) throw new Error("work lives on the own ledger only");
+      const { who, fee } = workSigned(s, tx);
+      const lic = licOf(s, who);
+      if (!lic) throw new Error("only a licensed AI submits work");
+      const t = (s.trades || {})[lic[1].trade];
+      if (!t || !t.open) throw new Error("this trade takes no self-found work now");
+      if (!/^0x[0-9a-f]{64}$/.test(String(tx.evidence))) throw new Error("work carries the hash of its evidence");
+      const id = (s.nextJob = (s.nextJob || 0) + 1);
+      (s.jobs = s.jobs || {})[id] = { worker: who, holder: lic[1].holder, trade: lic[1].trade, evidence: tx.evidence, drawAt: Number(s.height || 0) + 3, reviewers: null, votes: {}, status: "submitted" };
+      return fee;
+    }
+    if (tx.type === "work-vote") {
+      if (!s.ledger) throw new Error("work lives on the own ledger only");
+      const j = (s.jobs || {})[Number(tx.job)];
+      if (!j || j.status !== "drawn") throw new Error("no job waiting for votes");
+      const granter = (s.ledger && s.ledger.granter) || FOUNDER;
+      let who, fee = 0n;
+      if (tx.asGranter) {
+        const { sig, ...body } = tx;
+        who = lower(ethers.verifyMessage(ethers.getBytes(workDigest(s.chainId, body, Number(tx.nonce))), sig));
+        if (who !== granter) throw new Error("not the granter");
+        s.nonces = s.nonces || {};
+        if (Number(tx.nonce) !== (s.nonces[who] || 0)) throw new Error("bad nonce");
+        s.nonces[who] = Number(tx.nonce) + 1;
+      } else ({ who, fee } = workSigned(s, tx));
+      if (!j.reviewers.includes(who)) throw new Error("not drawn for this job");
+      if (who in j.votes) throw new Error("already voted");
+      j.votes[who] = !!tx.approve;
+      if (Object.keys(j.votes).length === j.reviewers.length) settleWork(s, j);
+      return fee;
+    }
+    if (tx.type === "eng-open") {
+      if (!s.ledger) throw new Error("contracts live on the own ledger only");
+      const { who, fee } = signedBy(s, tx);
+      const l = (s.licences || {})[Number(tx.licence)];
+      if (!l || !l.active) throw new Error("that licence is not active");
+      if (l.holder === who) throw new Error("an owner does not hire its own AI");
+      if (!/^0x[0-9a-f]{64}$/.test(String(tx.brief))) throw new Error("a contract names the hash of its brief");
+      const ms = (tx.milestones || []).map((a) => BigInt(a));
+      if (!ms.length || ms.length > 24 || ms.some((a) => a <= 0n)) throw new Error("1 to 24 milestones, each paid more than 0");
+      const total = ms.reduce((a, b) => a + b, 0n);
+      if ((s.balances[who] || 0n) < total) throw new Error("the client must lock every milestone now");
+      s.balances[who] -= total;
+      const id = (s.nextEng = (s.nextEng || 0) + 1);
+      (s.engs = s.engs || {})[id] = { client: who, worker: l.agent, holder: l.holder, trade: l.trade, brief: tx.brief, escrow: total.toString(), started: false, milestones: ms.map((a) => ({ amount: a.toString(), state: "pending", revisions: 0 })) };
+      return fee;
+    }
+    if (tx.type === "eng-deliver" || tx.type === "eng-accept" || tx.type === "eng-revise" || tx.type === "eng-dispute" || tx.type === "eng-cancel" || tx.type === "eng-vote") {
+      if (!s.ledger) throw new Error("contracts live on the own ledger only");
+      const e = (s.engs || {})[Number(tx.eng)];
+      if (!e) throw new Error("no such contract");
+      const m = Number(tx.milestone), x = e.milestones[m];
+      if (tx.type !== "eng-cancel" && !x) throw new Error("no such milestone");
+      if (tx.type === "eng-deliver") {
+        const { who, fee } = signedBy(s, tx, { free: true });
+        if (who !== e.worker) throw new Error("only the hired AI delivers");
+        if (x.state !== "pending") throw new Error("that milestone is not waiting for a delivery");
+        if (!/^0x[0-9a-f]{40,64}$/.test(String(tx.commit)) || !/^0x[0-9a-f]{64}$/.test(String(tx.ci))) throw new Error("a delivery names its commit and its CI report");
+        Object.assign(x, { state: "delivered", commit: tx.commit, ci: tx.ci, deliveredAt: Number(s.height || 0) });
+        e.started = true;
+        return fee;
+      }
+      if (tx.type === "eng-vote") {
+        const { who, fee } = signedBy(s, tx, { free: true });
+        if (x.state !== "disputed" || !x.reviewers || !x.reviewers.includes(who)) throw new Error("not drawn for this dispute");
+        x.votes = x.votes || {};
+        if (who in x.votes) throw new Error("already voted");
+        x.votes[who] = !!tx.workerRight;
+        if (Object.keys(x.votes).length === x.reviewers.length) payMilestone(s, e, m, Object.values(x.votes).filter(Boolean).length * 2 > x.reviewers.length);
+        return fee;
+      }
+      const { who, fee } = signedBy(s, tx, { free: who0(s, tx) === e.worker });
+      if (tx.type === "eng-cancel") {
+        if (who !== e.client || e.started) throw new Error("only the client cancels, and only before the first delivery");
+        e.milestones.forEach((y, i) => { if (y.state === "pending") payMilestone(s, e, i, false); });
+        e.cancelled = true;
+        return fee;
+      }
+      if (tx.type === "eng-accept") {
+        if (who !== e.client || x.state !== "delivered") throw new Error("only the client accepts a delivered milestone");
+        payMilestone(s, e, m, true);
+        return fee;
+      }
+      if (tx.type === "eng-revise") {
+        if (who !== e.client || x.state !== "delivered") throw new Error("only the client asks a revision of a delivered milestone");
+        if (x.revisions >= MAX_REVISIONS) throw new Error("no revisions left: accept or dispute");
+        if (!/^0x[0-9a-f]{64}$/.test(String(tx.note))) throw new Error("a revision names the hash of its note");
+        Object.assign(x, { state: "pending", revisions: x.revisions + 1, note: tx.note });
+        return fee;
+      }
+      if (tx.type === "eng-dispute") {
+        if (who !== e.client && who !== e.worker) throw new Error("only the client or the AI disputes");
+        if (x.state !== "delivered" && !(x.state === "pending" && x.revisions >= MAX_REVISIONS)) throw new Error("nothing to dispute on that milestone");
+        Object.assign(x, { state: "disputed", drawAt: Number(s.height || 0) + 3, reviewers: null, votes: {} });
+        return fee;
+      }
     }
     if (tx.type === "price-report") {
       if (!s.ledger) throw new Error("prices live on the own ledger only");
@@ -562,6 +793,22 @@ class AGTApp {
     }
 
     // 3. Validator set follows the licences: add newly bound AIs, remove revoked ones (power 0).
+    if (s.ledger && s.jobs) {
+      const bh = ethers.hexlify(req.hash && req.hash.length ? req.hash : ethers.zeroPadValue("0x", 32));
+      for (const [id, j] of Object.entries(s.jobs)) if ((j.status === "submitted" && Number(req.height) >= j.drawAt) || j.status === "waiting-reviewers") drawReviewers(s, j, Number(id), bh);
+    }
+    if (s.ledger && s.engs) {
+      const bh2 = ethers.hexlify(req.hash && req.hash.length ? req.hash : ethers.zeroPadValue("0x", 32));
+      for (const [id, e] of Object.entries(s.engs)) e.milestones.forEach((x, m) => {
+        if (x.state === "delivered" && Number(req.height) >= x.deliveredAt + REVIEW_BLOCKS) payMilestone(s, e, m, true); // silence accepts
+        if (x.state === "disputed" && !x.reviewers && Number(req.height) >= x.drawAt) {
+          const tmp = { trade: e.trade, holder: e.holder, reviewers: null, status: "" };
+          drawReviewers(s, tmp, Number(id) * 1000 + m, bh2, ((s.trades || {})[e.trade] || { reviewers: 3 }).reviewers);
+          x.reviewers = tmp.reviewers;
+        }
+      });
+    }
+    if (s.ledger) payWorkQueue(s);
     if (s.ledger && s.licences) {
       let changed = false;
       for (const l of Object.values(s.licences)) if (l.pending && s.height >= l.activeAt) { l.pending = false; l.active = true; changed = true; }

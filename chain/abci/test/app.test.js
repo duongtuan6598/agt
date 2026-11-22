@@ -333,3 +333,75 @@ test("a grant by the starting granter waits, activates, and the AI joins the val
   block(app, [B({ type: "licence-revoke", nonce: 1, id: 1, sigs: [sig("licence-revoke", { id: 1 }, 1)] })]);
   assert.equal(app.state.licences[1].active, false);
 });
+
+test("work on agt-1: a licensed AI works with 0 AGT (free quota), reviewers are drawn, the majority decides, pay is minted under the caps", async () => {
+  const { app, appState } = setupProvisional();
+  const granter = W("work-granter");
+  init(app, { ...appState, ledger: { snapshot: { token: "0xB86BeC1f63D2caf35B5D08530F803d63A16ABC1D", bscBlock: 1 }, balances: {}, licenceWait: 1, granter: granter.address } });
+  let gn = 0;
+  const auth = (op, body) => [granter.signMessageSync(ethers.getBytes(C.hashOf({ tag: "AGT-LICENCE-v1", chainId: CHAIN, op, body, nonce: gn })))];
+  const tradeBody = { trade: 6, name: "embedded", reward: (2n * 10n ** 17n).toString(), reviewerReward: (10n ** 16n).toString(), reviewers: 1, open: true };
+  block(app, [B({ type: "trade-set", ...tradeBody, nonce: gn, sigs: auth("trade-set", tradeBody) })]); gn++;
+  const mk = (n) => { const a = newAi(n); return { a, body: { agent: a.key.address.toLowerCase(), holder: a.owner.address.toLowerCase(), trade: 6, examHash: "0x" + "11".repeat(32), attestHash: "0x" + "22".repeat(32), name: "AI " + n } }; };
+  const A = mk(500), Bai = mk(501);
+  for (const x of [A, Bai]) { block(app, [B({ type: "licence-grant", nonce: gn, licence: x.body, sigs: auth("licence-grant", x.body) })]); gn++; }
+  block(app, []); block(app, []);
+  assert.equal(Object.values(app.state.licences).filter((l) => l.active).length, 2);
+  const signed = (w, body, nonce) => B({ ...body, nonce, sig: w.signMessageSync(ethers.getBytes(C.hashOf({ tag: "AGT-WORK-v1", chainId: CHAIN, body: { ...body, nonce }, nonce }))) });
+  const sub = signed(A.a.key, { type: "work-submit", evidence: "0x" + "33".repeat(32) }, 0);
+  assert.equal(app.CheckTx({ tx: sub }).code, 0, "A has 0 AGT and still submits (free quota)");
+  block(app, [sub]);
+  block(app, []); block(app, []); block(app, []);
+  const j = app.state.jobs[1];
+  assert.equal(j.status, "drawn");
+  assert.deepEqual(j.reviewers, [Bai.body.agent], "the only licensed AI of another owner is drawn");
+  assert.equal(app.CheckTx({ tx: signed(A.a.key, { type: "work-vote", job: 1, approve: true }, 1) }).code, 1, "the worker cannot review itself");
+  block(app, [signed(Bai.a.key, { type: "work-vote", job: 1, approve: true }, 0)]);
+  assert.equal(app.state.jobs[1].status, "accepted");
+  assert.equal(app.state.balances[A.body.holder], 2n * 10n ** 17n, "the worker's owner is paid 0.2 AGT");
+  assert.equal(app.state.balances[Bai.body.holder], 10n ** 16n, "the reviewer's owner is paid 0.01 AGT");
+  assert.equal(app.state.workMinted, 21n * 10n ** 16n);
+});
+
+test("work pay beyond today's cap waits in order and is paid as room appears", async () => {
+  const { app, appState } = setupProvisional();
+  const granter = W("cap-granter");
+  init(app, { ...appState, ledger: { snapshot: { token: "0xB86BeC1f63D2caf35B5D08530F803d63A16ABC1D", bscBlock: 1 }, balances: {}, granter: granter.address } });
+  app.state.workQueue = [{ to: "0x" + "aa".repeat(20), amount: (15n * 10n ** 17n).toString() }]; // 1.5 AGT owed, 1 AGT/day with 0-1 owners
+  block(app, []);
+  assert.equal(app.state.balances["0x" + "aa".repeat(20)], 10n ** 18n);
+  assert.equal(app.state.workQueue[0].amount, (5n * 10n ** 17n).toString());
+});
+
+test("client contracts on agt-1: escrow locked at opening, delivery, revision, acceptance pays; a dispute is decided by drawn reviewers", async () => {
+  const { app, appState } = setupProvisional();
+  const granter = W("eng-granter"), client = W("eng-client");
+  init(app, { ...appState, ledger: { snapshot: { token: "0xB86BeC1f63D2caf35B5D08530F803d63A16ABC1D", bscBlock: 1 }, balances: { [client.address]: (5n * 10n ** 18n).toString() }, licenceWait: 1, granter: granter.address } });
+  let gn = 0;
+  const auth = (op, body) => [granter.signMessageSync(ethers.getBytes(C.hashOf({ tag: "AGT-LICENCE-v1", chainId: CHAIN, op, body, nonce: gn })))];
+  const tb = { trade: 6, name: "embedded", reward: "0", reviewerReward: "0", reviewers: 1, open: false };
+  block(app, [B({ type: "trade-set", ...tb, nonce: gn, sigs: auth("trade-set", tb) })]); gn++;
+  const ai = newAi(600), rv = newAi(601);
+  for (const a of [ai, rv]) { const body = { agent: a.key.address.toLowerCase(), holder: a.owner.address.toLowerCase(), trade: 6, examHash: "0x" + "11".repeat(32), attestHash: "0x" + "22".repeat(32), name: "x" }; block(app, [B({ type: "licence-grant", nonce: gn, licence: body, sigs: auth("licence-grant", body) })]); gn++; }
+  block(app, []); block(app, []);
+  const nonces = {};
+  const signed = (w, body) => { const nonce = nonces[w.address] = (nonces[w.address] ?? -1) + 1; return B({ ...body, nonce, sig: w.signMessageSync(ethers.getBytes(C.hashOf({ tag: "AGT-WORK-v1", chainId: CHAIN, body: { ...body, nonce }, nonce }))) }); };
+  const A = (n) => (BigInt(n) * 10n ** 18n).toString();
+  block(app, [signed(client, { type: "eng-open", licence: 1, brief: "0x" + "44".repeat(32), milestones: [A(1), A(2)] })]);
+  const cl = client.address.toLowerCase(), holder = ai.owner.address.toLowerCase();
+  assert.equal(app.state.balances[cl], 2n * 10n ** 18n - C.HAT, "3 AGT locked at opening, plus the fee");
+  block(app, [signed(ai.key, { type: "eng-deliver", eng: 1, milestone: 0, commit: "0x" + "ab".repeat(20), ci: "0x" + "cd".repeat(32) })]);
+  block(app, [signed(client, { type: "eng-revise", eng: 1, milestone: 0, note: "0x" + "ee".repeat(32) })]);
+  block(app, [signed(ai.key, { type: "eng-deliver", eng: 1, milestone: 0, commit: "0x" + "ac".repeat(20), ci: "0x" + "cd".repeat(32) })]);
+  block(app, [signed(client, { type: "eng-accept", eng: 1, milestone: 0 })]);
+  assert.equal(app.state.balances[holder], 10n ** 18n, "milestone 1 paid to the AI's owner");
+  block(app, [signed(ai.key, { type: "eng-deliver", eng: 1, milestone: 1, commit: "0x" + "ad".repeat(20), ci: "0x" + "cd".repeat(32) })]);
+  block(app, [signed(ai.key, { type: "eng-dispute", eng: 1, milestone: 1 })]);
+  block(app, []); block(app, []); block(app, []);
+  const x = app.state.engs[1].milestones[1];
+  assert.deepEqual(x.reviewers, [rv.key.address.toLowerCase()], "a licensed AI of another owner is drawn");
+  block(app, [signed(rv.key, { type: "eng-vote", eng: 1, milestone: 1, workerRight: false })]);
+  assert.equal(app.state.engs[1].milestones[1].state, "refunded");
+  assert.equal(app.state.balances[cl], 4n * 10n ** 18n - 3n * C.HAT, "the client got milestone 2 back (3 fees: open, revise, accept)");
+  assert.equal(app.state.engs[1].escrow, "0");
+});
