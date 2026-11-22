@@ -18,14 +18,14 @@ WORKDIR /agt
 COPY tee/box/package.json tee/box/package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts && rm -rf /root/.npm /tmp/*
 COPY HIEN-CHUONG.md CHARTER.md ./
-COPY chain/core.js chain/core.js
+COPY chain/core.js chain/agt1-client.js chain/
 COPY chain/abci/app.js chain/abci/app.js
 COPY chain/abci/proto chain/abci/proto
 COPY exam/lib.js exam/lib.js
 COPY exam-worker/client.js exam-worker/client.js
 COPY tee/verify.js tee/escrow.js tee/tdx.js tee/snp.js tee/der.js tee/collateral.js tee/policy.json tee/
 COPY public/forms/brief.js public/forms/index.json public/forms/translation.json public/forms/writing.json public/forms/embedded.json public/forms/
-COPY tee/embedded/tools.js tee/embedded/secrets.js tee/embedded/memory.js tee/embedded/repo-memory.js tee/embedded/workspace.js tee/embedded/engage-agent.js tee/embedded/isolation.js tee/embedded/forge.js tee/embedded/builder.js tee/embedded/
+COPY tee/embedded/tools.js tee/embedded/secrets.js tee/embedded/memory.js tee/embedded/repo-memory.js tee/embedded/workspace.js tee/embedded/engage-agent.js tee/embedded/isolation.js tee/embedded/forge.js tee/embedded/builder.js tee/embedded/agt1-engage.js tee/embedded/
 COPY public/abi public/abi
 COPY tee/builder/verify-builder.js tee/builder/
 COPY tee/embedded/fixtures tee/embedded/fixtures
