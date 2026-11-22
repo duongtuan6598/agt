@@ -17,6 +17,7 @@ const ENG_ABI = require(path.join(ROOT, "public", "abi", "Engagement.json"));
 const o = { gasPrice: ethers.parseUnits("1", "gwei") };
 const STATES = ["None", "Pending", "Delivered", "HwTesting", "Done", "Disputed", "Refunded"];
 
+const milestone = (m) => { const n = Number(m); if (!Number.isInteger(n) || n < 1) throw new Error("milestones are numbered from 1"); return n - 1; };
 async function main() {
   const [cmd, ...a] = process.argv.slice(2);
   const provider = new ethers.JsonRpcProvider(RPC);
@@ -77,10 +78,13 @@ async function main() {
       console.log(`  milestone ${m + 1}: ${STATES[Number(x.state)]}, revisions ${x.revisions}, result ${x.result.slice(0, 12)}…, report ${x.report.slice(0, 12)}…`);
     }
   } else if (cmd === "accept") {
-    await (await eng.accept(Number(a[0]), Number(a[1]), o)).wait();
-    console.log(`milestone ${Number(a[1]) + 1} accepted: the AI is paid`);
+    // milestones are numbered from 1 on the command line, as `status` shows them
+    const m = milestone(a[1]);
+    await (await eng.accept(Number(a[0]), m, o)).wait();
+    console.log(`milestone ${m + 1} accepted: the AI is paid`);
   } else if (cmd === "revise") {
-    const [id, m, note] = a;
+    const [id, mm, note] = a;
+    const m = milestone(mm);
     const h = await publish(note);
     await (await eng.requestRevision(Number(id), Number(m), h, o)).wait();
     const r = await post("/notes", { contract: "engagement", id: Number(id), text: note, signature: await wallet.signMessage(`AGT note engagement ${id} ${h}`) });

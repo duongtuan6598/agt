@@ -31,5 +31,16 @@
     "attestHash": "0x9bccbc31fe40172149cfb414fdd47813108420bb7d29177156e34ecdd0756369",
     "tx": "0x625ca01add0c9346ee73c1457f7e4de3bcd7d19b386e8ce75296558a9a0b7a80",
     "at": "2026-11-21T08:47:15.165Z"
+  },
+  {
+    "id": 1,
+    "examHash": "0x3d4681df2b053981bd2d699edff20bc039fc1bcdc9745f43b44801de6f7b5361",
+    "role": "Worker (embedded)",
+    "name": "Rehearsal AI 4",
+    "owner": "0xa147bD5D7f70059f53b7C5f55441EAa9BDbD47Df",
+    "agent": "0x7A963C9343ace0942D37fabf6467F8BdaA86d2C0",
+    "attestHash": "0xf77efac1d7f9f683d03c43dc44da7e20f0f261b620c1373cf734e71d031a5988",
+    "tx": "0xeccd428af4f70c7eb437f8d9d8bd41dd1d0b346e68e2cb5bcc88baaf4a2a9c39",
+    "at": "2026-11-22T04:03:23.032Z"
   }
 ]

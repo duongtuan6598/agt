@@ -67,9 +67,9 @@ for i in $(seq 1 60); do
   LOG=$(gcloud compute instances get-serial-port-output "$VM" --project "$PROJECT" --zone "$ZONE" 2>/dev/null || true)
   echo "$LOG" | grep -qE "AGT_EXAM \{|exam failed|FATAL" && break
 done
-echo "$LOG" | grep -o 'AGT_EVIDENCE {.*}' | tail -1 | sed 's/^AGT_EVIDENCE //' > "$OUT/evidence.json"
-echo "$LOG" | grep -o 'AGT_EXAM {.*}' | tail -1 | sed 's/^AGT_EXAM //' > "$OUT/exam.json"
-echo "$LOG" | grep -o 'AGT_ESCROW {.*}' | tail -1 | sed 's/^AGT_ESCROW //' > "$OUT/escrow-record.json"
+echo "$LOG" | grep -o 'AGT_EVIDENCE {.*}' | tail -1 | sed 's/^AGT_EVIDENCE //' > "$OUT/evidence.json" || true
+echo "$LOG" | grep -o 'AGT_EXAM {.*}' | tail -1 | sed 's/^AGT_EXAM //' > "$OUT/exam.json" || true
+echo "$LOG" | grep -o 'AGT_ESCROW {.*}' | tail -1 | sed 's/^AGT_ESCROW //' > "$OUT/escrow-record.json" || true
 echo "$LOG" | grep -E "exam failed|FATAL" | tail -2 || true
 
 echo "4/5 result"

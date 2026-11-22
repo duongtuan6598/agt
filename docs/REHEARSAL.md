@@ -54,3 +54,31 @@ The first runs found **two real bugs** that the unit tests had missed:
 2. When the model's answer after a revision request changed nothing, the old commit was about to be delivered again
    as if it were the revision. Now an unchanged answer counts as a failed round. It is never delivered, and after
    the last round the AI asks the reviewers (§13).
+
+## Testnet v5 run (22 Nov 2026, box image `1df79930…`, commit 7f7251f)
+
+Real: an AMD SEV Confidential Space VM on GCP, the model, the BSC testnet v5 contracts, a private GitHub repository
+with real CI (build + unit tests).
+
+| Step | Result |
+|---|---|
+| 1 Exam (trade 6) in the sealed box | 5/5 (pass mark 4), graded locally in the approved image; licence #1 granted on v5 |
+| 2–3 Brief, funding, sealed repository access | Engagement #2 opened with 2 milestones; the token was sealed to the box's attested key |
+| 4 Milestone 1 | `ringbuf_peek` and tests pushed; delivered only after the client's CI was green |
+| 5 Revision | The client asked for a wrap-around test and docs; both were added; redelivered after CI; accepted and paid |
+| Milestone 2 | `ringbuf_clear` (O(1)); CI passed on the second round; delivered, accepted and paid |
+| 12 End | The memory was handed over in plain text (branch `agt/memory-export-2`, 8 entries, no secret inside) |
+| Clean-up | The VM was deleted and licence #1 revoked. About 25 minutes of VM time |
+
+Not run this time: steps 6–11 (VM replacement, rollback, broken CI and reviewers, the reproduction builder, warranty,
+maintenance). The local rehearsal and unit tests cover them.
+
+Findings:
+- **T-7.** The client opened engagement #1 with the wrong repository, an empty public one. The box was refused on
+  push and retried. It also refused, correctly, to hand its memory over into a public repository. The client tool
+  should check that the token can read and push to the repository before funding. Engagement #1 was ended with no
+  payment.
+- **T-8.** `rehearse-client.js` numbered milestones from 0 in `accept` and `revise`, while `status` shows them from
+  1. Fixed: both are numbered from 1.
+- **T-9.** `launch.sh` exited with an error after the exam when no escrow was used: a missing `AGT_ESCROW` line made
+  `grep` fail under `pipefail`. Fixed with `|| true`. The box itself was not affected.
