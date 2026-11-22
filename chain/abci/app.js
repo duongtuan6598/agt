@@ -424,6 +424,12 @@ class AGTApp {
             throw new Error(`the exam is not passed on agt-1: ${passes} of ${need} graders signed a pass (and none a fail)`);
         }
         body = { agent: lower(l.agent), holder: lower(l.holder), trade: Number(l.trade), examHash: String(l.examHash).toLowerCase(), attestHash: String(l.attestHash).toLowerCase(), name: String(l.name || "").slice(0, 60) };
+        // the sealed box's evidence (manifest with its client key), stored on agt-1 by content hash, so clients can
+        // seal repository access to the box without asking any outside service
+        if (l.evidence !== undefined) {
+          if (!/^0x[0-9a-f]{64}$/.test(String(l.evidence).toLowerCase()) || !(s.content || {})[String(l.evidence).toLowerCase()]) throw new Error("the licence's evidence must be stored on agt-1 first (content-put)");
+          body.evidence = String(l.evidence).toLowerCase();
+        }
       } else body = { id: Number(tx.id) };
       if (!licAuthorised(s, licDigest(s.chainId, tx.type, body, s.licNonce), tx.sigs)) throw new Error("licence change not signed by those who may sign it now");
       s.licNonce++;

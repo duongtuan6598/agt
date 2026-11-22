@@ -100,7 +100,7 @@ function withTransport(query, send) {
     dispute: (who, eng, milestone) => signed(who, { type: "eng-dispute", eng, milestone }),
     cancel: (client, eng) => signed(client, { type: "eng-cancel", eng }),
     // authority side (the granter at the start, > 2/3 of owners later)
-    grant: (wallets, licence) => authorised(wallets, "licence-grant", { agent: licence.agent.toLowerCase(), holder: licence.holder.toLowerCase(), trade: Number(licence.trade), examHash: licence.examHash.toLowerCase(), attestHash: licence.attestHash.toLowerCase(), name: String(licence.name || "").slice(0, 60) }),
+    grant: (wallets, licence) => authorised(wallets, "licence-grant", { agent: licence.agent.toLowerCase(), holder: licence.holder.toLowerCase(), trade: Number(licence.trade), examHash: licence.examHash.toLowerCase(), attestHash: licence.attestHash.toLowerCase(), name: String(licence.name || "").slice(0, 60), ...(licence.evidence ? { evidence: licence.evidence.toLowerCase() } : {}) }),
     revoke: (wallets, id) => authorised(wallets, "licence-revoke", { id: Number(id) }),
     setTrade: (wallets, t) => authorised(wallets, "trade-set", t),
     // price reporters
