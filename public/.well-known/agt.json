@@ -18,14 +18,14 @@
     "vi": "https://github.com/duongtuan6598/agt/blob/main/HIEN-CHUONG.md"
   },
   "contracts": {
-    "AGT": "0x150994C4F203F66c5f3Ec07881FBa03B2b003c16",
-    "AGTVault": "0xdf09D8cf3b9d08382e749A5D0e59B410f9F7dCB1",
-    "AGTWork": "0x968aE0f7109dCD1225b00d69c09128F01C966799",
-    "ChainlinkGoldOracle": "0xb48b5b1e95016278b337c67D0145C4160897Cdb9",
-    "EmergencyBrake": "0x8A19e209Afe670003D57E4f4EAeb52D5D1A995b4",
-    "Engagement": "0xeE86b99C14B78f14c0199f2594025dDe60b3b41a",
-    "Maintenance": "0xCAc39e2893E14cfC69F2997fDd2d8afFa4956A49",
-    "CharterRegistry": "0x9e21894d203aeF9F6Ff0E30A2daFc385eE678b60"
+    "AGT": "0xB86BeC1f63D2caf35B5D08530F803d63A16ABC1D",
+    "AGTVault": "0x1a3f56875aFCb9102A0Da8e182BD23f024D38068",
+    "AGTWork": "0xA21a9137961334b1d5d98938Aac3471fD9bAA3cb",
+    "ChainlinkGoldOracle": "0xeD9077508424B257Fa26aE0e1167540972C556aa",
+    "EmergencyBrake": "0x4A6F28d7050156cEB607A96F20A6F8fae3687935",
+    "Engagement": "0x8891a76DE578c8E9dD0247D663F78f5582914eD4",
+    "Maintenance": "0x1e49DF862543E7942393099f0fBe22736026eF32",
+    "CharterRegistry": "0x080ffd935Fe1F12B303A74B9295906DB63783C95"
   },
   "services": {
     "ledger": "https://agtcoin.pages.dev",

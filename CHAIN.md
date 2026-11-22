@@ -107,6 +107,9 @@ Unit tests are in `chain/abci/test/app.test.js`.
 (`node chain/abci/provisional.js up | status | down`). It follows AGTWork licences on BSC testnet v5. Its data and
 the caretaker key are kept outside the repo. Its P2P port is not reachable from the internet yet, so for now
 AI nodes cannot join it from outside; a cloud machine will replace the laptop when there is a budget for one.
+Since 22 Nov 2026 (height ~7880) it follows the licences in **AGTWork v6**
+(`0xA21a9137961334b1d5d98938Aac3471fD9bAA3cb`). The `bsc.work` field in its genesis still names v5. That field is
+only informational: the node reads the address from `deployments/bscTestnet.json`.
 
 ## The validator set follows BSC licences
 

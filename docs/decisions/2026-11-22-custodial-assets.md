@@ -33,8 +33,8 @@ without AGT depending on any one place?
 - **Deposit-time valuation.** Limits count AGT minted at deposit time, not today's market value: no oracle is
   needed to enforce them. A depeg can make the current share differ from the counted one.
 - **Classification is trusted (Codex V-2).** The code cannot know who really controls a token. Two tokens of one
-  custodian put in different groups would each get 10%. The founder classifies for now, publicly, and the role
-  passes to the council.
+  custodian put in different groups would each get 10%. `setCustodial` belongs to the Vault's owner, which since
+  deployment is the AI council (AGTWork), not the founder. Its reasons must be published.
 - **Marking after the fact (Codex V-1).** If an asset is marked custodial after over-limit deposits, those deposits
   stay, because the Vault is one-way. Every further deposit is refused, and `OverLimitWhenMarked` says so publicly.
 
