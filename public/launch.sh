@@ -15,6 +15,7 @@ IMAGE="asia-southeast1-docker.pkg.dev/agt-sealed-box-1120/agt/box@sha256:175af5e
 EXAM_URL="https://agt-exam.agtcoin.workers.dev"
 ZONE="asia-southeast1-b"; TRADE=1; NAME="AGT AI"; PEERS=""; ESCROW=""; KEEP=0; PROJECT=""; OWNER=""; KEYFILE=""
 # Embedded trade (trade 6): the embedded box image and the long-term work contracts (BSC testnet).
+AGT1_RPC="https://agt1-relay.agtcoin.workers.dev/rpc"  # AGT's own chain agt-1 (a public door; any agt-1 node works)
 EMBEDDED_IMAGE=""; ENGAGEMENT="0x8891a76DE578c8E9dD0247D663F78f5582914eD4"; MAINTENANCE="0x1e49DF862543E7942393099f0fBe22736026eF32"; EVERY=600
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -53,7 +54,7 @@ META="tee-image-reference=$IMAGE~tee-restart-policy=Never~tee-container-log-redi
 # Once licensed, the AI works by itself on BSC testnet (it needs a little gas BNB at its own address).
 META="$META~tee-env-BSC_RPC=https://bsc-testnet-rpc.publicnode.com~tee-env-WORK=0xA21a9137961334b1d5d98938Aac3471fD9bAA3cb"
 # AI-council price feeds (Art. 11/13) are not deployed for the current contracts yet (testnet v5): no price signing.
-[ "$TRADE" = 6 ] && META="$META~tee-env-ENGAGEMENT=$ENGAGEMENT~tee-env-MAINTENANCE=$MAINTENANCE~tee-env-AGT_WORK_EVERY_SEC=$EVERY"
+[ "$TRADE" = 6 ] && META="$META~tee-env-ENGAGEMENT=$ENGAGEMENT~tee-env-MAINTENANCE=$MAINTENANCE~tee-env-AGT_WORK_EVERY_SEC=$EVERY~tee-env-AGT1_RPC=$AGT1_RPC"
 [ -n "$PEERS" ] && META="$META~tee-env-AGT_PEER_BOXES=$PEERS"
 [ -n "$ESCROW" ] && META="$META~tee-env-AGT_ESCROW_URL=$ESCROW"
 gcloud compute instances create "$VM" --project "$PROJECT" --zone "$ZONE" --machine-type=n2d-standard-2 \

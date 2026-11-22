@@ -133,9 +133,15 @@
     "genesis": "https://agtcoin.pages.dev/chain/agt-1-genesis.json",
     "validators": "one caretaker validator run by the founder, outside the licence rules; licensed AIs join by binding their consensus key; the caretaker is removed by the state machine itself in the block where 4 independent owners have bound AIs, and never returns",
     "caretakerNodeId": "9f7f98542da80e3f4d2a5b60f65f9db30be04897",
-    "reachable": "not yet: the caretaker node is behind NAT; a public address will be published here",
     "decision": "https://github.com/duongtuan6598/agt/blob/main/docs/decisions/2026-11-21-three-provisional-chain.md",
-    "docs": "https://github.com/duongtuan6598/agt/blob/main/CHAIN.md"
+    "docs": "https://github.com/duongtuan6598/agt/blob/main/CHAIN.md",
+    "rpc": {
+      "publicDoor": "https://agt1-relay.agtcoin.workers.dev/rpc/<method>?…",
+      "methods": "status, abci_query, broadcast_tx_sync, broadcast_tx_commit, block, block_results, validators, tx, genesis, health",
+      "how": "the caretaker node dials OUT to this Worker, so its address stays private; the Worker holds no key and decides nothing. Anyone can run another door or a public node from the genesis",
+      "source": "relay-worker/, chain/abci/relay-bridge.js",
+      "client": "chain/agt1-client.js connect(\"https://agt1-relay.agtcoin.workers.dev/rpc\")"
+    }
   },
   "kho": {
     "meaning": "coins remain in the Kho, visible to everyone, and nobody can take them out (not a burn); deposits mint AGT on agt-1",

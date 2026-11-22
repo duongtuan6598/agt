@@ -13,6 +13,7 @@ const DIR = process.env.AGT_CHAIN_DIR || "C:/DuongTuan/agt-chain-1";
 const SNAPSHOT = require("../genesis/agt-1-snapshot.json"); // opening balances: AGT on BSC at one block, rebuilt by snapshot.js
 const APP = path.join(DIR, "app"), HOME = path.join(DIR, "cometbft");
 const WORK = require("../../deployments/bscTestnet.json").contracts.AGTWork;
+const RELAY_URL = process.env.RELAY_URL || "wss://agt1-relay.agtcoin.workers.dev/bridge";
 const BSC_RPC = process.env.BSC_RPC || "https://bsc-testnet-rpc.publicnode.com";
 const dock = (...a) => execFileSync("docker", a, { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
 const tryDock = (...a) => { try { return dock(...a); } catch { return ""; } };
@@ -50,11 +51,20 @@ function up() {
     NODE, "node", "/chain/abci/app.js");
   dock("run", "-d", "--name", "agt-cmt", "--restart", "unless-stopped", "--network", "container:agt-app", "--memory", "200m",
     "-v", `${HOME}:/cometbft`, "--entrypoint", "cometbft", CMT, "node", "--home", "/cometbft");
+  // the relay bridge: dials OUT to the public door (agt1-relay Worker), so the laptop's address stays private
+  const envFile = path.join(__dirname, "..", "..", ".env");
+  const key = fs.existsSync(envFile) ? (fs.readFileSync(envFile, "utf8").match(/^AGT1_BRIDGE_KEY=(.*)$/m) || [])[1] : "";
+  if (key) {
+    dock("run", "-d", "--name", "agt-bridge", "--restart", "unless-stopped", "--network", "container:agt-app", "--memory", "64m",
+      "-v", `${APP}:/chain:ro`, "-e", `RELAY_URL=${RELAY_URL}`, "-e", `BRIDGE_KEY=${key.trim()}`, "-e", "CMT_RPC=http://127.0.0.1:26657",
+      "node:22-alpine", "node", "/chain/abci/relay-bridge.js");
+    console.log(`public door: ${RELAY_URL.replace("wss://", "https://").replace("/bridge", "/rpc/status")}`);
+  }
   console.log(`caretaker node up · chain ${CHAIN_ID} · licences, prices and balances on agt-1 itself; BSC is read only for deposits into its Kho · RPC http://127.0.0.1:26657 · P2P :26656`);
 }
 
 function down(quiet) {
-  tryDock("rm", "-f", "agt-cmt", "agt-app");
+  tryDock("rm", "-f", "agt-bridge", "agt-cmt", "agt-app");
   tryDock("network", "rm", NET);
   if (!quiet) console.log("caretaker node stopped (data kept in " + DIR + ")");
 }
