@@ -405,3 +405,22 @@ test("client contracts on agt-1: escrow locked at opening, delivery, revision, a
   assert.equal(app.state.balances[cl], 4n * 10n ** 18n - 3n * C.HAT, "the client got milestone 2 back (3 fees: open, revise, accept)");
   assert.equal(app.state.engs[1].escrow, "0");
 });
+
+test("Codex A-5 and A-2: a rejected tx leaves CheckTx state untouched; one price voice per owner", async () => {
+  const { app, appState } = setupProvisional();
+  const granter = W("a5-granter");
+  init(app, { ...appState, ledger: { snapshot: { token: "0xB86BeC1f63D2caf35B5D08530F803d63A16ABC1D", bscBlock: 1 }, balances: {}, licenceWait: 1, granter: granter.address } });
+  let gn = 0;
+  const auth = (op, body) => [granter.signMessageSync(ethers.getBytes(C.hashOf({ tag: "AGT-LICENCE-v1", chainId: CHAIN, op, body, nonce: gn })))];
+  const owner = W("a2-owner");
+  const ais = [W("a2-ai1"), W("a2-ai2")];
+  for (const k of ais) { const body = { agent: k.address.toLowerCase(), holder: owner.address.toLowerCase(), trade: 6, examHash: "0x" + "11".repeat(32), attestHash: "0x" + "22".repeat(32), name: "x" }; block(app, [B({ type: "licence-grant", nonce: gn, licence: body, sigs: auth("licence-grant", body) })]); gn++; }
+  block(app, []); block(app, []);
+  const report = (k, price) => B({ type: "price-report", asset: "97:native", price, nonce: 0, reporter: k.address, sig: k.signMessageSync(ethers.getBytes(C.hashOf({ tag: "AGT-PRICE-v1", chainId: CHAIN, asset: "97:native", price, nonce: 0 }))) });
+  assert.equal(app.CheckTx({ tx: report(ais[0], "150000000000000000") }).code, 0, "the owner's first licence reports");
+  assert.equal(app.CheckTx({ tx: report(ais[1], "150000000000000000") }).code, 1, "the same owner's second licence has no extra voice");
+  const before = JSON.stringify(app.check, (k, v) => (typeof v === "bigint" ? v.toString() : v));
+  const badWork = B({ type: "work-submit", evidence: "nope", nonce: 0, sig: ais[0].signMessageSync(ethers.getBytes(C.hashOf({ tag: "AGT-WORK-v1", chainId: CHAIN, body: { type: "work-submit", evidence: "nope", nonce: 0 }, nonce: 0 }))) });
+  assert.equal(app.CheckTx({ tx: badWork }).code, 1);
+  assert.equal(JSON.stringify(app.check, (k, v) => (typeof v === "bigint" ? v.toString() : v)), before, "no nonce or quota consumed by a rejected tx");
+});

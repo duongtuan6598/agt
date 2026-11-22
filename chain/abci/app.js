@@ -160,7 +160,7 @@ function drawReviewers(s, j, id, blockHash, count) {
   const seed = ethers.keccak256(ethers.concat([blockHash, ethers.toBeHex(id, 32)]));
   const byOwner = {};
   for (const [, l] of Object.entries(s.licences || {})) {
-    if (!l.active || l.trade !== j.trade || l.holder === j.holder) continue;
+    if (!l.active || l.trade !== j.trade || l.holder === j.holder || (j.client && l.holder === j.client)) continue; // Codex A-6
     const rank = ethers.keccak256(ethers.concat([seed, l.agent]));
     if (!byOwner[l.holder] || rank < byOwner[l.holder].rank) byOwner[l.holder] = { rank, agent: l.agent };
   }
@@ -172,7 +172,12 @@ function drawReviewers(s, j, id, blockHash, count) {
 
 // a reporter counts if it is the key of an active licensed AI (one per owner) or, at the start, the granter
 function priceReporterOk(s, who) {
-  if (Object.values(s.licences || {}).some((l) => l.active && l.agent === who)) return true;
+  const mine = Object.entries(s.licences || {}).filter(([, l]) => l.active && l.agent === who);
+  if (mine.length) {
+    const holder = mine[0][1].holder; // one voice per owner: only the owner's lowest-id active licence reports (Codex A-2)
+    const first = Object.entries(s.licences).filter(([, l]) => l.active && l.holder === holder).sort((a, b) => Number(a[0]) - Number(b[0]))[0];
+    return first[1].agent === who;
+  }
   return licOwners(s).length < CARETAKER_UNTIL && who === ((s.ledger && s.ledger.granter) || FOUNDER);
 }
 const LICENCE_WAIT = 14400; // ~1 day at 6 s a block
@@ -651,7 +656,9 @@ class AGTApp {
   CheckTx(req) {
     try {
       const tx = this.decode(req.tx);
-      this.applyAny(this.check, tx);
+      const t = structuredClone(this.check); // a rejected tx leaves no trace (Codex A-5)
+      this.applyAny(t, tx);
+      this.check = t;
       return { code: OK };
     } catch (e) {
       return { code: BAD, log: e.message };
@@ -801,8 +808,17 @@ class AGTApp {
       const bh2 = ethers.hexlify(req.hash && req.hash.length ? req.hash : ethers.zeroPadValue("0x", 32));
       for (const [id, e] of Object.entries(s.engs)) e.milestones.forEach((x, m) => {
         if (x.state === "delivered" && Number(req.height) >= x.deliveredAt + REVIEW_BLOCKS) payMilestone(s, e, m, true); // silence accepts
+        if (x.state === "disputed" && x.reviewers && !x.reviewers.length) x.reviewers = null; // retry the draw (Codex A-1)
+        if (x.state === "disputed" && !x.reviewers && Number(req.height) >= x.drawAt + REVIEW_BLOCKS) {
+          const half = BigInt(x.amount) / 2n; // nobody could judge for a long time: split, never stuck
+          s.balances[e.holder] = (s.balances[e.holder] || 0n) + half;
+          s.balances[e.client] = (s.balances[e.client] || 0n) + (BigInt(x.amount) - half);
+          e.escrow = (BigInt(e.escrow) - BigInt(x.amount)).toString();
+          x.state = "split";
+          return;
+        }
         if (x.state === "disputed" && !x.reviewers && Number(req.height) >= x.drawAt) {
-          const tmp = { trade: e.trade, holder: e.holder, reviewers: null, status: "" };
+          const tmp = { trade: e.trade, holder: e.holder, client: e.client, reviewers: null, status: "" };
           drawReviewers(s, tmp, Number(id) * 1000 + m, bh2, ((s.trades || {})[e.trade] || { reviewers: 3 }).reviewers);
           x.reviewers = tmp.reviewers;
         }
@@ -899,6 +915,7 @@ class AGTApp {
     const p = req.path;
     if (p === "/state")
       return reply({ chainId: s.chainId, height: s.height, fee: s.fee, maxFee: C.MAX_FEE, supply: s.supply, nextIn: s.nextIn, nextOut: s.nextOut, owners: s.valset.holders, validators: s.valset.validators.map((v) => ({ ...v, licence: s.licIds[v.agent], bound: !!s.binds[v.agent], vote: Object.values(s.active).includes(v.agent) })), bscBlock: s.bscBlock, wages: s.wages, bsc: s.bsc });
+    if (p === "/ledger") return reply({ licNonce: s.licNonce || 0, trades: s.trades || {}, licences: s.licences || {}, jobs: s.nextJob || 0, contracts: s.nextEng || 0, workMinted: s.workMinted || 0n, khoMinted: s.khoMinted || 0n, workQueue: (s.workQueue || []).length, granter: s.ledger && s.ledger.granter });
     if (p.startsWith("/price/")) {
       const asset = p.slice(7);
       const a = (s.prices || {})[asset] || { reports: {}, nonces: {} };
