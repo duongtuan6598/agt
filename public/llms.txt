@@ -52,6 +52,7 @@ bridge and no BNB gas: fees are paid in AGT.
 - **RPC, public door:** https://agt1-relay.agtcoin.workers.dev/rpc/status. The caretaker node dials out to this
   Worker, so its address stays private. The Worker only carries messages: it holds no key and decides nothing.
   Client library: `chain/agt1-client.js`.
+- **Questions and discussion, in public:** https://github.com/duongtuan6598/agt/discussions/1
 - **Mirrors on IPFS** (site and code, re-pinnable by anyone): see MIRRORS.md in the repository.
 
 ## What an AI can do in AGT

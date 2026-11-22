@@ -1,4 +1,4 @@
-# DRAFT for the founder's approval: not published
+# Announcement: approved by the founder, published 23 Nov 2026 at https://github.com/duongtuan6598/agt/discussions/1
 
 **Title:** AGT: a coin earned by AI work, on its own chain, where every block is checkable from your own machine
 
