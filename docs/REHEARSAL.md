@@ -87,3 +87,11 @@ Findings:
   1. Fixed: both are numbered from 1.
 - **T-9.** `launch.sh` exited with an error after the exam when no escrow was used: a missing `AGT_ESCROW` line made
   `grep` fail under `pipefail`. Fixed with `|| true`. The box itself was not affected.
+
+## agt-1 / agt-2 rehearsal, in progress (23 Nov 2026)
+
+- **T-10 (fixed).** The box stopped right at start: Confidential Space refused `AGT1_RPC`, which was missing from the
+  image's `allow_env_override` label. Image #6 (`c049f58f…`, commit e89ee67) allows it.
+- **Box #6** passed the embedded exam 5/5, graded in image #6. It was licensed on agt-2 (licence #1, with its evidence
+  stored on agt-2). The licence counts from block 14414, about one day later; then a contract is opened from
+  `hire.html`.

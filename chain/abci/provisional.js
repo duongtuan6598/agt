@@ -7,10 +7,10 @@ const path = require("path");
 const { execFileSync } = require("child_process");
 const { ethers } = require("ethers");
 
-const CHAIN_ID = "agt-1"; // AGT's own ledger (docs/decisions/2026-11-22-own-ledger-now.md); agt-provisional-1 is archived
+const CHAIN_ID = "agt-2"; // AGT's own ledger. agt-1 is archived: its rules changed without a height, so it could not be replayed from genesis
 const CMT = "cometbft/cometbft:v0.38.26", NODE = "node:20-alpine", NET = "agt-chain";
-const DIR = process.env.AGT_CHAIN_DIR || "C:/DuongTuan/agt-chain-1";
-const SNAPSHOT = require("../genesis/agt-1-snapshot.json"); // opening balances: AGT on BSC at one block, rebuilt by snapshot.js
+const DIR = process.env.AGT_CHAIN_DIR || "C:/DuongTuan/agt-chain-2";
+const SNAPSHOT = require("../genesis/agt-2-opening.json"); // opening balances and credited Kho deposits, carried from agt-1
 const APP = path.join(DIR, "app"), HOME = path.join(DIR, "cometbft");
 const WORK = require("../../deployments/bscTestnet.json").contracts.AGTWork;
 const RELAY_URL = process.env.RELAY_URL || "wss://agt1-relay.agtcoin.workers.dev/bridge";

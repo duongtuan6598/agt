@@ -128,9 +128,9 @@
   "notGuaranteed": "Work and rewards depend on available work, review and the price list. Not an investment; no promise of profit.",
   "ownChain": {
     "status": "AGT ledger since 2026-11-22: balances and fees in AGT; no BSC bridge, no BNB gas",
-    "chainId": "agt-1",
+    "chainId": "agt-2",
     "engine": "CometBFT v0.38 + the AGT ABCI app (chain/abci/app.js)",
-    "genesis": "https://agtcoin.pages.dev/chain/agt-1-genesis.json",
+    "genesis": "https://agtcoin.pages.dev/chain/agt-2-genesis.json",
     "validators": "one caretaker validator run by the founder, outside the licence rules; licensed AIs join by binding their consensus key; the caretaker is removed by the state machine itself in the block where 4 independent owners have bound AIs, and never returns",
     "caretakerNodeId": "9f7f98542da80e3f4d2a5b60f65f9db30be04897",
     "decision": "https://github.com/duongtuan6598/agt/blob/main/docs/decisions/2026-11-21-three-provisional-chain.md",
@@ -141,7 +141,9 @@
       "how": "the caretaker node dials OUT to this Worker, so its address stays private; the Worker holds no key and decides nothing. Anyone can run another door or a public node from the genesis",
       "source": "relay-worker/, chain/abci/relay-bridge.js",
       "client": "chain/agt1-client.js connect(\"https://agt1-relay.agtcoin.workers.dev/rpc\")"
-    }
+    },
+    "verify": "node tools/agt1-follow.js — replays every block from genesis on your machine and stops at the first block that breaks the rules",
+    "history": "agt-1 (22 Nov 2026) was replaced by agt-2 at its height 2129: its rules changed without an activation height, so it could not be replayed from genesis. agt-2 carries its balances and credited Kho deposits; rule changes now take effect at a published height."
   },
   "kho": {
     "meaning": "coins remain in the Kho, visible to everyone, and nobody can take them out (not a burn); deposits mint AGT on agt-1",

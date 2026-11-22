@@ -737,6 +737,16 @@ class AGTApp {
     s.balances = opening;
     s.supply = Object.values(opening).reduce((t, v) => t + v, 0n);
     s.burned = 0n;
+    // carried over from an earlier AGT ledger (agt-1 → agt-2): which Kho deposits were already credited, so that none
+    // is ever credited twice, and how much AGT the Kho has minted (it raises the work caps)
+    if (g.ledger && g.ledger.khoCredited) {
+      s.khoCredited = {};
+      for (const [id, c] of Object.entries(g.ledger.khoCredited)) s.khoCredited[String(id).toLowerCase()] = c;
+      s.khoMinted = BigInt(g.ledger.khoMinted || 0);
+    }
+    // Consensus rules are versioned: a change of rules takes effect at a published height, so that anyone can replay
+    // the chain from genesis with the current code (tools/agt1-follow.js). agt-1 broke this and was replaced by agt-2.
+    s.rules = 1;
     s.caretaker = g.caretaker ? { pubKey: g.caretaker.pubKey, agent: "caretaker:" + String(g.caretaker.label || "founder").slice(0, 40), retired: false } : null;
     if (s.caretaker) cmt[cmtAddress(s.caretaker.pubKey)] = { agent: s.caretaker.agent, holder: "caretaker", pubKey: s.caretaker.pubKey };
     s.cmt = cmt;

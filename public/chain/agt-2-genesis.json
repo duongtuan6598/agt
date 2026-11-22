@@ -1,0 +1,80 @@
+{
+  "genesis_time": "2026-11-22T19:03:25.90794994Z",
+  "chain_id": "agt-2",
+  "initial_height": "0",
+  "consensus_params": {
+    "block": {
+      "max_bytes": "22020096",
+      "max_gas": "-1"
+    },
+    "evidence": {
+      "max_age_num_blocks": "100000",
+      "max_age_duration": "172800000000000",
+      "max_bytes": "1048576"
+    },
+    "validator": {
+      "pub_key_types": [
+        "ed25519"
+      ]
+    },
+    "version": {
+      "app": "0"
+    },
+    "abci": {
+      "vote_extensions_enable_height": "0"
+    }
+  },
+  "validators": [
+    {
+      "address": "1064913AC0275CB0A0D6DDEEA14E88A0BE80E617",
+      "pub_key": {
+        "type": "tendermint/PubKeyEd25519",
+        "value": "bnxQ9YIfYnylyX8MDaA4ROwll+jdS2HTuztZtVlmzEk="
+      },
+      "power": "1",
+      "name": "caretaker"
+    }
+  ],
+  "app_hash": "",
+  "app_state": {
+    "provisional": true,
+    "caretaker": {
+      "pubKey": "bnxQ9YIfYnylyX8MDaA4ROwll+jdS2HTuztZtVlmzEk=",
+      "label": "founder"
+    },
+    "bsc": {
+      "chainId": 97,
+      "bridge": "0x0000000000000000000000000000000000000000",
+      "work": "0xA21a9137961334b1d5d98938Aac3471fD9bAA3cb"
+    },
+    "holders": 0,
+    "validators": [],
+    "ledger": {
+      "snapshot": {
+        "token": "0xB86BeC1f63D2caf35B5D08530F803d63A16ABC1D",
+        "bscBlock": 144234162,
+        "from": "agt-1",
+        "agt1Height": 2129
+      },
+      "balances": {
+        "0x778c4fdfc8825a44a24cbc2e65606b9b8fe6e769": "11125631490693865",
+        "0x5c97f89aba1e95a4f51e99bb1ad7ec58024f800e": "7016478822493814"
+      },
+      "khoCredited": {
+        "97:0x5e5946a8e5b8562c93fc14d57580ef22cc02ea5d8d9a2b4ec6b0502fd36134ef:0": {
+          "block": 144236517,
+          "amount": "10000000000000000",
+          "agt": "1559478822493814",
+          "to": "0x5c97f89aba1e95a4f51e99bb1ad7ec58024f800e"
+        },
+        "97:0xaf57a2baac7d5f259e6070e52f0ea8e52dae2cbee6d58dc2b30e61440c8c23df:0": {
+          "block": 144238073,
+          "amount": "10000000000000000",
+          "agt": "1560000000000000",
+          "to": "0x5c97f89aba1e95a4f51e99bb1ad7ec58024f800e"
+        }
+      },
+      "khoMinted": "3119478822493814"
+    }
+  }
+}

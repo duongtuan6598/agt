@@ -165,3 +165,17 @@ RELAYER_KEY=… node chain/relayer.js watch                                # rel
 3. ~~Sealed box~~ (code done: `tee/`, see tee/README.md). It still has to run on a real Confidential Space VM, which needs a cloud account.
 4. Get an independent audit of `AGTBridge.sol` and the ABCI app.
 5. Meet every precondition in THIET-KE.md (separate identity, a large question bank, a new mainnet wallet, an audit).
+
+## agt-1 → agt-2, and the rule that came out of it (23 Nov 2026)
+
+`tools/agt1-follow.js` replays a chain from its genesis on your own machine, through any RPC, and compares its state
+hash with each block's. Run against agt-1, **block 1 already disagreed**. While agt-1 was being built, its rules
+changed and the node restarted from saved state, so today's code could not rebuild its history: nobody could check
+agt-1 independently.
+
+**agt-2 replaces it**, at agt-1 height 2129. It carries the balances (2 accounts, equal to the supply) and the Kho
+deposits already credited, so that no deposit is ever credited twice. Its full replay from genesis matches block by
+block.
+
+**Rule from now on:** a change to consensus rules takes effect at a published height. Before it counts as done,
+`agt1-follow.js` must replay the chain from genesis with the new code.

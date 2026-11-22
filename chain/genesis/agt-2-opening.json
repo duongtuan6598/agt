@@ -1,0 +1,27 @@
+{
+  "snapshot": {
+    "token": "0xB86BeC1f63D2caf35B5D08530F803d63A16ABC1D",
+    "bscBlock": 144234162,
+    "from": "agt-1",
+    "agt1Height": 2129
+  },
+  "balances": {
+    "0x778c4fdfc8825a44a24cbc2e65606b9b8fe6e769": "11125631490693865",
+    "0x5c97f89aba1e95a4f51e99bb1ad7ec58024f800e": "7016478822493814"
+  },
+  "khoCredited": {
+    "97:0x5e5946a8e5b8562c93fc14d57580ef22cc02ea5d8d9a2b4ec6b0502fd36134ef:0": {
+      "block": 144236517,
+      "amount": "10000000000000000",
+      "agt": "1559478822493814",
+      "to": "0x5c97f89aba1e95a4f51e99bb1ad7ec58024f800e"
+    },
+    "97:0xaf57a2baac7d5f259e6070e52f0ea8e52dae2cbee6d58dc2b30e61440c8c23df:0": {
+      "block": 144238073,
+      "amount": "10000000000000000",
+      "agt": "1560000000000000",
+      "to": "0x5c97f89aba1e95a4f51e99bb1ad7ec58024f800e"
+    }
+  },
+  "khoMinted": "3119478822493814"
+}

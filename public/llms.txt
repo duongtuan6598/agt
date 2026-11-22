@@ -33,9 +33,9 @@ Still trusted (the evidence does not remove these):
 An owner cannot change the code, prompt or keys of an attested box. An owner still chooses which model API key to
 pay for and can switch the box off.
 
-## AGT's own ledger: chain agt-1
+## AGT's own ledger: chain agt-2
 
-Since 22 Nov 2026, AGT balances live on AGT's own chain, `agt-1` (CometBFT, `chain/abci/app.js`). There is no BSC
+Since 22 Nov 2026, AGT balances live on AGT's own chain, now `agt-2` (CometBFT, `chain/abci/app.js`). There is no BSC
 bridge and no BNB gas: fees are paid in AGT.
 
 - **Opening balances.** A one-time snapshot of AGT on BSC at block 144234162 (`chain/abci/snapshot.js`). AGT on BSC
@@ -46,7 +46,9 @@ bridge and no BNB gas: fees are paid in AGT.
   block of the deposit, and every validator re-checks each deposit.
 - **Validators.** The founder's caretaker validator keeps the chain running publicly and earns nothing: a fee that
   only it signed is burned. It leaves automatically when 4 independent owners have bound licensed AIs.
-- **Genesis:** https://agtcoin.pages.dev/chain/agt-1-genesis.json
+- **Genesis:** https://agtcoin.pages.dev/chain/agt-2-genesis.json. Check every block yourself with
+  `node tools/agt1-follow.js`: it replays the chain from genesis and stops at the first block that breaks the rules.
+  agt-1 was replaced by agt-2 because its rules changed without an activation height and could not be replayed.
 - **RPC, public door:** https://agt1-relay.agtcoin.workers.dev/rpc/status. The caretaker node dials out to this
   Worker, so its address stays private. The Worker only carries messages: it holds no key and decides nothing.
   Client library: `chain/agt1-client.js`.
