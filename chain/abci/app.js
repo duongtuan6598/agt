@@ -26,7 +26,7 @@ const OK = 0, BAD = 1;
 // Part of the consensus rules: a deposit counts only at these addresses, valued in gold AT THE DEPOSIT'S BLOCK by the
 // named oracle, after KHO_CONF confirmations. Each validator re-checks every deposit against its own RPC.
 const KHO = {
-  97: { kho: "0x509b499a84888b2b547c428fbc861f9b254e8760", oracle: "0xed9077508424b257fa26ae0e1167540972c556aa", fromBlock: 144236000 },
+  97: { kho: "0x509b499a84888b2b547c428fbc861f9b254e8760", asset: "97:native", decimals: 18, fromBlock: 144236000 },
 };
 const KHO_CONF = 15;
 // Licences on the own ledger, not on BSC. Restaurant rule: until CARETAKER_UNTIL independent owners hold licences,
@@ -34,6 +34,25 @@ const KHO_CONF = 15;
 // revocation needs signatures of more than 2/3 of the licensed owners. A grant waits LICENCE_WAIT blocks before it
 // counts (anyone can read and contest the evidence meanwhile; the granter can cancel it).
 const FOUNDER = "0x778c4fdfc8825a44a24cbc2e65606b9b8fe6e769";
+// Prices on agt-1 itself (founder: "không phụ thuộc vào ai hết, nhất là BNB"): no outside oracle. A price is AGT (in
+// wei) per whole coin of an asset. Reporters: each licensed AI's key, one voice per owner; while fewer than
+// CARETAKER_UNTIL owners hold licences, the starting granter also reports, publicly. The chain's price is the median of
+// the latest report of each reporter. A report more than PRICE_STEP_BPS away from the current median is refused, so no
+// one (the founder included) can move the price far at once. Later, daily auctions on agt-1 replace reports.
+const PRICE_TAG = "AGT-PRICE-v1";
+const PRICE_STEP_BPS = 1000n; // ±10% per report
+const priceDigest = (chainId, asset, price, nonce) => C.hashOf({ tag: PRICE_TAG, chainId, asset, price, nonce });
+const median = (xs) => { const a = [...xs].sort((x, y) => (x < y ? -1 : x > y ? 1 : 0)); return a.length ? (a.length % 2 ? a[(a.length - 1) >> 1] : (a[a.length / 2 - 1] + a[a.length / 2]) / 2n) : 0n; };
+function priceOf(s, asset) {
+  const r = ((s.prices || {})[asset] || {}).reports || {};
+  const live = Object.entries(r).filter(([who]) => priceReporterOk(s, who)).map(([, v]) => BigInt(v));
+  return median(live);
+}
+// a reporter counts if it is the key of an active licensed AI (one per owner) or, at the start, the granter
+function priceReporterOk(s, who) {
+  if (Object.values(s.licences || {}).some((l) => l.active && l.agent === who)) return true;
+  return licOwners(s).length < CARETAKER_UNTIL && who === ((s.ledger && s.ledger.granter) || FOUNDER);
+}
 const LICENCE_WAIT = 14400; // ~1 day at 6 s a block
 const LIC_TAG = "AGT-LICENCE-v1";
 const licDigest = (chainId, op, body, nonce) => C.hashOf({ tag: LIC_TAG, chainId, op, body, nonce });
@@ -129,15 +148,13 @@ function makeBscView(env = process.env) {
     const provider = env.BSC_PROVIDER || new ethers.JsonRpcProvider(env.BSC_RPC);
     const k = KHO[97];
     const kho = new ethers.Contract(k.kho, [KHO_EVENT], provider);
-    const oracle = new ethers.Contract(k.oracle, ["function valueInAGT(address token, uint256 amount) view returns (uint256)"], provider);
-    const value = (amount, block) => oracle.valueInAGT(ethers.ZeroAddress, amount, { blockTag: block });
     // deposits from block `from` up to the final head, oldest first, each with its AGT value at its own block
     view.khoDeposits = async (from) => {
       const head = (await provider.getBlockNumber()) - KHO_CONF;
       const out = [];
       for (let a = Math.max(from, k.fromBlock); a <= head; a += 5000) {
         for (const e of await kho.queryFilter(kho.filters.Deposited(), a, Math.min(a + 4999, head))) {
-          out.push({ chain: 97, txHash: e.transactionHash, logIndex: e.index, block: e.blockNumber, from: lower(e.args.from), beneficiary: lower(e.args.beneficiary), amount: e.args.amount.toString(), agt: (await value(e.args.amount, e.blockNumber)).toString() });
+          out.push({ chain: 97, txHash: e.transactionHash, logIndex: e.index, block: e.blockNumber, from: lower(e.args.from), beneficiary: lower(e.args.beneficiary), amount: e.args.amount.toString() });
         }
       }
       return { head, deposits: out };
@@ -151,7 +168,7 @@ function makeBscView(env = process.env) {
       if (!lg || lower(lg.address) !== k.kho) return null;
       const ev = kho.interface.parseLog(lg);
       if (!ev || ev.name !== "Deposited") return null;
-      return { block: r.blockNumber, from: lower(ev.args.from), beneficiary: lower(ev.args.beneficiary), amount: ev.args.amount.toString(), agt: (await value(ev.args.amount, r.blockNumber)).toString() };
+      return { block: r.blockNumber, from: lower(ev.args.from), beneficiary: lower(ev.args.beneficiary), amount: ev.args.amount.toString() };
     };
     view.name.push(`Kho ${k.kho}`);
   }
@@ -244,6 +261,23 @@ class AGTApp {
       }
       return 0n;
     }
+    if (tx.type === "price-report") {
+      if (!s.ledger) throw new Error("prices live on the own ledger only");
+      const who = lower(tx.reporter), price = BigInt(tx.price), asset = String(tx.asset);
+      if (!/^[0-9]+:(native|0x[0-9a-f]{40})$/.test(asset)) throw new Error("bad asset name");
+      if (price <= 0n) throw new Error("bad price");
+      if (!priceReporterOk(s, who)) throw new Error("not a price reporter: a licensed AI, or the granter at the start");
+      s.prices = s.prices || {};
+      const a = (s.prices[asset] = s.prices[asset] || { reports: {}, nonces: {} });
+      const nonce = a.nonces[who] || 0;
+      if (Number(tx.nonce) !== nonce) throw new Error("bad price nonce");
+      if (lower(ethers.verifyMessage(ethers.getBytes(priceDigest(s.chainId, asset, price.toString(), nonce)), tx.sig)) !== who) throw new Error("price report not signed by its reporter");
+      const now = priceOf(s, asset);
+      if (now > 0n && (price * 10000n > now * (10000n + PRICE_STEP_BPS) || price * 10000n < now * (10000n - PRICE_STEP_BPS))) throw new Error("price report too far from the current median (±10%)");
+      a.reports[who] = price.toString();
+      a.nonces[who] = nonce + 1;
+      return 0n;
+    }
     if (tx.type === "kho-credit") {
       // AGT for coins deposited in a Kho (they remain there; nobody can take them out). Proposer-only; every
       // validator re-checked it in ProcessProposal against its own view of the origin chain.
@@ -254,7 +288,9 @@ class AGTApp {
       const id = `${Number(tx.chain)}:${String(tx.txHash).toLowerCase()}:${Number(tx.logIndex)}`;
       s.khoCredited = s.khoCredited || {};
       if (s.khoCredited[id]) throw new Error("deposit already credited");
-      const agt = BigInt(tx.agt), to = lower(tx.beneficiary);
+      const price = priceOf(s, k.asset);
+      if (price <= 0n) throw new Error("no agt-1 price for this asset yet");
+      const agt = (BigInt(tx.amount) * price) / 10n ** BigInt(k.decimals), to = lower(tx.beneficiary);
       if (agt <= 0n) throw new Error("deposit worth nothing");
       s.khoCredited[id] = { block: Number(tx.block), amount: String(tx.amount), agt: agt.toString(), to };
       s.balances[to] = (s.balances[to] || 0n) + agt;
@@ -416,6 +452,7 @@ class AGTApp {
       const { deposits } = await this.bsc.khoDeposits(KHO[97].fromBlock);
       for (const d of deposits) {
         if ((s.khoCredited || {})[`${d.chain}:${d.txHash.toLowerCase()}:${d.logIndex}`]) continue;
+        if (priceOf(s, KHO[d.chain].asset) <= 0n) break; // no agt-1 price yet: the deposit waits, nothing is lost
         const tx = { type: "kho-credit", ...d };
         this.applyAny(s, tx, { fromProposer: true });
         if (!push(Buffer.from(JSON.stringify(tx)))) break;
@@ -462,7 +499,7 @@ class AGTApp {
         if (tx.type === "kho-credit") {
           const mine = this.bsc.khoDeposit ? await this.bsc.khoDeposit(tx) : null;
           if (!mine) throw new Error(`Kho deposit ${tx.txHash} not final or not seen by me`);
-          for (const f of ["block", "from", "beneficiary", "amount", "agt"]) if (String(mine[f]) !== String(f === "block" ? Number(tx[f]) : f === "from" || f === "beneficiary" ? lower(tx[f]) : tx[f])) throw new Error(`Kho deposit ${tx.txHash}: ${f} differs from my view`);
+          for (const f of ["block", "from", "beneficiary", "amount"]) if (String(mine[f]) !== String(f === "block" ? Number(tx[f]) : f === "from" || f === "beneficiary" ? lower(tx[f]) : tx[f])) throw new Error(`Kho deposit ${tx.txHash}: ${f} differs from my view`);
         }
         if (tx.type === "credit") {
           locks = locks || (await this.bsc.locksFrom(s.nextIn));
@@ -615,6 +652,11 @@ class AGTApp {
     const p = req.path;
     if (p === "/state")
       return reply({ chainId: s.chainId, height: s.height, fee: s.fee, maxFee: C.MAX_FEE, supply: s.supply, nextIn: s.nextIn, nextOut: s.nextOut, owners: s.valset.holders, validators: s.valset.validators.map((v) => ({ ...v, licence: s.licIds[v.agent], bound: !!s.binds[v.agent], vote: Object.values(s.active).includes(v.agent) })), bscBlock: s.bscBlock, wages: s.wages, bsc: s.bsc });
+    if (p.startsWith("/price/")) {
+      const asset = p.slice(7);
+      const a = (s.prices || {})[asset] || { reports: {}, nonces: {} };
+      return reply({ asset, price: priceOf(s, asset), reports: a.reports, nonces: a.nonces });
+    }
     if (p.startsWith("/balance/")) {
       const a = lower(p.slice(9));
       return reply({ address: a, balance: s.balances[a] || 0n, nonce: s.nonces[a] || 0 });

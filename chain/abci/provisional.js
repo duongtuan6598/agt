@@ -46,11 +46,11 @@ function up() {
   dock("network", "create", NET);
   dock("run", "-d", "--name", "agt-app", "--restart", "unless-stopped", "--network", NET, "-p", "127.0.0.1:26657:26657", "-p", "26656:26656", "--memory", "200m",
     "-v", `${APP}:/chain:ro`, "-v", `${DIR}:/data`,
-    "-e", "PORT=26658", "-e", "STATE_FILE=/data/app-state.json", "-e", `BSC_RPC=${BSC_RPC}`, "-e", `WORK=${WORK}`, "-e", "CMT_RPC=http://127.0.0.1:26657",
+    "-e", "PORT=26658", "-e", "STATE_FILE=/data/app-state.json", "-e", `BSC_RPC=${BSC_RPC}`, "-e", "CMT_RPC=http://127.0.0.1:26657",
     NODE, "node", "/chain/abci/app.js");
   dock("run", "-d", "--name", "agt-cmt", "--restart", "unless-stopped", "--network", "container:agt-app", "--memory", "200m",
     "-v", `${HOME}:/cometbft`, "--entrypoint", "cometbft", CMT, "node", "--home", "/cometbft");
-  console.log(`caretaker node up · chain ${CHAIN_ID} · licences from AGTWork ${WORK} · RPC http://127.0.0.1:26657 · P2P :26656`);
+  console.log(`caretaker node up · chain ${CHAIN_ID} · licences, prices and balances on agt-1 itself; BSC is read only for deposits into its Kho · RPC http://127.0.0.1:26657 · P2P :26656`);
 }
 
 function down(quiet) {

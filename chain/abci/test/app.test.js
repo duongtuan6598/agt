@@ -271,24 +271,28 @@ test("own ledger: opening balances from a BSC snapshot; transfers pay fees in AG
   assert.equal(p.txs.filter((b) => JSON.parse(b.toString()).type === "credit").length, 0, "no credits from BSC");
 });
 
-test("Kho deposits mint AGT on the own ledger once each, only when every validator's own view agrees", async () => {
+test("Kho deposits mint AGT once each at agt-1's own price; no price yet = the deposit waits; validators re-check the facts", async () => {
   const { app, appState } = setupProvisional();
+  const granter = W("price-granter");
   const ben = W("kho-ben").address.toLowerCase();
-  const dep = { chain: 97, txHash: "0x" + "ab".repeat(32), logIndex: 0, block: 144240000, from: W("kho-from").address.toLowerCase(), beneficiary: ben, amount: "10000000000000000", agt: "1502663149069386" };
+  const dep = { chain: 97, txHash: "0x" + "ab".repeat(32), logIndex: 0, block: 144240000, from: W("kho-from").address.toLowerCase(), beneficiary: ben, amount: "10000000000000000" };
   let mine = { ...dep };
   app.bsc = { head: async () => 0, valsetAt: async () => null, locksFrom: async () => [], khoDeposits: async () => ({ deposits: [dep] }), khoDeposit: async () => mine };
-  init(app, { ...appState, ledger: { snapshot: { token: "0xB86BeC1f63D2caf35B5D08530F803d63A16ABC1D", bscBlock: 1 }, balances: {} } });
-  const p = await app.PrepareProposal({ txs: [], max_tx_bytes: "1048576", height: "1" });
+  init(app, { ...appState, ledger: { snapshot: { token: "0xB86BeC1f63D2caf35B5D08530F803d63A16ABC1D", bscBlock: 1 }, balances: {}, granter: granter.address } });
+  assert.equal((await app.PrepareProposal({ txs: [], max_tx_bytes: "1048576", height: "1" })).txs.length, 0, "no agt-1 price yet: the deposit waits");
+  const report = (price, nonce, signer = granter) => B({ type: "price-report", asset: "97:native", price, nonce, reporter: signer.address, sig: signer.signMessageSync(ethers.getBytes(C.hashOf({ tag: "AGT-PRICE-v1", chainId: CHAIN, asset: "97:native", price, nonce }))) });
+  assert.equal(app.CheckTx({ tx: report("150000000000000000", 0, W("stranger")) }).code, 1, "only a licensed AI, or the granter at the start, reports prices");
+  block(app, [report("150000000000000000", 0)]); // 0.15 AGT per BNB
+  assert.match(String(app.CheckTx({ tx: report("200000000000000000", 1) }).log), /too far/, "nobody moves the price more than 10% at once");
+  const p = await app.PrepareProposal({ txs: [], max_tx_bytes: "1048576", height: "2" });
   assert.equal(p.txs.length, 1);
-  mine = { ...dep, agt: "9999999999999999999" }; // this validator values it differently: it must reject
-  assert.equal((await app.ProcessProposal({ txs: p.txs, height: "1" })).status, "REJECT");
+  mine = { ...dep, amount: "1" }; // this validator sees a different deposit: it must reject
+  assert.equal((await app.ProcessProposal({ txs: p.txs, height: "2" })).status, "REJECT");
   mine = { ...dep };
-  assert.equal((await app.ProcessProposal({ txs: p.txs, height: "1" })).status, "ACCEPT");
+  assert.equal((await app.ProcessProposal({ txs: p.txs, height: "2" })).status, "ACCEPT");
   block(app, p.txs);
-  assert.equal(app.state.balances[ben], 1502663149069386n);
-  assert.equal(app.state.khoMinted, 1502663149069386n);
-  const again = await app.PrepareProposal({ txs: [], max_tx_bytes: "1048576", height: "2" });
-  assert.equal(again.txs.length, 0, "a deposit is credited once");
+  assert.equal(app.state.balances[ben], 1500000000000000n, "0.01 BNB x 0.15 AGT/BNB");
+  assert.equal((await app.PrepareProposal({ txs: [], max_tx_bytes: "1048576", height: "3" })).txs.length, 0, "a deposit is credited once");
   assert.equal(app.CheckTx({ tx: B({ type: "kho-credit", ...dep, txHash: "0x" + "cd".repeat(32) }) }).code, 1, "nobody but the proposer adds a Kho credit");
 });
 
