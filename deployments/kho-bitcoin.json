@@ -1,0 +1,10 @@
+{
+  "text": "AGT-KHO-v1:bitcoin",
+  "counter": 1,
+  "internalKeyX": "ef66e5afb4529eb2c0b56f3b1ac72f3ec101e49ee2dacdeb28cd2a18cc901f31",
+  "tweak": "d24c29ca2be035b579ac5b27db3fa88583d66d0eed166202d53a10ab714064df",
+  "outputKeyX": "775f9b89499a3d223c990c2a737df38a2f63137a3a84587a04a99f4ed8e1c287",
+  "scriptPubKey": "5120775f9b89499a3d223c990c2a737df38a2f63137a3a84587a04a99f4ed8e1c287",
+  "mainnet": "bc1pwa0ehz2fng7jy0yeps48xl0n3ghkxym682z9s7sy4x05ak8pc2rsw9fwyg",
+  "testnet": "tb1pwa0ehz2fng7jy0yeps48xl0n3ghkxym682z9s7sy4x05ak8pc2rsedlp78"
+}

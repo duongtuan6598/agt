@@ -149,6 +149,14 @@
       },
       "howToDeposit": "send coins to the address with your 20-byte agt-1 account as calldata, or call deposit(account)"
     },
-    "terms": "https://github.com/duongtuan6598/agt/blob/main/TU-NGU.md"
+    "terms": "https://github.com/duongtuan6598/agt/blob/main/TU-NGU.md",
+    "bitcoin": {
+      "mainnet": "bc1pwa0ehz2fng7jy0yeps48xl0n3ghkxym682z9s7sy4x05ak8pc2rsw9fwyg",
+      "testnet": "tb1pwa0ehz2fng7jy0yeps48xl0n3ghkxym682z9s7sy4x05ak8pc2rsedlp78",
+      "derivation": "tools/kho-bitcoin.js: NUMS internal key lift_x(sha256(\"AGT-KHO-v1:bitcoin\"||counter)), BIP-341 key-path tweak, no script tree",
+      "outputKeyX": "775f9b89499a3d223c990c2a737df38a2f63137a3a84587a04a99f4ed8e1c287",
+      "howToDeposit": "send BTC to the address with, in the same transaction, an OP_RETURN output holding \"AGT1\" + your 20-byte agt-1 account",
+      "status": "address published; agt-1 credits for Bitcoin deposits come with the Bitcoin view of each validator (next)"
+    }
   }
 }
