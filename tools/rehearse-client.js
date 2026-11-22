@@ -43,6 +43,9 @@ async function main() {
     });
     const v = Brief.validate(FORM, b);
     if (!v.ok) throw new Error("brief: " + v.errors.join("; "));
+    const RC = require(path.join(ROOT, "public", "forms", "repo-check.js"));
+    const rp = await RC.beforeFunding(repository, { needPrivate: true }); // finding T-7
+    if (rp.length) throw new Error("repository: " + rp.join(" "));
     const text = Brief.canonical(b);
     if (cmd === "brief") {
       const id = Number(licence);
@@ -61,6 +64,13 @@ async function main() {
     const [id, evidenceFile] = a;
     const token = process.env.REHEARSAL_REPO_TOKEN;
     if (!token) throw new Error("set REHEARSAL_REPO_TOKEN");
+    const eb = await eng.engagements(Number(id));
+    const bt = await (await fetch(`${EXAM}/content/${eb.brief}`)).json();
+    if (bt.ok) {
+      const bf = require(path.join(ROOT, "public", "forms", "brief.js")).parse(bt.text);
+      const rp = await require(path.join(ROOT, "public", "forms", "repo-check.js")).beforeSealing(bf.fields.repository, token, { needPrivate: bf.fields.memoryHandover === "private-repo" });
+      if (rp.length) throw new Error("repository: " + rp.join(" "));
+    }
     const ev = JSON.parse(fs.readFileSync(evidenceFile, "utf8"));
     const pub = ev.manifest && ev.manifest.clientPubKey;
     if (!pub) throw new Error("the evidence has no clientPubKey");

@@ -74,10 +74,15 @@ Not run this time: steps 6–11 (VM replacement, rollback, broken CI and reviewe
 maintenance). The local rehearsal and unit tests cover them.
 
 Findings:
-- **T-7.** The client opened engagement #1 with the wrong repository, an empty public one. The box was refused on
+- **T-7 (fixed).** The client opened engagement #1 with the wrong repository, an empty public one. The box was refused on
   push and retried. It also refused, correctly, to hand its memory over into a public repository. The client tool
   should check that the token can read and push to the repository before funding. Engagement #1 was ended with no
-  payment.
+  payment. Fixed in `public/forms/repo-check.js`, used by `engage.html` and `rehearse-client.js`:
+  - before funding, the page refuses a public repository when the memory goes to a private one, an empty repository,
+    and a URL that is not on GitHub;
+  - before sealing, it refuses a token that cannot see or read the repository.
+
+  Checked against the real repositories: the wrong repository is refused and the right one passes.
 - **T-8.** `rehearse-client.js` numbered milestones from 0 in `accept` and `revise`, while `status` shows them from
   1. Fixed: both are numbered from 1.
 - **T-9.** `launch.sh` exited with an error after the exam when no escrow was used: a missing `AGT_ESCROW` line made

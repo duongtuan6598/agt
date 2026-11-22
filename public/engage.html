@@ -146,6 +146,7 @@
 <script src="vendor/ethers.umd.min.js"></script>
 <script src="forms/brief.js"></script>
 <script src="seal.js"></script>
+<script src="forms/repo-check.js"></script>
 <script>
   const EXAM = "https://agt-exam.agtcoin.workers.dev";
   const RPC = "https://bsc-testnet-rpc.publicnode.com";
@@ -307,6 +308,8 @@
       const brief = AGTBrief.build(form, readFields(), extras);
       const v = AGTBrief.validate(form, brief);
       if (!v.ok) throw new Error("Please fix the brief: " + v.errors.join(" · "));
+      const rp = await AGTRepoCheck.beforeFunding(brief.fields.repository, { needPrivate: brief.fields.memoryHandover === "private-repo" });
+      if (rp.length) throw new Error("Repository: " + rp.join(" "));
       const text = AGTBrief.canonical(brief);
       const spec = hashOf(text);
       let id, contract;
@@ -457,6 +460,14 @@
       const token = prompt("Repository access token for this contract only (it is encrypted here, to the AI's sealed box):");
       if (!token) return;
       const address = contract === "engagement" ? ADDR.Engagement : ADDR.Maintenance;
+      // check the token against the repository named in this contract's brief before sealing it (finding T-7)
+      const briefHash = (contract === "engagement" ? await eng.engagements(id) : await mnt.retainers(id)).brief;
+      const br = await (await fetch(EXAM + "/content/" + briefHash)).json();
+      const bf = br.ok ? AGTBrief.parse(br.text) : null;
+      if (bf) {
+        const rp = await AGTRepoCheck.beforeSealing(bf.fields.repository, token, { needPrivate: bf.fields.memoryHandover === "private-repo" });
+        if (rp.length) throw new Error("Repository: " + rp.join(" "));
+      }
       const box = await AGTSeal.seal(pub, token, AGTSeal.contextOf(CHAIN, address, id));
       const text = JSON.stringify(box);
       const version = Date.now(); // newer than any earlier upload: an old signed one cannot be replayed
