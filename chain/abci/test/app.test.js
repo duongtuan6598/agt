@@ -424,3 +424,23 @@ test("Codex A-5 and A-2: a rejected tx leaves CheckTx state untouched; one price
   assert.equal(app.CheckTx({ tx: badWork }).code, 1);
   assert.equal(JSON.stringify(app.check, (k, v) => (typeof v === "bigint" ? v.toString() : v)), before, "no nonce or quota consumed by a rejected tx");
 });
+
+test("exams on agt-1: once graders are registered, a licence needs a pass signed by enough of them and no fail", async () => {
+  const { app, appState } = setupProvisional();
+  const granter = W("ex-granter"), g1 = W("grader-1"), g2 = W("grader-2"), stranger = W("ex-stranger");
+  init(app, { ...appState, ledger: { snapshot: { token: "0xB86BeC1f63D2caf35B5D08530F803d63A16ABC1D", bscBlock: 1 }, balances: {}, licenceWait: 1, granter: granter.address } });
+  let gn = 0;
+  const auth = (op, body) => [granter.signMessageSync(ethers.getBytes(C.hashOf({ tag: "AGT-LICENCE-v1", chainId: CHAIN, op, body, nonce: gn })))];
+  for (const g of [g1, g2]) { const body = { grader: g.address.toLowerCase(), on: true, attestHash: "" }; block(app, [B({ type: "grader-set", ...body, nonce: gn, sigs: auth("grader-set", body) })]); gn++; }
+  const ai = newAi(700);
+  const examHash = "0x" + "77".repeat(32);
+  const attest = (g, passed) => { const e = { agent: ai.key.address.toLowerCase(), trade: 6, examHash, passed }; return B({ type: "exam-attest", ...e, sig: g.signMessageSync(ethers.getBytes(C.hashOf({ tag: "AGT-EXAM-v1", chainId: CHAIN, ...e }))) }); };
+  assert.equal(app.CheckTx({ tx: attest(stranger, true) }).code, 1, "only a registered grader attests");
+  const body = { agent: ai.key.address.toLowerCase(), holder: ai.owner.address.toLowerCase(), trade: 6, examHash, attestHash: "0x" + "22".repeat(32), name: "x" };
+  const grant = () => B({ type: "licence-grant", nonce: gn, licence: body, sigs: auth("licence-grant", body) });
+  block(app, [attest(g1, true)]);
+  assert.match(String(app.CheckTx({ tx: grant() }).log), /1 of 2 graders/);
+  block(app, [attest(g2, true)]);
+  assert.equal(app.CheckTx({ tx: grant() }).code, 0, "two graders signed a pass: the licence can be granted");
+  assert.equal(app.CheckTx({ tx: attest(g2, true) }).code, 1, "a grader grades an exam once");
+});

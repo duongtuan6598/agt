@@ -111,6 +111,14 @@ function workSigned(s, tx) {
 // a delivery accepts it. Before the AI's first delivery the client may cancel what is undelivered.
 const MAX_REVISIONS = 3;
 const CONTENT_MAX = 65536;
+// Exams on agt-1: graders are keys registered by the licence authority (at the start the founder's exam service,
+// publicly; anyone may run a grader in a sealed box and be registered). A licence needs an exam passed for that AI and
+// trade, signed by GRADER_QUORUM graders (or by every grader while there are fewer), and no registered grader may have
+// signed a fail. Before any grader is registered, a licence carries only the exam hash (the start). Not yet enforced:
+// tying a grader to its owner so that it cannot grade its own owner's AI.
+const GRADER_QUORUM = 2;
+const EXAM_TAG = "AGT-EXAM-v1";
+const examDigest = (chainId, e) => C.hashOf({ tag: EXAM_TAG, chainId, ...e });
 const REVIEW_BLOCKS = 14400 * 7;
 // any signed agt-1 transaction outside the transfer format: signer, nonce, and the fee (or the AI's free quota)
 function signedBy(s, tx, { free = false } = {}) {
@@ -372,6 +380,14 @@ class AGTApp {
           throw new Error("a licence carries the exam and the sealed-box attestation it was earned with");
         if (licOwners(s).length < CARETAKER_UNTIL && lower(l.holder) === ((s.ledger && s.ledger.granter) || FOUNDER)) throw new Error("the founder grants during the start, so he cannot license an AI of his own");
         if (Object.values(s.licences).some((x) => (x.active || x.pending) && x.agent === lower(l.agent))) throw new Error("that AI already holds a licence");
+        const graders = Object.entries(s.graders || {}).filter(([, g]) => g.on).map(([k]) => k);
+        if (graders.length) {
+          const x = (s.exams || {})[String(l.examHash).toLowerCase()];
+          const need = Math.min(GRADER_QUORUM, graders.length);
+          const passes = x ? x.pass.filter((g) => graders.includes(g)).length : 0;
+          if (!x || x.agent !== lower(l.agent) || x.trade !== Number(l.trade) || passes < need || x.fail.some((g) => graders.includes(g)))
+            throw new Error(`the exam is not passed on agt-1: ${passes} of ${need} graders signed a pass (and none a fail)`);
+        }
         body = { agent: lower(l.agent), holder: lower(l.holder), trade: Number(l.trade), examHash: String(l.examHash).toLowerCase(), attestHash: String(l.attestHash).toLowerCase(), name: String(l.name || "").slice(0, 60) };
       } else body = { id: Number(tx.id) };
       if (!licAuthorised(s, licDigest(s.chainId, tx.type, body, s.licNonce), tx.sigs)) throw new Error("licence change not signed by those who may sign it now");
@@ -431,6 +447,28 @@ class AGTApp {
       j.votes[who] = !!tx.approve;
       if (Object.keys(j.votes).length === j.reviewers.length) settleWork(s, j);
       return fee;
+    }
+    if (tx.type === "grader-set") {
+      if (!s.ledger) throw new Error("graders live on the own ledger only");
+      const body = { grader: lower(tx.grader), on: !!tx.on, attestHash: String(tx.attestHash || "") };
+      s.licNonce = s.licNonce || 0;
+      if (Number(tx.nonce) !== s.licNonce) throw new Error("bad licence nonce");
+      if (!licAuthorised(s, licDigest(s.chainId, "grader-set", body, s.licNonce), tx.sigs)) throw new Error("grader change not signed by those who may sign it now");
+      s.licNonce++;
+      (s.graders = s.graders || {})[body.grader] = { on: body.on, attestHash: body.attestHash };
+      return 0n;
+    }
+    if (tx.type === "exam-attest") {
+      if (!s.ledger) throw new Error("exams live on the own ledger only");
+      const e = { agent: lower(tx.agent), trade: Number(tx.trade), examHash: String(tx.examHash).toLowerCase(), passed: !!tx.passed };
+      if (!/^0x[0-9a-f]{64}$/.test(e.examHash)) throw new Error("bad exam hash");
+      const g = lower(ethers.verifyMessage(ethers.getBytes(examDigest(s.chainId, e)), tx.sig));
+      if (!(s.graders || {})[g] || !s.graders[g].on) throw new Error("not a registered grader");
+      const x = ((s.exams = s.exams || {})[e.examHash] = s.exams[e.examHash] || { agent: e.agent, trade: e.trade, pass: [], fail: [] });
+      if (x.agent !== e.agent || x.trade !== e.trade) throw new Error("that exam belongs to another AI or trade");
+      if (x.pass.includes(g) || x.fail.includes(g)) throw new Error("this grader already graded that exam");
+      (e.passed ? x.pass : x.fail).push(g);
+      return 0n;
     }
     if (tx.type === "content-put") {
       // Briefs, notes and CI reports live on agt-1 itself, addressed by keccak256 of their UTF-8 text: no outside
@@ -939,6 +977,7 @@ class AGTApp {
     if (p === "/state")
       return reply({ chainId: s.chainId, height: s.height, fee: s.fee, maxFee: C.MAX_FEE, supply: s.supply, nextIn: s.nextIn, nextOut: s.nextOut, owners: s.valset.holders, validators: s.valset.validators.map((v) => ({ ...v, licence: s.licIds[v.agent], bound: !!s.binds[v.agent], vote: Object.values(s.active).includes(v.agent) })), bscBlock: s.bscBlock, wages: s.wages, bsc: s.bsc });
     if (p === "/engs") return reply(s.engs || {});
+    if (p === "/exams") return reply({ graders: s.graders || {}, exams: s.exams || {} });
     if (p.startsWith("/content/")) return reply({ text: (s.content || {})[p.slice(9).toLowerCase()] ?? null });
     if (p.startsWith("/sealed/")) return reply({ box: (s.sealed || {})[Number(p.slice(8))] ?? null });
     if (p === "/jobs") return reply(s.jobs || {});
