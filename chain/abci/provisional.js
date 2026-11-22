@@ -7,9 +7,10 @@ const path = require("path");
 const { execFileSync } = require("child_process");
 const { ethers } = require("ethers");
 
-const CHAIN_ID = "agt-provisional-1";
+const CHAIN_ID = "agt-1"; // AGT's own ledger (docs/decisions/2026-11-22-own-ledger-now.md); agt-provisional-1 is archived
 const CMT = "cometbft/cometbft:v0.38.26", NODE = "node:20-alpine", NET = "agt-chain";
-const DIR = process.env.AGT_CHAIN_DIR || "C:/DuongTuan/agt-chain";
+const DIR = process.env.AGT_CHAIN_DIR || "C:/DuongTuan/agt-chain-1";
+const SNAPSHOT = require("../genesis/agt-1-snapshot.json"); // opening balances: AGT on BSC at one block, rebuilt by snapshot.js
 const APP = path.join(DIR, "app"), HOME = path.join(DIR, "cometbft");
 const WORK = require("../../deployments/bscTestnet.json").contracts.AGTWork;
 const BSC_RPC = process.env.BSC_RPC || "https://bsc-testnet-rpc.publicnode.com";
@@ -30,7 +31,7 @@ function up() {
     const g = JSON.parse(fs.readFileSync(path.join(HOME, "config", "genesis.json"), "utf8"));
     g.chain_id = CHAIN_ID;
     g.validators = [{ ...g.validators[0], power: "1", name: "caretaker" }];
-    g.app_state = { provisional: true, caretaker: { pubKey: pv.pub_key.value, label: "founder" }, bsc: { chainId: 97, bridge: ethers.ZeroAddress, work: WORK }, holders: 0, validators: [] };
+    g.app_state = { provisional: true, caretaker: { pubKey: pv.pub_key.value, label: "founder" }, bsc: { chainId: 97, bridge: ethers.ZeroAddress, work: WORK }, holders: 0, validators: [], ledger: SNAPSHOT };
     fs.writeFileSync(path.join(HOME, "config", "genesis.json"), JSON.stringify(g, null, 2));
     const cf = path.join(HOME, "config", "config.toml");
     let t = fs.readFileSync(cf, "utf8");

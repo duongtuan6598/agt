@@ -245,3 +245,28 @@ test("when every licence is revoked after the caretaker left, the chain halts in
   const p = await app.PrepareProposal({ txs: [], max_tx_bytes: "1048576", height: "1" });
   assert.throws(() => block(app, p.txs), /chain halts here by design/);
 });
+
+// ---------- AGT's own ledger on the provisional chain (founder: "AGT must not depend on BNB") ----------
+test("own ledger: opening balances from a BSC snapshot; transfers pay fees in AGT; no BSC bridge at all", async () => {
+  const { app, appState, caretaker } = setupProvisional();
+  const alice = W("ledger-alice"), bob = W("ledger-bob");
+  const snapshot = { token: "0xB86BeC1f63D2caf35B5D08530F803d63A16ABC1D", bscBlock: 1 };
+  assert.throws(() => init(app, { ...appState, provisional: false, caretaker: undefined, bsc: { chainId: 97, bridge: "0x44f0733C93b11D064eA015183c7DC8665b4a2416" }, ledger: { snapshot, balances: {} } }), /only on a provisional chain/);
+  init(app, { ...appState, ledger: { snapshot, balances: { [alice.address]: (2n * 10n ** 18n).toString() } } });
+  assert.equal(app.state.supply, 2n * 10n ** 18n);
+  const tx = await C.signTx(alice, { type: "transfer", chainId: CHAIN, to: bob.address, amount: 10n ** 18n, fee: C.HAT, nonce: 0 });
+  assert.equal(app.CheckTx({ tx: B(tx) }).code, 0, "a transfer is accepted");
+  block(app, [B(tx)]);
+  assert.equal(app.state.balances[bob.address.toLowerCase()], 10n ** 18n);
+  assert.equal(app.state.balances[alice.address.toLowerCase()], 10n ** 18n - C.HAT, "the sender paid the fee in AGT");
+  // the next block's commit was signed by the caretaker only: its wage is burned, nobody profits from the role
+  const care = { round: 0, votes: [{ validator: { address: Buffer.from(cmtAddress(caretaker.pubKey), "hex"), power: "1" }, block_id_flag: "BLOCK_ID_FLAG_COMMIT" }] };
+  block(app, [], care);
+  assert.equal(app.state.burned, C.HAT);
+  assert.equal(app.state.supply, 2n * 10n ** 18n - C.HAT);
+  assert.ok(!app.state.balances.caretaker);
+  const wd = await C.signTx(bob, { type: "withdraw", chainId: CHAIN, to: bob.address, amount: 1n, fee: C.HAT, nonce: 0 });
+  assert.equal(app.CheckTx({ tx: B(wd) }).code, 1, "no withdrawal to BSC: AGT lives here");
+  const p = await app.PrepareProposal({ txs: [], max_tx_bytes: "1048576", height: "1" });
+  assert.equal(p.txs.filter((b) => JSON.parse(b.toString()).type === "credit").length, 0, "no credits from BSC");
+});

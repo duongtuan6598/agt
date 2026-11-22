@@ -153,7 +153,9 @@ class AGTApp {
   }
 
   applyAny(s, tx, { fromProposer = false } = {}) {
-    if (s.provisional && !["valset", "bind"].includes(tx.type)) throw new Error("provisional chain: no balances, no transfers, no withdrawals");
+    if (s.ledger) {
+      if (["credit", "attest", "withdraw"].includes(tx.type)) throw new Error("AGT lives on this chain: there is no BSC bridge");
+    } else if (s.provisional && !["valset", "bind"].includes(tx.type)) throw new Error("provisional chain: no balances, no transfers, no withdrawals");
     if (tx.type === "credit") {
       if (!fromProposer) throw new Error("credits only come from the proposer");
       if (Number(tx.nonce) !== s.nextIn) throw new Error("credits out of order");
@@ -214,6 +216,7 @@ class AGTApp {
     if (!raw) throw new Error("genesis has no AGT app_state (validators, BSC bridge) — wrong genesis file");
     const g = JSON.parse(raw);
     const provisional = g.provisional === true;
+    if (g.ledger && !provisional) throw new Error("an own ledger starts only on a provisional chain");
     if (!g.bsc || !ethers.isAddress(g.bsc.bridge)) throw new Error("genesis names no valid bridge address");
     if (g.caretaker && !provisional) throw new Error("a caretaker validator is allowed only on a provisional chain");
     // provisional ⇔ no bridge (Codex P-3): a chain with balances names its bridge; a provisional one names none
@@ -222,6 +225,17 @@ class AGTApp {
     const keys = [...g.validators.map((v) => v.pubKey), ...(g.caretaker ? [g.caretaker.pubKey] : [])];
     if (keys.some((k) => !isKey(k)) || new Set(keys).size !== keys.length) throw new Error("genesis consensus keys must be valid and all different"); // Codex P-2
     if (!g.validators.length && !g.caretaker) throw new Error("no validator at genesis");
+    // AGT's own ledger (docs/decisions/2026-11-22-own-ledger-now.md): opening balances = a published snapshot of AGT
+    // on BSC at one block; from then on AGT lives here: no BSC bridge, fees in AGT. Only on a provisional chain.
+    const opening = {};
+    if (g.ledger) {
+      const sn = g.ledger.snapshot || {};
+      if (!Number.isInteger(sn.bscBlock) || !ethers.isAddress(sn.token)) throw new Error("the ledger names no BSC snapshot (token, block)");
+      for (const [a, v] of Object.entries(g.ledger.balances || {})) {
+        if (!ethers.isAddress(a) || BigInt(v) <= 0n) throw new Error(`bad opening balance for ${a}`);
+        opening[lower(a)] = (opening[lower(a)] || 0n) + BigInt(v);
+      }
+    }
     const owners = new Set();
     const cmt = {};
     for (const v of g.validators) {
@@ -234,6 +248,10 @@ class AGTApp {
     }
     const s = C.genesis({ chainId: req.chain_id, bsc: g.bsc, valset: { holders: g.holders, validators: g.validators } });
     s.provisional = provisional;
+    s.ledger = g.ledger ? { snapshot: { token: lower(g.ledger.snapshot.token), bscBlock: g.ledger.snapshot.bscBlock } } : null;
+    s.balances = opening;
+    s.supply = Object.values(opening).reduce((t, v) => t + v, 0n);
+    s.burned = 0n;
     s.caretaker = g.caretaker ? { pubKey: g.caretaker.pubKey, agent: "caretaker:" + String(g.caretaker.label || "founder").slice(0, 40), retired: false } : null;
     if (s.caretaker) cmt[cmtAddress(s.caretaker.pubKey)] = { agent: s.caretaker.agent, holder: "caretaker", pubKey: s.caretaker.pubKey };
     s.cmt = cmt;
@@ -245,7 +263,7 @@ class AGTApp {
     s.pendingWage = 0n;
     this.state = s;
     this.check = structuredClone(s);
-    log(`InitChain ${req.chain_id}: ${g.validators.length} AI validators, ${g.holders} owners${provisional ? " · PROVISIONAL (no balances)" : ""}${s.caretaker ? " · caretaker " + s.caretaker.agent : ""}`);
+    log(`InitChain ${req.chain_id}: ${g.validators.length} AI validators, ${g.holders} owners${s.ledger ? ` · OWN LEDGER, ${Object.keys(opening).length} opening balances` : provisional ? " · PROVISIONAL (no balances)" : ""}${s.caretaker ? " · caretaker " + s.caretaker.agent : ""}`);
     return {
       consensus_params: null,
       validators: Object.keys(s.active).map((pk) => ({ pub_key: { ed25519: Buffer.from(pk, "base64") }, power: "1" })), // 1 owner = 1 vote
@@ -344,7 +362,8 @@ class AGTApp {
         .filter((v) => v.block_id_flag === "BLOCK_ID_FLAG_COMMIT")
         .map((v) => s.cmt[Buffer.from(v.validator.address).toString("hex")])
         .filter(Boolean)
-        .map((v) => v.holder))].sort();
+        .map((v) => v.holder)
+        .filter((h) => h !== "caretaker"))].sort();
       if (owners.length) {
         const share = s.pendingWage / BigInt(owners.length);
         owners.forEach((o, i) => {
@@ -352,6 +371,10 @@ class AGTApp {
           s.balances[o] = (s.balances[o] || 0n) + pay;
           s.wages[o] = (s.wages[o] || 0n) + pay;
         });
+        s.pendingWage = 0n;
+      } else if (s.ledger) {
+        s.supply -= s.pendingWage; // only the caretaker signed: the fee is burned, nobody profits from holding the role
+        s.burned += s.pendingWage;
         s.pendingWage = 0n;
       }
     }

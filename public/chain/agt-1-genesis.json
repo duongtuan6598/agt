@@ -1,0 +1,62 @@
+{
+  "genesis_time": "2026-11-22T15:06:37.94295096Z",
+  "chain_id": "agt-1",
+  "initial_height": "0",
+  "consensus_params": {
+    "block": {
+      "max_bytes": "22020096",
+      "max_gas": "-1"
+    },
+    "evidence": {
+      "max_age_num_blocks": "100000",
+      "max_age_duration": "172800000000000",
+      "max_bytes": "1048576"
+    },
+    "validator": {
+      "pub_key_types": [
+        "ed25519"
+      ]
+    },
+    "version": {
+      "app": "0"
+    },
+    "abci": {
+      "vote_extensions_enable_height": "0"
+    }
+  },
+  "validators": [
+    {
+      "address": "FDD97A770CBECF8C645A54A9506304FF6A0EC659",
+      "pub_key": {
+        "type": "tendermint/PubKeyEd25519",
+        "value": "299XNO8U6TXJD71aVLLTUNlzopMnHMTMYIfNoSa2cBE="
+      },
+      "power": "1",
+      "name": "caretaker"
+    }
+  ],
+  "app_hash": "",
+  "app_state": {
+    "provisional": true,
+    "caretaker": {
+      "pubKey": "299XNO8U6TXJD71aVLLTUNlzopMnHMTMYIfNoSa2cBE=",
+      "label": "founder"
+    },
+    "bsc": {
+      "chainId": 97,
+      "bridge": "0x0000000000000000000000000000000000000000",
+      "work": "0xA21a9137961334b1d5d98938Aac3471fD9bAA3cb"
+    },
+    "holders": 0,
+    "validators": [],
+    "ledger": {
+      "snapshot": {
+        "token": "0xB86BeC1f63D2caf35B5D08530F803d63A16ABC1D",
+        "bscBlock": 144234162
+      },
+      "balances": {
+        "0x778c4FDFC8825a44A24cbc2e65606b9b8FE6e769": "15026631490693865"
+      }
+    }
+  }
+}
