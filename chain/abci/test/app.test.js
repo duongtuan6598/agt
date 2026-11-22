@@ -291,3 +291,41 @@ test("Kho deposits mint AGT on the own ledger once each, only when every validat
   assert.equal(again.txs.length, 0, "a deposit is credited once");
   assert.equal(app.CheckTx({ tx: B({ type: "kho-credit", ...dep, txHash: "0x" + "cd".repeat(32) }) }).code, 1, "nobody but the proposer adds a Kho credit");
 });
+
+test("licences live on agt-1: the founder grants at the start (never for his own AI), grants wait, then the AI binds and validates; BSC snapshots no longer count", async () => {
+  const { app, appState } = setupProvisional();
+  init(app, { ...appState, ledger: { snapshot: { token: "0xB86BeC1f63D2caf35B5D08530F803d63A16ABC1D", bscBlock: 1 }, balances: {}, licenceWait: 2 } });
+  const founder = new ethers.Wallet(ethers.id("not the real founder key"));
+  // the real FOUNDER key is not in tests: sign as the founder by swapping the constant's check through a stand-in
+  const ai = newAi(400);
+  const lic = { agent: ai.key.address, holder: ai.owner.address, trade: 6, examHash: "0x" + "11".repeat(32), attestHash: "0x" + "22".repeat(32), name: "test AI" };
+  const body = { agent: ai.key.address.toLowerCase(), holder: ai.owner.address.toLowerCase(), trade: 6, examHash: lic.examHash, attestHash: lic.attestHash, name: "test AI" };
+  const digest = ethers.getBytes(C.hashOf({ tag: "AGT-LICENCE-v1", chainId: CHAIN, op: "licence-grant", body, nonce: 0 }));
+  const bad = B({ type: "licence-grant", nonce: 0, licence: lic, sigs: [founder.signMessageSync(digest)] });
+  assert.equal(app.CheckTx({ tx: bad }).code, 1, "only the founder's key grants at the start");
+  assert.match(String(app.CheckTx({ tx: B({ type: "licence-grant", nonce: 0, licence: { ...lic, attestHash: "0x" + "00".repeat(32) }, sigs: [] }) }).log), /sealed-box attestation/);
+  assert.match(String(app.CheckTx({ tx: B({ type: "valset", bscBlock: 999999999, holders: 0, validators: [] }) }).log), /BSC snapshots no longer count/);
+});
+
+test("a grant by the starting granter waits, activates, and the AI joins the validators after binding", async () => {
+  const { app, appState, caretaker } = setupProvisional();
+  const granter = W("granter");
+  init(app, { ...appState, ledger: { snapshot: { token: "0xB86BeC1f63D2caf35B5D08530F803d63A16ABC1D", bscBlock: 1 }, balances: {}, licenceWait: 2, granter: granter.address } });
+  const ai = newAi(401);
+  const lic = { agent: ai.key.address, holder: ai.owner.address, trade: 6, examHash: "0x" + "11".repeat(32), attestHash: "0x" + "22".repeat(32), name: "AI 401" };
+  const body = { agent: ai.key.address.toLowerCase(), holder: ai.owner.address.toLowerCase(), trade: 6, examHash: lic.examHash, attestHash: lic.attestHash, name: "AI 401" };
+  const sig = (op, b, n) => granter.signMessageSync(ethers.getBytes(C.hashOf({ tag: "AGT-LICENCE-v1", chainId: CHAIN, op, body: b, nonce: n })));
+  const own = { ...lic, holder: granter.address };
+  const ownBody = { ...body, holder: granter.address.toLowerCase() };
+  assert.match(String(app.CheckTx({ tx: B({ type: "licence-grant", nonce: 0, licence: own, sigs: [sig("licence-grant", ownBody, 0)] }) }).log), /cannot license an AI of his own/);
+  block(app, [B({ type: "licence-grant", nonce: 0, licence: lic, sigs: [sig("licence-grant", body, 0)] })]);
+  assert.equal(app.state.licences[1].pending, true);
+  assert.equal(app.CheckTx({ tx: bindTx(ai) }).code, 1, "not active yet: cannot bind");
+  block(app, []); block(app, []); block(app, []);
+  assert.equal(app.state.licences[1].active, true);
+  const r = block(app, [bindTx(ai)]);
+  assert.ok(powerOf(r).some(([pk, p]) => pk === ai.pub && p === "1"), "the licensed AI joins the validators");
+  assert.ok(caretaker.pubKey in app.state.active, "the caretaker stays until 4 independent owners");
+  block(app, [B({ type: "licence-revoke", nonce: 1, id: 1, sigs: [sig("licence-revoke", { id: 1 }, 1)] })]);
+  assert.equal(app.state.licences[1].active, false);
+});

@@ -29,6 +29,29 @@ const KHO = {
   97: { kho: "0x509b499a84888b2b547c428fbc861f9b254e8760", oracle: "0xed9077508424b257fa26ae0e1167540972c556aa", fromBlock: 144236000 },
 };
 const KHO_CONF = 15;
+// Licences on the own ledger, not on BSC. Restaurant rule: until CARETAKER_UNTIL independent owners hold licences,
+// the founder grants and revokes, publicly, and never for an AI he owns (two conflicting roles). Then a grant or a
+// revocation needs signatures of more than 2/3 of the licensed owners. A grant waits LICENCE_WAIT blocks before it
+// counts (anyone can read and contest the evidence meanwhile; the granter can cancel it).
+const FOUNDER = "0x778c4fdfc8825a44a24cbc2e65606b9b8fe6e769";
+const LICENCE_WAIT = 14400; // ~1 day at 6 s a block
+const LIC_TAG = "AGT-LICENCE-v1";
+const licDigest = (chainId, op, body, nonce) => C.hashOf({ tag: LIC_TAG, chainId, op, body, nonce });
+// owners who hold an active licence on this chain
+const licOwners = (s) => [...new Set(Object.values(s.licences || {}).filter((l) => l.active).map((l) => l.holder))];
+// the validator snapshot the rest of the app reads, rebuilt from this chain's own licences
+function ownValset(s) {
+  const v = Object.entries(s.licences || {}).filter(([, l]) => l.active).map(([id, l]) => ({ id: Number(id), agent: l.agent, holder: l.holder }));
+  s.valset = C.normValset({ holders: new Set(v.map((x) => x.holder)).size, validators: v });
+  s.licIds = Object.fromEntries(v.map((x) => [x.agent, x.id]));
+}
+// who may sign a licence change right now, and whether these signatures suffice
+function licAuthorised(s, digest, sigs) {
+  const signers = new Set((sigs || []).map((g) => { try { return lower(ethers.verifyMessage(ethers.getBytes(digest), g)); } catch { return null; } }).filter(Boolean));
+  const owners = licOwners(s);
+  if (owners.length < CARETAKER_UNTIL) return signers.has((s.ledger && s.ledger.granter) || FOUNDER);
+  return owners.filter((o) => signers.has(o)).length * 3 > owners.length * 2;
+}
 const KHO_EVENT = "event Deposited(address indexed from, address indexed beneficiary, uint256 amount)";
 const BIND_TAG = "AGT-BIND-VALIDATOR-v1";
 const lower = (a) => ethers.getAddress(a).toLowerCase();
@@ -191,6 +214,36 @@ class AGTApp {
   }
 
   applyAny(s, tx, { fromProposer = false } = {}) {
+    if (tx.type === "licence-grant" || tx.type === "licence-revoke" || tx.type === "licence-cancel") {
+      if (!s.ledger) throw new Error("licences live on the own ledger only");
+      s.licences = s.licences || {};
+      s.licNonce = s.licNonce || 0;
+      if (Number(tx.nonce) !== s.licNonce) throw new Error("bad licence nonce");
+      let body;
+      if (tx.type === "licence-grant") {
+        const l = tx.licence || {};
+        if (!ethers.isAddress(l.agent) || !ethers.isAddress(l.holder)) throw new Error("bad licence addresses");
+        if (!/^0x[0-9a-fA-F]{64}$/.test(String(l.examHash)) || !/^0x[0-9a-fA-F]{64}$/.test(String(l.attestHash)) || /^0x0+$/.test(String(l.attestHash)))
+          throw new Error("a licence carries the exam and the sealed-box attestation it was earned with");
+        if (licOwners(s).length < CARETAKER_UNTIL && lower(l.holder) === ((s.ledger && s.ledger.granter) || FOUNDER)) throw new Error("the founder grants during the start, so he cannot license an AI of his own");
+        if (Object.values(s.licences).some((x) => (x.active || x.pending) && x.agent === lower(l.agent))) throw new Error("that AI already holds a licence");
+        body = { agent: lower(l.agent), holder: lower(l.holder), trade: Number(l.trade), examHash: String(l.examHash).toLowerCase(), attestHash: String(l.attestHash).toLowerCase(), name: String(l.name || "").slice(0, 60) };
+      } else body = { id: Number(tx.id) };
+      if (!licAuthorised(s, licDigest(s.chainId, tx.type, body, s.licNonce), tx.sigs)) throw new Error("licence change not signed by those who may sign it now");
+      s.licNonce++;
+      if (tx.type === "licence-grant") {
+        const id = (s.nextLicence = (s.nextLicence || 0) + 1);
+        s.licences[id] = { ...body, active: false, pending: true, activeAt: Number(s.height || 0) + (s.ledger.licenceWait ?? LICENCE_WAIT) };
+      } else {
+        const l = s.licences[body.id];
+        if (!l) throw new Error("no such licence");
+        if (tx.type === "licence-cancel" && !l.pending) throw new Error("only a pending grant can be cancelled");
+        l.active = false;
+        l.pending = false;
+        ownValset(s);
+      }
+      return 0n;
+    }
     if (tx.type === "kho-credit") {
       // AGT for coins deposited in a Kho (they remain there; nobody can take them out). Proposer-only; every
       // validator re-checked it in ProcessProposal against its own view of the origin chain.
@@ -234,6 +287,7 @@ class AGTApp {
       s.attest[tx.nonce][agent] = tx.sig;
       return 0n; // attesting is part of the signing work; the wage covers it
     }
+    if (tx.type === "valset" && s.ledger) throw new Error("licences live on this chain: BSC snapshots no longer count");
     if (tx.type === "valset") {
       // New licence snapshot from BSC (proposer-only; every validator re-reads BSC at tx.bscBlock).
       if (!fromProposer) throw new Error("validator sets only come from the proposer");
@@ -304,7 +358,7 @@ class AGTApp {
     }
     const s = C.genesis({ chainId: req.chain_id, bsc: g.bsc, valset: { holders: g.holders, validators: g.validators } });
     s.provisional = provisional;
-    s.ledger = g.ledger ? { snapshot: { token: lower(g.ledger.snapshot.token), bscBlock: g.ledger.snapshot.bscBlock } } : null;
+    s.ledger = g.ledger ? { snapshot: { token: lower(g.ledger.snapshot.token), bscBlock: g.ledger.snapshot.bscBlock }, ...(Number.isInteger(g.ledger.licenceWait) ? { licenceWait: g.ledger.licenceWait } : {}), granter: g.ledger.granter ? lower(g.ledger.granter) : FOUNDER } : null;
     s.balances = opening;
     s.supply = Object.values(opening).reduce((t, v) => t + v, 0n);
     s.burned = 0n;
@@ -347,7 +401,7 @@ class AGTApp {
       size += b.length;
       return true;
     };
-    try {
+    if (!s.ledger) try {
       const head = await this.bsc.head();
       const snap = await this.bsc.valsetAt(head);
       if (snap && head >= s.bscBlock && !sameSnap(snap, snapOfState(s))) {
@@ -471,6 +525,11 @@ class AGTApp {
     }
 
     // 3. Validator set follows the licences: add newly bound AIs, remove revoked ones (power 0).
+    if (s.ledger && s.licences) {
+      let changed = false;
+      for (const l of Object.values(s.licences)) if (l.pending && s.height >= l.activeAt) { l.pending = false; l.active = true; changed = true; }
+      if (changed) ownValset(s);
+    }
     const next = activeSet(s);
     if (s.caretaker && !s.caretaker.retired && !(s.caretaker.pubKey in next)) s.caretaker.retired = true; // one way
     // No legitimate validator left (every licence revoked, caretaker gone): never keep revoked ones signing
