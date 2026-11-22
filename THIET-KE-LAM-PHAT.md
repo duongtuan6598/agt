@@ -44,6 +44,12 @@ phải tài sản được cất giữ.
 > - mỗi ngày, mọi nghề cộng lại: ≤ min(100, 1 + AGT Kho in ÷ 3650) AGT;
 > - phần vượt trần ngày thì ghi nợ và trả sau; phần vượt trần trọn đời thì không thành nợ.
 
+> **Tài sản lưu ký, như vàng thật do một quốc gia giữ (22/11, docs/decisions/2026-11-22-custodial-assets.md):**
+> - mỗi token lưu ký ≤ 5% số AGT Kho đã in;
+> - mỗi nhóm lưu ký ≤ 10%;
+> - Kho trống thì không nhận tài sản lưu ký;
+> - không hứa đổi ngược ra vàng, không cho quyền hay phiếu.
+
 **Để bên quản trị quyết, trong khung trên:** thưởng và ngân sách của từng nghề, theo nhu cầu đo được (việc được đặt
 hàng và việc treo thưởng cho thấy nhu cầu thật). Mọi thay đổi phải công bố **trước** khi có hiệu lực.
 

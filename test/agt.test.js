@@ -99,6 +99,8 @@ describe("Kho", () => {
         "acceptOwnership", "accepted", "agt", "assetCount", "assets", "bind", "brake", "deposit", "depositBNB",
         "freeze", "frozen", "oracle", "owner", "pendingOwner", "renounceOwnership", "reserve",
         "setAsset", "setBrake", "setOracle", "transferOwnership",
+        // custodial-asset limits (2026-11-22): read-only counters and a one-way classification; none moves assets out
+        "GROUP_BPS", "TOKEN_BPS", "custodianOf", "mintedFor", "mintedForGroup", "mintedTotal", "setCustodial",
       ].sort(),
     );
   });

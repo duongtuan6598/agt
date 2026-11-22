@@ -30,10 +30,30 @@ contract AGTVault is Ownable2Step, ReentrancyGuard {
     mapping(address => uint256) public reserve; // tổng lượng đã vào kho theo từng tài sản
     address[] public assets;
 
+    /// Custodial assets (Claude + Codex, 22/11/2026; docs/decisions/2026-11-22-custodial-assets.md): a token that is a
+    /// claim on something held off-chain by someone (tokenized gold held by a custodian or a nation, a fiat
+    /// stablecoin). AGT must not depend on any one of them, so after every deposit:
+    /// - one custodial token <= 5% of all AGT the Vault minted, and
+    /// - one custodian group (all tokens controlled by the same party) <= 10%.
+    /// Measured in AGT minted at deposit time (no price oracle needed to enforce it). Constants: nobody raises them.
+    /// With a small Vault little custodial value fits; the room grows with the Vault (no waiting, no exception).
+    /// Marking an asset custodial only ever makes the rules stricter, so it is one-way and allowed even when frozen.
+    /// The Vault is one-way: AGT never promises redemption in gold, and depositors get no rights or votes.
+    uint256 public constant TOKEN_BPS = 500;
+    uint256 public constant GROUP_BPS = 1000;
+    uint256 public mintedTotal;
+    mapping(address => uint256) public mintedFor;
+    mapping(address => uint256) public custodianOf; // 0 = not custodial
+    mapping(uint256 => uint256) public mintedForGroup;
+
     event Bound(address agt);
     event OracleSet(address oracle);
     event AssetSet(address indexed token, bool accepted);
     event Frozen();
+    event CustodialSet(address indexed token, uint256 indexed group);
+    /// Emitted when an asset is marked custodial after deposits that already exceed a limit (Codex V-1): those
+    /// deposits stay (the Vault is one-way), and every further deposit of that token or group is refused.
+    event OverLimitWhenMarked(address indexed token, uint256 indexed group);
     event BrakeSet(address brake);
     event Deposited(address indexed from, address indexed beneficiary, address indexed token, uint256 amount, uint256 agtMinted);
 
@@ -44,6 +64,9 @@ contract AGTVault is Ownable2Step, ReentrancyGuard {
     error ZeroValue();
     error DirectBnb();
     error Braked();
+    error AlreadyCustodial();
+    error BadGroup();
+    error Concentrated(address token);
 
     constructor(address owner_, address oracle_) Ownable(owner_) {
         oracle = IPriceOracle(oracle_);
@@ -71,6 +94,17 @@ contract AGTVault is Ownable2Step, ReentrancyGuard {
     }
 
     /// Gắn phanh khẩn cấp đúng một lần. Phanh chỉ chặn tiền MỚI vào Kho, tối đa 14 ngày, tự mở.
+    /// Marks `token` custodial, in custodian group `group` (> 0). One-way; past deposits count toward the group.
+    function setCustodial(address token, uint256 group) external onlyOwner {
+        if (custodianOf[token] != 0) revert AlreadyCustodial();
+        if (group == 0) revert BadGroup();
+        custodianOf[token] = group;
+        mintedForGroup[group] += mintedFor[token];
+        emit CustodialSet(token, group);
+        if (mintedFor[token] * 10000 > mintedTotal * TOKEN_BPS || mintedForGroup[group] * 10000 > mintedTotal * GROUP_BPS)
+            emit OverLimitWhenMarked(token, group);
+    }
+
     function setBrake(address brake_) external onlyOwner {
         if (address(brake) != address(0)) revert AlreadyBound();
         brake = IEmergencyBrake(brake_);
@@ -102,6 +136,14 @@ contract AGTVault is Ownable2Step, ReentrancyGuard {
         minted = oracle.valueInAGT(token, amount);
         if (minted == 0) revert ZeroValue();
         reserve[token] += amount;
+        mintedTotal += minted;
+        mintedFor[token] += minted;
+        uint256 g = custodianOf[token];
+        if (g != 0) {
+            mintedForGroup[g] += minted;
+            if (mintedFor[token] * 10000 > mintedTotal * TOKEN_BPS || mintedForGroup[g] * 10000 > mintedTotal * GROUP_BPS)
+                revert Concentrated(token);
+        }
         agt.mintFromVault(beneficiary, minted);
         emit Deposited(msg.sender, beneficiary, token, amount, minted);
     }
