@@ -29,6 +29,18 @@ const KHO = {
   97: { kho: "0x509b499a84888b2b547c428fbc861f9b254e8760", asset: "97:native", decimals: 18, fromBlock: 144236000 },
 };
 const KHO_CONF = 15;
+// The Bitcoin Kho (tools/kho-bitcoin.js): coins remain at this Taproot output; nobody can spend them. A deposit names
+// its agt-1 account in an OP_RETURN "AGT1" + 20 bytes of the same transaction. BTC_CONF confirmations.
+const KHO_BTC = { chain: "btc", asset: "btc:native", decimals: 8, script: "5120775f9b89499a3d223c990c2a737df38a2f63137a3a84587a04a99f4ed8e1c287" };
+const BTC_CONF = 6;
+// one deposit per Bitcoin transaction: the sum of its outputs to the Kho, and the account in its OP_RETURN
+function btcDepositOf(tx) {
+  const toKho = tx.vout.map((o, i) => ({ o, i })).filter(({ o }) => o.scriptpubkey === KHO_BTC.script);
+  if (!toKho.length) return null;
+  const tag = tx.vout.map((o) => o.scriptpubkey).find((sp) => /^6a1841475431[0-9a-f]{40}$/.test(sp)); // OP_RETURN PUSH24 "AGT1" + 20 bytes
+  if (!tag) return null;
+  return { chain: "btc", txHash: tx.txid, logIndex: toKho[0].i, beneficiary: "0x" + tag.slice(12), from: "btc", amount: String(toKho.reduce((t, { o }) => t + BigInt(o.value), 0n)) };
+}
 // Licences on the own ledger, not on BSC. Restaurant rule: until CARETAKER_UNTIL independent owners hold licences,
 // the founder grants and revokes, publicly, and never for an AI he owns (two conflicting roles). Then a grant or a
 // revocation needs signatures of more than 2/3 of the licensed owners. A grant waits LICENCE_WAIT blocks before it
@@ -308,6 +320,29 @@ function makeBscView(env = process.env) {
     };
     view.name.push(`Kho ${k.kho}`);
   }
+  if (env.BTC_ESPLORA) {
+    const api = env.BTC_ESPLORA.replace(/\/$/, "");
+    const j = async (p) => { const r = await fetch(api + p); if (!r.ok) throw new Error(`esplora ${r.status}`); return r.json(); };
+    const addr = env.BTC_KHO_ADDRESS || "tb1pwa0ehz2fng7jy0yeps48xl0n3ghkxym682z9s7sy4x05ak8pc2rsedlp78";
+    view.btcDeposits = async () => {
+      const tip = Number(await (await fetch(api + "/blocks/tip/height")).text());
+      const out = [];
+      for (const tx of await j(`/address/${addr}/txs`)) {
+        if (!tx.status || !tx.status.confirmed || tip - tx.status.block_height + 1 < BTC_CONF) continue;
+        const d = btcDepositOf(tx);
+        if (d) out.push({ ...d, block: tx.status.block_height });
+      }
+      return out;
+    };
+    view.btcDeposit = async (t) => {
+      const tip = Number(await (await fetch(api + "/blocks/tip/height")).text());
+      const tx = await j(`/tx/${t.txHash}`);
+      if (!tx.status || !tx.status.confirmed || tip - tx.status.block_height + 1 < BTC_CONF) return null;
+      const d = btcDepositOf(tx);
+      return d ? { ...d, block: tx.status.block_height } : null;
+    };
+    view.name.push(`Bitcoin Kho via ${api}`);
+  }
   view.name = view.name.join(", ") || "none";
   return view;
 }
@@ -561,7 +596,7 @@ class AGTApp {
     if (tx.type === "price-report") {
       if (!s.ledger) throw new Error("prices live on the own ledger only");
       const who = lower(tx.reporter), price = BigInt(tx.price), asset = String(tx.asset);
-      if (!/^[0-9]+:(native|0x[0-9a-f]{40})$/.test(asset)) throw new Error("bad asset name");
+      if (!/^([0-9]+|btc):(native|0x[0-9a-f]{40})$/.test(asset)) throw new Error("bad asset name");
       if (price <= 0n) throw new Error("bad price");
       if (!priceReporterOk(s, who)) throw new Error("not a price reporter: a licensed AI, or the granter at the start");
       s.prices = s.prices || {};
@@ -580,9 +615,10 @@ class AGTApp {
       // validator re-checked it in ProcessProposal against its own view of the origin chain.
       if (!s.ledger) throw new Error("Kho deposits mint AGT only on the own ledger");
       if (!fromProposer) throw new Error("Kho credits only come from the proposer");
-      const k = KHO[Number(tx.chain)];
+      const k = tx.chain === "btc" ? KHO_BTC : KHO[Number(tx.chain)];
       if (!k) throw new Error("no Kho on that chain");
-      const id = `${Number(tx.chain)}:${String(tx.txHash).toLowerCase()}:${Number(tx.logIndex)}`;
+      if (!ethers.isAddress(tx.beneficiary)) throw new Error("bad agt-1 account");
+      const id = `${tx.chain === "btc" ? "btc" : Number(tx.chain)}:${String(tx.txHash).toLowerCase()}:${Number(tx.logIndex)}`;
       s.khoCredited = s.khoCredited || {};
       if (s.khoCredited[id]) throw new Error("deposit already credited");
       const price = priceOf(s, k.asset);
@@ -759,6 +795,17 @@ class AGTApp {
     } catch (e) {
       log("Kho view unavailable, proposing without Kho credits:", e.message);
     }
+    if (s.ledger && this.bsc.btcDeposits) try {
+      for (const d of await this.bsc.btcDeposits()) {
+        if ((s.khoCredited || {})[`btc:${d.txHash.toLowerCase()}:${d.logIndex}`]) continue;
+        if (priceOf(s, KHO_BTC.asset) <= 0n) break;
+        const tx = { type: "kho-credit", ...d };
+        this.applyAny(s, tx, { fromProposer: true });
+        if (!push(Buffer.from(JSON.stringify(tx)))) break;
+      }
+    } catch (e) {
+      log("Bitcoin view unavailable, proposing without Bitcoin Kho credits:", e.message);
+    }
     if (!s.provisional) try {
       for (const l of await this.bsc.locksFrom(s.nextIn)) {
         if (l.nonce !== s.nextIn) break;
@@ -796,9 +843,9 @@ class AGTApp {
           if (!mine || !sameSnap(mine, tx)) throw new Error(`licence snapshot at BSC block ${tx.bscBlock} does not match BSC`);
         }
         if (tx.type === "kho-credit") {
-          const mine = this.bsc.khoDeposit ? await this.bsc.khoDeposit(tx) : null;
+          const mine = tx.chain === "btc" ? (this.bsc.btcDeposit ? await this.bsc.btcDeposit(tx) : null) : this.bsc.khoDeposit ? await this.bsc.khoDeposit(tx) : null;
           if (!mine) throw new Error(`Kho deposit ${tx.txHash} not final or not seen by me`);
-          for (const f of ["block", "from", "beneficiary", "amount"]) if (String(mine[f]) !== String(f === "block" ? Number(tx[f]) : f === "from" || f === "beneficiary" ? lower(tx[f]) : tx[f])) throw new Error(`Kho deposit ${tx.txHash}: ${f} differs from my view`);
+          for (const f of ["block", "from", "beneficiary", "amount"]) if (String(mine[f]) !== String(f === "block" ? Number(tx[f]) : f === "beneficiary" || (f === "from" && tx.chain !== "btc") ? lower(tx[f]) : tx[f])) throw new Error(`Kho deposit ${tx.txHash}: ${f} differs from my view`);
         }
         if (tx.type === "credit") {
           locks = locks || (await this.bsc.locksFrom(s.nextIn));
@@ -1038,5 +1085,5 @@ function serve(app, port) {
   return server;
 }
 
-module.exports = { AGTApp, serve, bindDigest, cmtAddress, ser, des, makeBscView };
+module.exports = { btcDepositOf, AGTApp, serve, bindDigest, cmtAddress, ser, des, makeBscView };
 if (require.main === module) serve(new AGTApp(), Number(process.env.PORT || 26658));

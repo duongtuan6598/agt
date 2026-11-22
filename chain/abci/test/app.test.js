@@ -449,3 +449,24 @@ test("exams on agt-1: once graders are registered, a licence needs a pass signed
   block(app, [attest(g3, true)]);
   assert.equal(app.CheckTx({ tx: grant() }).code, 0, "two independent graders signed a pass: the licence can be granted");
 });
+
+test("Bitcoin Kho: a deposit with an OP_RETURN AGT1 account is credited at agt-1's BTC price; without the account, nothing", async () => {
+  const { btcDepositOf } = require("../app.js");
+  const ben = W("btc-ben").address.toLowerCase();
+  const kho = "5120775f9b89499a3d223c990c2a737df38a2f63137a3a84587a04a99f4ed8e1c287";
+  const tx = { txid: "ee".repeat(32), vout: [{ scriptpubkey: "0014" + "11".repeat(20), value: 5000 }, { scriptpubkey: kho, value: 100000 }, { scriptpubkey: "6a1841475431" + ben.slice(2), value: 0 }] };
+  const d = btcDepositOf(tx);
+  assert.equal(d.amount, "100000");
+  assert.equal(d.beneficiary, ben);
+  assert.equal(btcDepositOf({ ...tx, vout: tx.vout.slice(0, 2) }), null, "no account named: not a deposit (the coins stay in the Kho)");
+  const { app, appState } = setupProvisional();
+  const granter = W("btc-granter");
+  app.bsc = { head: async () => 0, valsetAt: async () => null, locksFrom: async () => [], btcDeposits: async () => [{ ...d, block: 100 }], btcDeposit: async () => ({ ...d, block: 100 }) };
+  init(app, { ...appState, ledger: { snapshot: { token: "0xB86BeC1f63D2caf35B5D08530F803d63A16ABC1D", bscBlock: 1 }, balances: {}, granter: granter.address } });
+  const price = (30n * 10n ** 18n).toString(); // 30 AGT per BTC
+  block(app, [B({ type: "price-report", asset: "btc:native", price, nonce: 0, reporter: granter.address, sig: granter.signMessageSync(ethers.getBytes(C.hashOf({ tag: "AGT-PRICE-v1", chainId: CHAIN, asset: "btc:native", price, nonce: 0 }))) })]);
+  const p = await app.PrepareProposal({ txs: [], max_tx_bytes: "1048576", height: "2" });
+  assert.equal((await app.ProcessProposal({ txs: p.txs, height: "2" })).status, "ACCEPT");
+  block(app, p.txs);
+  assert.equal(app.state.balances[ben], 3n * 10n ** 16n, "0.001 BTC x 30 AGT/BTC = 0.03 AGT");
+});
