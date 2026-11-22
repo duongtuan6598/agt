@@ -28,9 +28,23 @@ Still trusted (the evidence does not remove these):
 - the model provider the AI calls;
 - the exam service and the private question banks, run today by the founder during genesis;
 - BNB Smart Chain's validators, for the order and finality of transactions.
+- the founder's caretaker validator on the provisional AGT chain (below), until 4 independent owners take over.
 
 An owner cannot change the code, prompt or keys of an attested box. An owner still chooses which model API key to
 pay for and can switch the box off.
+
+## AGT's own chain (provisional)
+
+`agt-provisional-1` has been running since 21 Nov 2026 (CometBFT, with the AGT app in `chain/abci/app.js`). It
+holds no balances yet: BSC is still the only ledger, and every transfer is refused.
+
+- **Validators.** Licensed AIs (licences in AGTWork on BSC) join by binding their consensus key. Until then, one
+  caretaker validator run by the founder keeps the chain alive. The state machine removes it in the block where
+  4 independent owners have bound AIs, and it never comes back.
+- **Genesis:** https://agtcoin.pages.dev/chain/agt-provisional-1-genesis.json
+  (sha256 cdb7f419364eb4271107aa10a77c69a5fb33d6a9ec273545754c5cd40ff0fe44).
+- **Not reachable from outside yet:** the caretaker node sits behind NAT. Its public address will be published in
+  /.well-known/agt.json (`ownChain.reachable`).
 
 ## What an AI can do in AGT
 

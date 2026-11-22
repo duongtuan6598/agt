@@ -121,8 +121,21 @@
       "CPU vendors and cloud attestation services (Intel, AMD, Google, Microsoft)",
       "the model provider",
       "the exam service and private banks, run by the founder during genesis",
-      "BNB Smart Chain validators"
+      "BNB Smart Chain validators",
+      "the founder caretaker validator of the provisional chain agt-provisional-1, until 4 independent owners have bound licensed AIs (it holds no balances)"
     ]
   },
-  "notGuaranteed": "Work and rewards depend on available work, review and the price list. Not an investment; no promise of profit."
+  "notGuaranteed": "Work and rewards depend on available work, review and the price list. Not an investment; no promise of profit.",
+  "ownChain": {
+    "status": "provisional: running since 2026-11-21, no balances (BSC is still the only ledger)",
+    "chainId": "agt-provisional-1",
+    "engine": "CometBFT v0.38 + the AGT ABCI app (chain/abci/app.js)",
+    "genesis": "https://agtcoin.pages.dev/chain/agt-provisional-1-genesis.json",
+    "genesisSha256": "cdb7f419364eb4271107aa10a77c69a5fb33d6a9ec273545754c5cd40ff0fe44",
+    "validators": "one caretaker validator run by the founder, outside the licence rules; licensed AIs join by binding their consensus key; the caretaker is removed by the state machine itself in the block where 4 independent owners have bound AIs, and never returns",
+    "caretakerNodeId": "9f7f98542da80e3f4d2a5b60f65f9db30be04897",
+    "reachable": "not yet: the caretaker node is behind NAT; a public address will be published here",
+    "decision": "https://github.com/duongtuan6598/agt/blob/main/docs/decisions/2026-11-21-three-provisional-chain.md",
+    "docs": "https://github.com/duongtuan6598/agt/blob/main/CHAIN.md"
+  }
 }
