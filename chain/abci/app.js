@@ -186,7 +186,7 @@ function drawReviewers(s, j, id, blockHash, count) {
     if (!byOwner[l.holder] || rank < byOwner[l.holder].rank) byOwner[l.holder] = { rank, agent: l.agent };
   }
   const picked = Object.values(byOwner).sort((a, b) => (a.rank < b.rank ? -1 : 1)).slice(0, want).map((x) => x.agent);
-  if (picked.length < want && licOwners(s).length < CARETAKER_UNTIL) picked.push((s.ledger && s.ledger.granter) || FOUNDER);
+  if (picked.length < want && (v2(s) ? granterActive(s) : licOwners(s).length < CARETAKER_UNTIL)) picked.push((s.ledger && s.ledger.granter) || FOUNDER);
   j.reviewers = picked;
   j.status = picked.length ? "drawn" : "waiting-reviewers";
 }
@@ -199,7 +199,7 @@ function priceReporterOk(s, who) {
     const first = Object.entries(s.licences).filter(([, l]) => l.active && l.holder === holder).sort((a, b) => Number(a[0]) - Number(b[0]))[0];
     return first[1].agent === who;
   }
-  return licOwners(s).length < CARETAKER_UNTIL && who === ((s.ledger && s.ledger.granter) || FOUNDER);
+  return (v2(s) ? granterActive(s) : licOwners(s).length < CARETAKER_UNTIL) && who === ((s.ledger && s.ledger.granter) || FOUNDER);
 }
 const LICENCE_WAIT = 14400; // ~1 day at 6 s a block
 const LIC_TAG = "AGT-LICENCE-v1";
@@ -213,10 +213,12 @@ function ownValset(s) {
   s.licIds = Object.fromEntries(v.map((x) => [x.agent, x.id]));
 }
 // who may sign a licence change right now, and whether these signatures suffice
+// the starting granter's role ends for good the first time 4 independent owners hold licences (D-4)
+const granterActive = (s) => !(v2(s) && s.handedOver) && licOwners(s).length < CARETAKER_UNTIL;
 function licAuthorised(s, digest, sigs) {
   const signers = new Set((sigs || []).map((g) => { try { return lower(ethers.verifyMessage(ethers.getBytes(digest), g)); } catch { return null; } }).filter(Boolean));
   const owners = licOwners(s);
-  if (owners.length < CARETAKER_UNTIL) return signers.has((s.ledger && s.ledger.granter) || FOUNDER);
+  if (v2(s) ? granterActive(s) : owners.length < CARETAKER_UNTIL) return signers.has((s.ledger && s.ledger.granter) || FOUNDER);
   return owners.filter((o) => signers.has(o)).length * 3 > owners.length * 2;
 }
 const KHO_EVENT = "event Deposited(address indexed from, address indexed beneficiary, uint256 amount)";
@@ -362,6 +364,13 @@ const sameSnap = (a, b) => C.hashOf(normSnap(a)) === C.hashOf(normSnap(b));
 // A provisional chain stays provisional for good, caretaker or not: balances come only with a new genesis that names a
 // bridge, after the cutover conditions and a Charter Art. 14 amendment (by design; Gemini P-3 asked otherwise).
 const CARETAKER_UNTIL = 4;
+// Rules v2 (DeepSeek D-1..D-6, 23 Nov 2026) take effect at agt-2 height V2_AT, published before it was reached, so the
+// chain replays from genesis with this code (tools/agt1-follow.js). Before V2_AT the v1 behaviour is kept exactly.
+const V2_AT = 1000;
+const v2 = (s) => Number(s.height || 0) >= V2_AT;
+const RECLAIM_BLOCKS = 14400 * 14; // a pending milestone with no delivery for 14 days can be taken back (D-1)
+const VOTE_BLOCKS = 14400 * 7;     // drawn reviewers have 7 days; then the votes cast decide (D-2)
+const PRICE_INTERVAL = 600;        // one price report per reporter per ~hour (D-3)
 // A consensus key is exactly 32 bytes in CANONICAL base64: one key, one spelling (Codex P-4).
 const isKey = (k) => typeof k === "string" && Buffer.from(k, "base64").length === 32 && Buffer.from(k, "base64").toString("base64") === k;
 
@@ -546,10 +555,10 @@ class AGTApp {
       if ((s.balances[who] || 0n) < total) throw new Error("the client must lock every milestone now");
       s.balances[who] -= total;
       const id = (s.nextEng = (s.nextEng || 0) + 1);
-      (s.engs = s.engs || {})[id] = { client: who, worker: l.agent, holder: l.holder, trade: l.trade, brief: tx.brief, escrow: total.toString(), started: false, milestones: ms.map((a) => ({ amount: a.toString(), state: "pending", revisions: 0 })) };
+      (s.engs = s.engs || {})[id] = { client: who, worker: l.agent, holder: l.holder, trade: l.trade, brief: tx.brief, escrow: total.toString(), started: false, ...(v2(s) ? { openedAt: Number(s.height || 0) } : {}), milestones: ms.map((a) => ({ amount: a.toString(), state: "pending", revisions: 0, ...(v2(s) ? { since: Number(s.height || 0) } : {}) })) };
       return fee;
     }
-    if (tx.type === "eng-deliver" || tx.type === "eng-accept" || tx.type === "eng-revise" || tx.type === "eng-dispute" || tx.type === "eng-cancel" || tx.type === "eng-vote") {
+    if (tx.type === "eng-deliver" || tx.type === "eng-accept" || tx.type === "eng-revise" || tx.type === "eng-dispute" || tx.type === "eng-cancel" || tx.type === "eng-vote" || tx.type === "eng-reclaim") {
       if (!s.ledger) throw new Error("contracts live on the own ledger only");
       const e = (s.engs || {})[Number(tx.eng)];
       if (!e) throw new Error("no such contract");
@@ -574,6 +583,14 @@ class AGTApp {
         return fee;
       }
       const { who, fee } = signedBy(s, tx, { free: who0(s, tx) === e.worker });
+      if (tx.type === "eng-reclaim") {
+        if (!v2(s)) throw new Error("eng-reclaim starts with rules v2");
+        if (who !== e.client || !x || x.state !== "pending") throw new Error("only the client takes back a pending milestone");
+        const since = Number(x.since ?? e.openedAt ?? 0);
+        if (Number(s.height || 0) < since + RECLAIM_BLOCKS) throw new Error("the AI still has time for this milestone");
+        payMilestone(s, e, m, false);
+        return fee;
+      }
       if (tx.type === "eng-cancel") {
         if (who !== e.client || e.started) throw new Error("only the client cancels, and only before the first delivery");
         e.milestones.forEach((y, i) => { if (y.state === "pending") payMilestone(s, e, i, false); });
@@ -589,7 +606,7 @@ class AGTApp {
         if (who !== e.client || x.state !== "delivered") throw new Error("only the client asks a revision of a delivered milestone");
         if (x.revisions >= MAX_REVISIONS) throw new Error("no revisions left: accept or dispute");
         if (!/^0x[0-9a-f]{64}$/.test(String(tx.note))) throw new Error("a revision names the hash of its note");
-        Object.assign(x, { state: "pending", revisions: x.revisions + 1, note: tx.note });
+        Object.assign(x, { state: "pending", revisions: x.revisions + 1, note: tx.note, ...(v2(s) ? { since: Number(s.height || 0) } : {}) });
         return fee;
       }
       if (tx.type === "eng-dispute") {
@@ -609,10 +626,15 @@ class AGTApp {
       const a = (s.prices[asset] = s.prices[asset] || { reports: {}, nonces: {} });
       const nonce = a.nonces[who] || 0;
       if (Number(tx.nonce) !== nonce) throw new Error("bad price nonce");
+      if (v2(s)) {
+        a.at = a.at || {}; // v1 state has no "at": created only from V2_AT, so older blocks replay unchanged
+        if (a.at[who] !== undefined && Number(s.height || 0) < a.at[who] + PRICE_INTERVAL) throw new Error(`one price report per reporter every ${PRICE_INTERVAL} blocks`);
+      }
       if (lower(ethers.verifyMessage(ethers.getBytes(priceDigest(s.chainId, asset, price.toString(), nonce)), tx.sig)) !== who) throw new Error("price report not signed by its reporter");
       const now = priceOf(s, asset);
       if (now > 0n && (price * 10000n > now * (10000n + PRICE_STEP_BPS) || price * 10000n < now * (10000n - PRICE_STEP_BPS))) throw new Error("price report too far from the current median (±10%)");
       a.reports[who] = price.toString();
+      if (v2(s)) a.at[who] = Number(s.height || 0);
       a.nonces[who] = nonce + 1;
       return 0n;
     }
@@ -886,6 +908,7 @@ class AGTApp {
       const owners = [...new Set(req.decided_last_commit.votes
         .filter((v) => v.block_id_flag === "BLOCK_ID_FLAG_COMMIT")
         .map((v) => s.cmt[Buffer.from(v.validator.address).toString("hex")])
+        .map((c) => (c && v2(s) && c.holder !== "caretaker" ? (() => { const cur = s.valset.validators.find((x) => x.agent === c.agent); return cur ? { ...c, holder: cur.holder } : null; })() : c))
         .filter(Boolean)
         .map((v) => v.holder)
         .filter((h) => h !== "caretaker"))].sort();
@@ -926,13 +949,32 @@ class AGTApp {
     // 3. Validator set follows the licences: add newly bound AIs, remove revoked ones (power 0).
     if (s.ledger && s.jobs) {
       const bh = ethers.hexlify(req.hash && req.hash.length ? req.hash : ethers.zeroPadValue("0x", 32));
-      for (const [id, j] of Object.entries(s.jobs)) if ((j.status === "submitted" && Number(req.height) >= j.drawAt) || j.status === "waiting-reviewers") drawReviewers(s, j, Number(id), bh);
+      for (const [id, j] of Object.entries(s.jobs)) {
+        if ((j.status === "submitted" && Number(req.height) >= j.drawAt) || j.status === "waiting-reviewers") { drawReviewers(s, j, Number(id), bh); if (v2(s)) j.drawnAt = Number(req.height); }
+        else if (v2(s) && j.status === "drawn" && Number(req.height) >= Number(j.drawnAt ?? j.drawAt) + VOTE_BLOCKS) {
+          if (Object.keys(j.votes).length) { j.reviewers = Object.keys(j.votes); settleWork(s, j); } // the votes cast decide
+          else j.status = "expired"; // nobody voted: nothing is minted
+        }
+      }
     }
     if (s.ledger && s.engs) {
       const bh2 = ethers.hexlify(req.hash && req.hash.length ? req.hash : ethers.zeroPadValue("0x", 32));
       for (const [id, e] of Object.entries(s.engs)) e.milestones.forEach((x, m) => {
         if (x.state === "delivered" && Number(req.height) >= x.deliveredAt + REVIEW_BLOCKS) payMilestone(s, e, m, true); // silence accepts
         if (x.state === "disputed" && x.reviewers && !x.reviewers.length) x.reviewers = null; // retry the draw (Codex A-1)
+        if (v2(s) && x.state === "disputed" && x.reviewers && x.reviewers.length && Number(req.height) >= Number(x.drawnAt ?? x.drawAt) + VOTE_BLOCKS) {
+          const votes = Object.values(x.votes || {});
+          const yes = votes.filter(Boolean).length, no = votes.length - yes;
+          if (yes !== no) payMilestone(s, e, m, yes > no);
+          else { // no votes, or a tie: split, never stuck
+            const half = BigInt(x.amount) / 2n;
+            s.balances[e.holder] = (s.balances[e.holder] || 0n) + half;
+            s.balances[e.client] = (s.balances[e.client] || 0n) + (BigInt(x.amount) - half);
+            e.escrow = (BigInt(e.escrow) - BigInt(x.amount)).toString();
+            x.state = "split";
+          }
+          return;
+        }
         if (x.state === "disputed" && !x.reviewers && Number(req.height) >= x.drawAt + REVIEW_BLOCKS) {
           const half = BigInt(x.amount) / 2n; // nobody could judge for a long time: split, never stuck
           s.balances[e.holder] = (s.balances[e.holder] || 0n) + half;
@@ -945,10 +987,12 @@ class AGTApp {
           const tmp = { trade: e.trade, holder: e.holder, client: e.client, reviewers: null, status: "" };
           drawReviewers(s, tmp, Number(id) * 1000 + m, bh2, ((s.trades || {})[e.trade] || { reviewers: 3 }).reviewers);
           x.reviewers = tmp.reviewers;
+          if (v2(s)) x.drawnAt = Number(req.height);
         }
       });
     }
     if (s.ledger) payWorkQueue(s);
+    if (s.ledger && v2(s) && !s.handedOver && licOwners(s).length >= CARETAKER_UNTIL) s.handedOver = true; // one way (D-4)
     if (s.ledger && s.licences) {
       let changed = false;
       for (const l of Object.values(s.licences)) if (l.pending && s.height >= l.activeAt) { l.pending = false; l.active = true; changed = true; }
@@ -1062,6 +1106,7 @@ class AGTApp {
       const ownerOf = new Map(s.valset.validators.map((v) => [v.agent, v.holder]));
       const sigs = Object.entries(s.attest[n] || {})
         .map(([agent, sig]) => ({ holder: ownerOf.get(agent), sig }))
+        .filter((x) => x.holder !== undefined)
         .sort((a, b) => (BigInt(a.holder) < BigInt(b.holder) ? -1 : 1))
         .map((x) => x.sig);
       return reply({ nonce: n, to: w.to, amount: w.amount, sigs, ready: C.enough(s.valset, sigs) });

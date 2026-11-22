@@ -470,3 +470,50 @@ test("Bitcoin Kho: a deposit with an OP_RETURN AGT1 account is credited at agt-1
   block(app, p.txs);
   assert.equal(app.state.balances[ben], 3n * 10n ** 16n, "0.001 BTC x 30 AGT/BTC = 0.03 AGT");
 });
+
+// ---------- rules v2 from height 1000 (DeepSeek D-1..D-4) ----------
+test("rules v2: one price report per hour (D-3), a pending milestone can be reclaimed after 14 days (D-1), unvoted disputes settle (D-2), the granter's role ends for good (D-4)", async () => {
+  const { app, appState } = setupProvisional();
+  const granter = W("v2-granter"), client = W("v2-client");
+  init(app, { ...appState, ledger: { snapshot: { token: "0xB86BeC1f63D2caf35B5D08530F803d63A16ABC1D", bscBlock: 1 }, balances: { [client.address]: (5n * 10n ** 18n).toString() }, licenceWait: 1, granter: granter.address } });
+  height = 999; // jump to the v2 activation height
+  block(app, []);
+  assert.ok(app.state.height >= 1000);
+  const report = (price, nonce) => B({ type: "price-report", asset: "97:native", price, nonce, reporter: granter.address, sig: granter.signMessageSync(ethers.getBytes(C.hashOf({ tag: "AGT-PRICE-v1", chainId: CHAIN, asset: "97:native", price, nonce }))) });
+  block(app, [report("150000000000000000", 0)]);
+  assert.match(String(app.CheckTx({ tx: report("160000000000000000", 1) }).log), /one price report per reporter every 600 blocks/, "D-3: no walking the price inside one block");
+  // a contract whose AI never delivers
+  let gn = 0;
+  const auth = (op, body) => [granter.signMessageSync(ethers.getBytes(C.hashOf({ tag: "AGT-LICENCE-v1", chainId: CHAIN, op, body, nonce: gn })))];
+  const ai = newAi(800);
+  const body = { agent: ai.key.address.toLowerCase(), holder: ai.owner.address.toLowerCase(), trade: 6, examHash: "0x" + "11".repeat(32), attestHash: "0x" + "22".repeat(32), name: "x" };
+  block(app, [B({ type: "licence-grant", nonce: gn, licence: body, sigs: auth("licence-grant", body) })]); gn++;
+  block(app, []); block(app, []);
+  const nonces = {};
+  const signed = (w, b) => { const nonce = nonces[w.address] = (nonces[w.address] ?? -1) + 1; return B({ ...b, nonce, sig: w.signMessageSync(ethers.getBytes(C.hashOf({ tag: "AGT-WORK-v1", chainId: CHAIN, body: { ...b, nonce }, nonce }))) }); };
+  block(app, [signed(client, { type: "eng-open", licence: 1, brief: "0x" + "44".repeat(32), milestones: [(10n ** 18n).toString(), (10n ** 18n).toString()] })]);
+  block(app, [signed(ai.key, { type: "eng-deliver", eng: 1, milestone: 0, commit: "0x" + "ab".repeat(20), ci: "0x" + "cd".repeat(32) })]);
+  assert.equal(app.CheckTx({ tx: signed(client, { type: "eng-cancel", eng: 1 }) }).code, 1, "started: cancel is no longer possible");
+  nonces[client.address]--;
+  assert.match(String(app.CheckTx({ tx: signed(client, { type: "eng-reclaim", eng: 1, milestone: 1 }) }).log), /still has time/);
+  nonces[client.address]--;
+  height += 14400 * 14; block(app, []);
+  const before = app.state.balances[client.address.toLowerCase()];
+  block(app, [signed(client, { type: "eng-reclaim", eng: 1, milestone: 1 })]);
+  assert.equal(app.state.engs[1].milestones[1].state, "refunded", "D-1: the undelivered milestone came back to the client");
+  assert.equal(app.state.balances[client.address.toLowerCase()] - before, 10n ** 18n - C.HAT);
+  assert.equal(app.state.engs[1].milestones[0].state, "paid", "the delivered milestone was accepted by the client's silence");
+  // a second contract: delivered, disputed, the drawn granter never votes: after 7 days the dispute splits
+  block(app, [signed(client, { type: "eng-open", licence: 1, brief: "0x" + "45".repeat(32), milestones: [(10n ** 18n).toString()] })]);
+  block(app, [signed(ai.key, { type: "eng-deliver", eng: 2, milestone: 0, commit: "0x" + "ab".repeat(20), ci: "0x" + "cd".repeat(32) })]);
+  block(app, [signed(client, { type: "eng-dispute", eng: 2, milestone: 0 })]);
+  block(app, []); block(app, []); block(app, []);
+  assert.ok(app.state.engs[2].milestones[0].reviewers.length, "reviewers drawn");
+  height += 14400 * 7; block(app, []);
+  assert.equal(app.state.engs[2].milestones[0].state, "split", "D-2: nobody voted in 7 days: split, never stuck");
+  // D-4: once handed over, the granter never signs again, even if owners drop below 4
+  app.state.handedOver = true;
+  app.check.handedOver = true; // CheckTx works on its own copy
+  const b2 = { id: 1 };
+  assert.match(String(app.CheckTx({ tx: B({ type: "licence-revoke", nonce: gn, id: 1, sigs: auth("licence-revoke", b2) }) }).log), /not signed by those who may sign/);
+});

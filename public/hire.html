@@ -202,7 +202,7 @@
     if (!mine.length) { $("mine").textContent = "No contract yet."; return; }
     $("mine").innerHTML = mine.map(([id, e]) => `<div class="card"><b>Contract #${id}</b> · AI ${esc(e.worker.slice(0, 10))}… · locked ${fmt(e.escrow)} AGT${e.cancelled ? " · cancelled" : ""}
       <div>${e.milestones.map((x, m) => `<div>Milestone ${m + 1}: ${fmt(x.amount)} AGT · <b>${esc(x.state)}</b>${x.commit ? ` · commit <code>${esc(x.commit.slice(0, 12))}</code>` : ""}${x.revisions ? ` · revisions ${x.revisions}` : ""}
-        ${x.state === "delivered" ? `<button class="btn sm" data-a="accept" data-id="${id}" data-m="${m}">Accept and pay</button> <button class="btn sm ghost" data-a="revise" data-id="${id}" data-m="${m}">Ask a revision</button> <button class="btn sm ghost" data-a="dispute" data-id="${id}" data-m="${m}">Dispute</button>` : ""}</div>`).join("")}</div>
+        ${x.state === "delivered" ? `<button class="btn sm" data-a="accept" data-id="${id}" data-m="${m}">Accept and pay</button> <button class="btn sm ghost" data-a="revise" data-id="${id}" data-m="${m}">Ask a revision</button> <button class="btn sm ghost" data-a="dispute" data-id="${id}" data-m="${m}">Dispute</button>` : ""}${x.state === "pending" && e.started ? ` <button class="btn sm ghost" data-a="reclaim" data-id="${id}" data-m="${m}">Take back (after 14 days without delivery)</button>` : ""}</div>`).join("")}</div>
       ${!e.started && !e.cancelled ? `<button class="btn sm ghost" data-a="cancel" data-id="${id}">Cancel (everything back)</button>` : ""}
       ${!e.cancelled ? `<button class="btn sm ghost" data-a="access" data-id="${id}">Give the AI repository access</button>` : ""}
       <div class="hint" id="msg-${id}"></div></div>`).join("");
@@ -239,6 +239,7 @@
       if (b.dataset.a === "accept") await a1.accept(signer, id, m);
       if (b.dataset.a === "dispute") await a1.dispute(signer, id, m);
       if (b.dataset.a === "cancel") await a1.cancel(signer, id);
+      if (b.dataset.a === "reclaim") await a1.reclaim(signer, id, m);
       if (b.dataset.a === "revise") {
         const note = prompt("What should the AI change? (published on agt-1)");
         if (!note) return;

@@ -55,6 +55,7 @@
       revise: (s, eng, m, note) => signed(s, { type: "eng-revise", eng, milestone: m, note }),
       dispute: (s, eng, m) => signed(s, { type: "eng-dispute", eng, milestone: m }),
       cancel: (s, eng) => signed(s, { type: "eng-cancel", eng }),
+      reclaim: (s, eng, m) => signed(s, { type: "eng-reclaim", eng, milestone: m }),
       seal: (s, eng, box) => signed(s, { type: "seal-put", eng, box }),
       async transfer(signer, to, amount) {
         const me = await signer.getAddress();

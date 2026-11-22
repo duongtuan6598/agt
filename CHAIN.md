@@ -190,3 +190,22 @@ had stopped. A full replay from genesis matched all 509 blocks.
 - The server's commands are in `chain/abci/vps-node.sh`.
 - SSH accepts keys only; password login is off.
 - The firewall allows SSH and P2P only; the RPC stays on localhost and is reached through the public door.
+
+## Rules v2 at agt-2 height 1000 (23 Nov 2026), after DeepSeek's review
+
+DeepSeek, newly added to the AIs that decide AGT, reviewed the chain app and found five real problems that Codex had
+not (docs/decisions/2026-11-23-review-deepseek-agt2.md). All take effect at **height 1000**, published before it
+was reached; before that height the v1 behaviour is kept exactly.
+
+| Finding | Fix |
+|---|---|
+| D-1 undelivered milestones locked forever once work started | The client takes back a pending milestone after 14 days without delivery (`eng-reclaim`) |
+| D-2 a drawn reviewer who never votes strands a dispute or a job | After 7 days the votes cast decide. A tie, or no vote at all, splits a contract milestone; a job with no vote expires and mints nothing |
+| D-3 several price reports in one block walk the price without limit | One report per reporter every 600 blocks |
+| D-4 if owners drop below 4, the granter got its role back | The role ends for good the first time 4 independent owners hold licences |
+| D-5 wages paid to the holder at bind time after a licence changed hands | Wages go to the current holder of the signing AI's licence |
+| D-6 `/release` broke on stale attestations | Stale ones are skipped |
+
+The replay check caught a mistake of Claude's before height 1000: the first v2 code wrote a new state field in every
+block, which changed the state hash of block 13. Every new field is now gated behind the height, and the full replay
+from genesis matches.
