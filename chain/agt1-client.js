@@ -9,6 +9,7 @@ const des = (t) => JSON.parse(t, (k, v) => (v && typeof v === "object" && "$n" i
 const enc = (tx) => "0x" + Buffer.from(JSON.stringify(tx, (k, v) => (typeof v === "bigint" ? v.toString() : v))).toString("hex");
 const TAG = { work: "AGT-WORK-v1", licence: "AGT-LICENCE-v1", price: "AGT-PRICE-v1" };
 
+// over a node's CometBFT RPC
 function connect(rpc = "http://127.0.0.1:26657") {
   const get = async (q) => {
     const r = await (await fetch(rpc + q)).json();
@@ -26,6 +27,30 @@ function connect(rpc = "http://127.0.0.1:26657") {
     if (r.tx_result.code) throw new Error(r.tx_result.log);
     return Number(r.height);
   };
+  return withTransport(query, send);
+}
+
+// in-process, straight into an AGTApp (tests and local rehearsals): each send is checked, then put in its own block
+function connectApp(app) {
+  const query = async (p) => {
+    const r = app.Query({ path: p });
+    if (r.code) throw new Error(r.log);
+    return des(Buffer.from(r.value).toString("utf8"));
+  };
+  const send = async (tx) => {
+    const b = Buffer.from(JSON.stringify(tx, (k, v) => (typeof v === "bigint" ? v.toString() : v)));
+    const c = app.CheckTx({ tx: b });
+    if (c.code) throw new Error(c.log);
+    const h = Number(app.state.height || 0) + 1;
+    const r = app.FinalizeBlock({ txs: [b], height: String(h), hash: require("crypto").randomBytes(32), decided_last_commit: { round: 0, votes: [] } });
+    app.Commit();
+    if (r.tx_results[0].code) throw new Error(r.tx_results[0].log);
+    return h;
+  };
+  return withTransport(query, send);
+}
+
+function withTransport(query, send) {
   const chainId = async () => (await query("/state")).chainId;
   // the nonce space shared by work, contract, vote and transfer transactions of one key
   const nonceOf = async (addr) => Number((await query(`/balance/${addr}`)).nonce || 0);
@@ -52,6 +77,13 @@ function connect(rpc = "http://127.0.0.1:26657") {
     ledger: () => query("/ledger"),
     balance: (a) => query(`/balance/${a}`),
     price: (asset) => query(`/price/${asset}`),
+    // content on agt-1 (briefs, notes, CI reports), addressed by keccak256 of the text
+    content: (signer) => ({
+      async get(hash) { const r = await query(`/content/${hash}`); if (r.text == null) throw new Error(`content ${hash} not on agt-1`); return r.text; },
+      async put(text) { await signed(signer, { type: "content-put", text }); return ethers.keccak256(ethers.toUtf8Bytes(text)); },
+    }),
+    sealedFor: () => ({ async get(kind, id) { return (await query(`/sealed/${id}`)).box; } }),
+    seal: (client, eng, box) => signed(client, { type: "seal-put", eng, box }),
     async transfer(wallet, to, amount) {
       const st = await query("/state");
       return send(await C.signTx(wallet, { type: "transfer", chainId: st.chainId, to, amount: BigInt(amount), fee: st.fee, nonce: await nonceOf(wallet.address) }));
@@ -82,4 +114,4 @@ function connect(rpc = "http://127.0.0.1:26657") {
   };
 }
 
-module.exports = { connect };
+module.exports = { connect, connectApp };

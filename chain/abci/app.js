@@ -110,6 +110,7 @@ function workSigned(s, tx) {
 // self-found work and the majority pays the AI or refunds the client. A client who stays silent REVIEW_BLOCKS after
 // a delivery accepts it. Before the AI's first delivery the client may cancel what is undelivered.
 const MAX_REVISIONS = 3;
+const CONTENT_MAX = 65536;
 const REVIEW_BLOCKS = 14400 * 7;
 // any signed agt-1 transaction outside the transfer format: signer, nonce, and the fee (or the AI's free quota)
 function signedBy(s, tx, { free = false } = {}) {
@@ -429,6 +430,28 @@ class AGTApp {
       if (who in j.votes) throw new Error("already voted");
       j.votes[who] = !!tx.approve;
       if (Object.keys(j.votes).length === j.reviewers.length) settleWork(s, j);
+      return fee;
+    }
+    if (tx.type === "content-put") {
+      // Briefs, notes and CI reports live on agt-1 itself, addressed by keccak256 of their UTF-8 text: no outside
+      // content service. A licensed AI uses its free quota; anyone else pays the fee. At most CONTENT_MAX bytes.
+      if (!s.ledger) throw new Error("content lives on the own ledger only");
+      const text = String(tx.text || "");
+      if (!text || Buffer.byteLength(text) > CONTENT_MAX) throw new Error(`content must be 1 to ${CONTENT_MAX} bytes`);
+      const { fee } = signedBy(s, tx, { free: !!licOf(s, who0(s, tx)) });
+      const h = ethers.keccak256(ethers.toUtf8Bytes(text));
+      (s.content = s.content || {})[h] = text;
+      return fee;
+    }
+    if (tx.type === "seal-put") {
+      // the client's repository token, sealed to the AI box's attested key (only that box can open it)
+      if (!s.ledger) throw new Error("sealed access lives on the own ledger only");
+      const { who, fee } = signedBy(s, tx);
+      const e = (s.engs || {})[Number(tx.eng)];
+      if (!e || e.client !== who) throw new Error("only the contract's client seals access for it");
+      const box = JSON.stringify(tx.box || null);
+      if (box.length > 4096 || !tx.box) throw new Error("bad sealed box");
+      (s.sealed = s.sealed || {})[Number(tx.eng)] = tx.box;
       return fee;
     }
     if (tx.type === "eng-open") {
@@ -915,6 +938,10 @@ class AGTApp {
     const p = req.path;
     if (p === "/state")
       return reply({ chainId: s.chainId, height: s.height, fee: s.fee, maxFee: C.MAX_FEE, supply: s.supply, nextIn: s.nextIn, nextOut: s.nextOut, owners: s.valset.holders, validators: s.valset.validators.map((v) => ({ ...v, licence: s.licIds[v.agent], bound: !!s.binds[v.agent], vote: Object.values(s.active).includes(v.agent) })), bscBlock: s.bscBlock, wages: s.wages, bsc: s.bsc });
+    if (p === "/engs") return reply(s.engs || {});
+    if (p.startsWith("/content/")) return reply({ text: (s.content || {})[p.slice(9).toLowerCase()] ?? null });
+    if (p.startsWith("/sealed/")) return reply({ box: (s.sealed || {})[Number(p.slice(8))] ?? null });
+    if (p === "/jobs") return reply(s.jobs || {});
     if (p === "/ledger") return reply({ licNonce: s.licNonce || 0, trades: s.trades || {}, licences: s.licences || {}, jobs: s.nextJob || 0, contracts: s.nextEng || 0, workMinted: s.workMinted || 0n, khoMinted: s.khoMinted || 0n, workQueue: (s.workQueue || []).length, granter: s.ledger && s.ledger.granter });
     if (p.startsWith("/price/")) {
       const asset = p.slice(7);
