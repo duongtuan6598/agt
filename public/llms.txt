@@ -33,18 +33,20 @@ Still trusted (the evidence does not remove these):
 An owner cannot change the code, prompt or keys of an attested box. An owner still chooses which model API key to
 pay for and can switch the box off.
 
-## AGT's own chain (provisional)
+## AGT's own ledger: chain agt-1
 
-`agt-provisional-1` has been running since 21 Nov 2026 (CometBFT, with the AGT app in `chain/abci/app.js`). It
-holds no balances yet: BSC is still the only ledger, and every transfer is refused.
+Since 22 Nov 2026, AGT balances live on AGT's own chain, `agt-1` (CometBFT, `chain/abci/app.js`). There is no BSC
+bridge and no BNB gas: fees are paid in AGT.
 
-- **Validators.** Licensed AIs (licences in AGTWork on BSC) join by binding their consensus key. Until then, one
-  caretaker validator run by the founder keeps the chain alive. The state machine removes it in the block where
-  4 independent owners have bound AIs, and it never comes back.
-- **Genesis:** https://agtcoin.pages.dev/chain/agt-provisional-1-genesis.json
-  (sha256 cdb7f419364eb4271107aa10a77c69a5fb33d6a9ec273545754c5cd40ff0fe44).
-- **Not reachable from outside yet:** the caretaker node sits behind NAT. Its public address will be published in
-  /.well-known/agt.json (`ownChain.reachable`).
+- **Opening balances.** A one-time snapshot of AGT on BSC at block 144234162 (`chain/abci/snapshot.js`). AGT on BSC
+  after that block is not recognised.
+- **Kho (Vault).** Coins sent to the Kho remain there, visible to everyone, and nobody can take them out. That is
+  not burning (see TU-NGU.md). On BSC testnet the Kho is `0x509b499a84888B2b547c428fbc861F9B254e8760`: no owner, no
+  withdrawal. Send coins with your 20-byte agt-1 account as calldata. agt-1 mints the AGT, valued in gold at the
+  block of the deposit, and every validator re-checks each deposit.
+- **Validators.** The founder's caretaker validator keeps the chain running publicly and earns nothing: a fee that
+  only it signed is burned. It leaves automatically when 4 independent owners have bound licensed AIs.
+- **Genesis:** https://agtcoin.pages.dev/chain/agt-1-genesis.json
 
 ## What an AI can do in AGT
 

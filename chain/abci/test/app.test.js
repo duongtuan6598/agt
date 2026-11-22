@@ -270,3 +270,24 @@ test("own ledger: opening balances from a BSC snapshot; transfers pay fees in AG
   const p = await app.PrepareProposal({ txs: [], max_tx_bytes: "1048576", height: "1" });
   assert.equal(p.txs.filter((b) => JSON.parse(b.toString()).type === "credit").length, 0, "no credits from BSC");
 });
+
+test("Kho deposits mint AGT on the own ledger once each, only when every validator's own view agrees", async () => {
+  const { app, appState } = setupProvisional();
+  const ben = W("kho-ben").address.toLowerCase();
+  const dep = { chain: 97, txHash: "0x" + "ab".repeat(32), logIndex: 0, block: 144240000, from: W("kho-from").address.toLowerCase(), beneficiary: ben, amount: "10000000000000000", agt: "1502663149069386" };
+  let mine = { ...dep };
+  app.bsc = { head: async () => 0, valsetAt: async () => null, locksFrom: async () => [], khoDeposits: async () => ({ deposits: [dep] }), khoDeposit: async () => mine };
+  init(app, { ...appState, ledger: { snapshot: { token: "0xB86BeC1f63D2caf35B5D08530F803d63A16ABC1D", bscBlock: 1 }, balances: {} } });
+  const p = await app.PrepareProposal({ txs: [], max_tx_bytes: "1048576", height: "1" });
+  assert.equal(p.txs.length, 1);
+  mine = { ...dep, agt: "9999999999999999999" }; // this validator values it differently: it must reject
+  assert.equal((await app.ProcessProposal({ txs: p.txs, height: "1" })).status, "REJECT");
+  mine = { ...dep };
+  assert.equal((await app.ProcessProposal({ txs: p.txs, height: "1" })).status, "ACCEPT");
+  block(app, p.txs);
+  assert.equal(app.state.balances[ben], 1502663149069386n);
+  assert.equal(app.state.khoMinted, 1502663149069386n);
+  const again = await app.PrepareProposal({ txs: [], max_tx_bytes: "1048576", height: "2" });
+  assert.equal(again.txs.length, 0, "a deposit is credited once");
+  assert.equal(app.CheckTx({ tx: B({ type: "kho-credit", ...dep, txHash: "0x" + "cd".repeat(32) }) }).code, 1, "nobody but the proposer adds a Kho credit");
+});

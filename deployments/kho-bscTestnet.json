@@ -1,0 +1,10 @@
+{
+  "chainId": 97,
+  "kho": "0x509b499a84888B2b547c428fbc861F9B254e8760",
+  "salt": "0x0f14ce87cced7afbddfde3f8fd1e78932f8da4f8da8e37598bb9478dd6207127",
+  "saltText": "AGT-KHO-v1",
+  "deployer": "0x4e59b44847b379578588920ca78fbf26c0b4956c",
+  "initCodeHash": "0x067fa47795e03bf0a8f18c1daa8990620c21a1558b595df749d75206531524b7",
+  "runtimeHash": "0xe67b4c8c5747599e2294dfb4c277834be63b569394fe53456ed6f3b0ed92593a",
+  "block": 144236315
+}

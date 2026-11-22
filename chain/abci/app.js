@@ -22,6 +22,14 @@ const def = protoLoader.loadSync("tendermint/abci/types.proto", { includeDirs: [
 const abci = grpc.loadPackageDefinition(def).tendermint.abci;
 
 const OK = 0, BAD = 1;
+// Kho on other chains whose deposits mint AGT on the own ledger (docs/decisions/2026-11-22-keyless-vault.md).
+// Part of the consensus rules: a deposit counts only at these addresses, valued in gold AT THE DEPOSIT'S BLOCK by the
+// named oracle, after KHO_CONF confirmations. Each validator re-checks every deposit against its own RPC.
+const KHO = {
+  97: { kho: "0x509b499a84888b2b547c428fbc861f9b254e8760", oracle: "0xed9077508424b257fa26ae0e1167540972c556aa", fromBlock: 144236000 },
+};
+const KHO_CONF = 15;
+const KHO_EVENT = "event Deposited(address indexed from, address indexed beneficiary, uint256 amount)";
 const BIND_TAG = "AGT-BIND-VALIDATOR-v1";
 const lower = (a) => ethers.getAddress(a).toLowerCase();
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
@@ -94,6 +102,36 @@ function makeBscView(env = process.env) {
       view.name.push(`licences ${env.WORK}`);
     }
   }
+  if (env.BSC_RPC || env.BSC_PROVIDER) {
+    const provider = env.BSC_PROVIDER || new ethers.JsonRpcProvider(env.BSC_RPC);
+    const k = KHO[97];
+    const kho = new ethers.Contract(k.kho, [KHO_EVENT], provider);
+    const oracle = new ethers.Contract(k.oracle, ["function valueInAGT(address token, uint256 amount) view returns (uint256)"], provider);
+    const value = (amount, block) => oracle.valueInAGT(ethers.ZeroAddress, amount, { blockTag: block });
+    // deposits from block `from` up to the final head, oldest first, each with its AGT value at its own block
+    view.khoDeposits = async (from) => {
+      const head = (await provider.getBlockNumber()) - KHO_CONF;
+      const out = [];
+      for (let a = Math.max(from, k.fromBlock); a <= head; a += 5000) {
+        for (const e of await kho.queryFilter(kho.filters.Deposited(), a, Math.min(a + 4999, head))) {
+          out.push({ chain: 97, txHash: e.transactionHash, logIndex: e.index, block: e.blockNumber, from: lower(e.args.from), beneficiary: lower(e.args.beneficiary), amount: e.args.amount.toString(), agt: (await value(e.args.amount, e.blockNumber)).toString() });
+        }
+      }
+      return { head, deposits: out };
+    };
+    // one deposit, re-read from this node's own RPC: the receipt's log must be the Kho's, final, and valued alike
+    view.khoDeposit = async (tx) => {
+      const head = (await provider.getBlockNumber()) - KHO_CONF;
+      const r = await provider.getTransactionReceipt(tx.txHash);
+      if (!r || r.blockNumber > head) return null;
+      const lg = r.logs.find((x) => x.index === Number(tx.logIndex));
+      if (!lg || lower(lg.address) !== k.kho) return null;
+      const ev = kho.interface.parseLog(lg);
+      if (!ev || ev.name !== "Deposited") return null;
+      return { block: r.blockNumber, from: lower(ev.args.from), beneficiary: lower(ev.args.beneficiary), amount: ev.args.amount.toString(), agt: (await value(ev.args.amount, r.blockNumber)).toString() };
+    };
+    view.name.push(`Kho ${k.kho}`);
+  }
   view.name = view.name.join(", ") || "none";
   return view;
 }
@@ -138,7 +176,7 @@ class AGTApp {
     this.stateFile = env.STATE_FILE || path.join(process.cwd(), "agt-state.json");
     this.agent = env.AGENT_KEY ? new ethers.Wallet(env.AGENT_KEY) : null;
     this.cmtRpc = env.CMT_RPC || "http://127.0.0.1:26657";
-    this.bsc = makeBscView(env);
+    this.bsc = env.BSC_VIEW || makeBscView(env); // tests inject a view
     this.state = fs.existsSync(this.stateFile) ? des(fs.readFileSync(this.stateFile, "utf8")) : null;
     this.check = this.state && structuredClone(this.state);
     this.work = null; // state being built in FinalizeBlock, persisted at Commit
@@ -153,6 +191,24 @@ class AGTApp {
   }
 
   applyAny(s, tx, { fromProposer = false } = {}) {
+    if (tx.type === "kho-credit") {
+      // AGT for coins deposited in a Kho (they remain there; nobody can take them out). Proposer-only; every
+      // validator re-checked it in ProcessProposal against its own view of the origin chain.
+      if (!s.ledger) throw new Error("Kho deposits mint AGT only on the own ledger");
+      if (!fromProposer) throw new Error("Kho credits only come from the proposer");
+      const k = KHO[Number(tx.chain)];
+      if (!k) throw new Error("no Kho on that chain");
+      const id = `${Number(tx.chain)}:${String(tx.txHash).toLowerCase()}:${Number(tx.logIndex)}`;
+      s.khoCredited = s.khoCredited || {};
+      if (s.khoCredited[id]) throw new Error("deposit already credited");
+      const agt = BigInt(tx.agt), to = lower(tx.beneficiary);
+      if (agt <= 0n) throw new Error("deposit worth nothing");
+      s.khoCredited[id] = { block: Number(tx.block), amount: String(tx.amount), agt: agt.toString(), to };
+      s.balances[to] = (s.balances[to] || 0n) + agt;
+      s.supply += agt;
+      s.khoMinted = (s.khoMinted || 0n) + agt;
+      return 0n;
+    }
     if (s.ledger) {
       if (["credit", "attest", "withdraw"].includes(tx.type)) throw new Error("AGT lives on this chain: there is no BSC bridge");
     } else if (s.provisional && !["valset", "bind"].includes(tx.type)) throw new Error("provisional chain: no balances, no transfers, no withdrawals");
@@ -302,6 +358,17 @@ class AGTApp {
     } catch (e) {
       log("BSC licences unavailable, keeping the current validator set:", e.message);
     }
+    if (s.ledger && this.bsc.khoDeposits) try {
+      const { deposits } = await this.bsc.khoDeposits(KHO[97].fromBlock);
+      for (const d of deposits) {
+        if ((s.khoCredited || {})[`${d.chain}:${d.txHash.toLowerCase()}:${d.logIndex}`]) continue;
+        const tx = { type: "kho-credit", ...d };
+        this.applyAny(s, tx, { fromProposer: true });
+        if (!push(Buffer.from(JSON.stringify(tx)))) break;
+      }
+    } catch (e) {
+      log("Kho view unavailable, proposing without Kho credits:", e.message);
+    }
     if (!s.provisional) try {
       for (const l of await this.bsc.locksFrom(s.nextIn)) {
         if (l.nonce !== s.nextIn) break;
@@ -337,6 +404,11 @@ class AGTApp {
           if (Number(tx.bscBlock) > (await this.bsc.head())) throw new Error(`snapshot from BSC block ${tx.bscBlock} is not final for me yet`);
           const mine = await this.bsc.valsetAt(Number(tx.bscBlock));
           if (!mine || !sameSnap(mine, tx)) throw new Error(`licence snapshot at BSC block ${tx.bscBlock} does not match BSC`);
+        }
+        if (tx.type === "kho-credit") {
+          const mine = this.bsc.khoDeposit ? await this.bsc.khoDeposit(tx) : null;
+          if (!mine) throw new Error(`Kho deposit ${tx.txHash} not final or not seen by me`);
+          for (const f of ["block", "from", "beneficiary", "amount", "agt"]) if (String(mine[f]) !== String(f === "block" ? Number(tx[f]) : f === "from" || f === "beneficiary" ? lower(tx[f]) : tx[f])) throw new Error(`Kho deposit ${tx.txHash}: ${f} differs from my view`);
         }
         if (tx.type === "credit") {
           locks = locks || (await this.bsc.locksFrom(s.nextIn));

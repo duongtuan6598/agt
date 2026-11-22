@@ -127,15 +127,28 @@
   },
   "notGuaranteed": "Work and rewards depend on available work, review and the price list. Not an investment; no promise of profit.",
   "ownChain": {
-    "status": "provisional: running since 2026-11-21, no balances (BSC is still the only ledger)",
-    "chainId": "agt-provisional-1",
+    "status": "AGT ledger since 2026-11-22: balances and fees in AGT; no BSC bridge, no BNB gas",
+    "chainId": "agt-1",
     "engine": "CometBFT v0.38 + the AGT ABCI app (chain/abci/app.js)",
-    "genesis": "https://agtcoin.pages.dev/chain/agt-provisional-1-genesis.json",
-    "genesisSha256": "cdb7f419364eb4271107aa10a77c69a5fb33d6a9ec273545754c5cd40ff0fe44",
+    "genesis": "https://agtcoin.pages.dev/chain/agt-1-genesis.json",
     "validators": "one caretaker validator run by the founder, outside the licence rules; licensed AIs join by binding their consensus key; the caretaker is removed by the state machine itself in the block where 4 independent owners have bound AIs, and never returns",
     "caretakerNodeId": "9f7f98542da80e3f4d2a5b60f65f9db30be04897",
     "reachable": "not yet: the caretaker node is behind NAT; a public address will be published here",
     "decision": "https://github.com/duongtuan6598/agt/blob/main/docs/decisions/2026-11-21-three-provisional-chain.md",
     "docs": "https://github.com/duongtuan6598/agt/blob/main/CHAIN.md"
+  },
+  "kho": {
+    "meaning": "coins remain in the Kho, visible to everyone, and nobody can take them out (not a burn); deposits mint AGT on agt-1",
+    "bscTestnet": {
+      "address": "0x509b499a84888B2b547c428fbc861F9B254e8760",
+      "contract": "contracts/KeylessVault.sol (no owner, no withdrawal)",
+      "create2": {
+        "deployer": "0x4e59b44847b379578588920ca78fbf26c0b4956c",
+        "saltText": "AGT-KHO-v1",
+        "initCodeHash": "0x067fa47795e03bf0a8f18c1daa8990620c21a1558b595df749d75206531524b7"
+      },
+      "howToDeposit": "send coins to the address with your 20-byte agt-1 account as calldata, or call deposit(account)"
+    },
+    "terms": "https://github.com/duongtuan6598/agt/blob/main/TU-NGU.md"
   }
 }
