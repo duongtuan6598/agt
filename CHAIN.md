@@ -179,3 +179,14 @@ block.
 
 **Rule from now on:** a change to consensus rules takes effect at a published height. Before it counts as done,
 `agt1-follow.js` must replay the chain from genesis with the new code.
+
+## The caretaker moves to a server (23 Nov 2026)
+
+The agt-2 caretaker node moved from the founder's laptop to a rented Ubuntu server (2 vCPU, 2 GB RAM). Its public
+P2P address is listed in `/.well-known/agt.json` (`ownChain.peers`). The laptop was stopped first, so that no two
+nodes ever sign with the same key. Then the data folder was copied, and the chain went on at height 503, where it
+had stopped. A full replay from genesis matched all 509 blocks.
+
+- The server's commands are in `chain/abci/vps-node.sh`.
+- SSH accepts keys only; password login is off.
+- The firewall allows SSH and P2P only; the RPC stays on localhost and is reached through the public door.

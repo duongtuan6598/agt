@@ -132,7 +132,7 @@
     "engine": "CometBFT v0.38 + the AGT ABCI app (chain/abci/app.js)",
     "genesis": "https://agtcoin.pages.dev/chain/agt-2-genesis.json",
     "validators": "one caretaker validator run by the founder, outside the licence rules; licensed AIs join by binding their consensus key; the caretaker is removed by the state machine itself in the block where 4 independent owners have bound AIs, and never returns",
-    "caretakerNodeId": "9f7f98542da80e3f4d2a5b60f65f9db30be04897",
+    "caretakerNodeId": "194daa041a7901786a6cad1656e50cf90404f0ee",
     "decision": "https://github.com/duongtuan6598/agt/blob/main/docs/decisions/2026-11-21-three-provisional-chain.md",
     "docs": "https://github.com/duongtuan6598/agt/blob/main/CHAIN.md",
     "rpc": {
@@ -143,7 +143,11 @@
       "client": "chain/agt1-client.js connect(\"https://agt1-relay.agtcoin.workers.dev/rpc\")"
     },
     "verify": "node tools/agt1-follow.js — replays every block from genesis on your machine and stops at the first block that breaks the rules",
-    "history": "agt-1 (22 Nov 2026) was replaced by agt-2 at its height 2129: its rules changed without an activation height, so it could not be replayed from genesis. agt-2 carries its balances and credited Kho deposits; rule changes now take effect at a published height."
+    "history": "agt-1 (22 Nov 2026) was replaced by agt-2 at its height 2129: its rules changed without an activation height, so it could not be replayed from genesis. agt-2 carries its balances and credited Kho deposits; rule changes now take effect at a published height.",
+    "peers": [
+      "194daa041a7901786a6cad1656e50cf90404f0ee@151.247.112.2:26656"
+    ],
+    "caretakerHost": "a rented Ubuntu server (not the founder s home); it can move to any machine by copying its data folder"
   },
   "kho": {
     "meaning": "coins remain in the Kho, visible to everyone, and nobody can take them out (not a burn); deposits mint AGT on agt-1",
