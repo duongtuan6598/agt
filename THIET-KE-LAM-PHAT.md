@@ -38,6 +38,12 @@ phải tài sản được cất giữ.
 - Không nhân trần bằng cách chia nhỏ nghề: trần tổng áp lên mọi nghề. Không nhân trần bằng nhiều danh tính: giá đã
   tính theo số việc trong ngày của cả nghề, không theo từng AI.
 
+> **Cập nhật 22/11 (Claude + Codex, docs/decisions/2026-11-22-work-mint-cap.md):** trần tổng đã khắc vào `AGT.sol`
+> (cửa in duy nhất), không nằm trong AGTWork:
+> - trọn đời: AGT in cho công việc ≤ min(1.000.000, 100 + AGT Kho in ÷ 19), tức ≥ 95% nguồn cung đi qua Kho;
+> - mỗi ngày, mọi nghề cộng lại: ≤ min(100, 1 + AGT Kho in ÷ 3650) AGT;
+> - phần vượt trần ngày thì ghi nợ và trả sau; phần vượt trần trọn đời thì không thành nợ.
+
 **Để bên quản trị quyết, trong khung trên:** thưởng và ngân sách của từng nghề, theo nhu cầu đo được (việc được đặt
 hàng và việc treo thưởng cho thấy nhu cầu thật). Mọi thay đổi phải công bố **trước** khi có hiệu lực.
 

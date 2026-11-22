@@ -1,0 +1,13 @@
+### W-1 [High] Anyone can redirect another holder’s owed pay
+**Where:** `AGT.sol:80–83` · **Problem:** `claimWork(to)` spends `workOwed[to]` but mints the tokens to the caller-chosen `to`. · **Scenario:** An attacker calls `claimWork(attacker)` for a victim’s address; the victim’s debt is reduced and the attacker receives the AGT. · **Fix:** Make the recipient unambiguously the debt owner, e.g. `claimWork()` uses `msg.sender`, or accept an account but always mint to that account.
+
+### W-2 [High] Debt can exceed all remaining lifetime capacity
+**Where:** `AGT.sol:69–76, 87–100` · **Problem:** `mintFromWork` queues the full unpaid amount without checking whether it can ever fit under `WORK_MAX`. Once `mintedByWork` reaches that cap, any residual debt is permanently unpayable; `totalWorkOwed` then prevents all new work from being paid directly. · **Scenario:** A large payout, or repeated payouts, creates more debt than the remaining lifetime allowance. Claims exhaust the allowance, leaving permanent debt and a stuck work-pay path. · **Fix:** Bound obligations at their source: ensure `AGTWork` cannot promise more than the remaining lifetime capacity, or define an explicit cancellation/expiry rule for unpayable debt. Check this alongside AGTWork’s per-trade ceiling; this contract’s ceiling does not bound queued obligations.
+
+### W-3 [Medium] The “queue” does not enforce FIFO
+**Where:** `AGT.sol:79–83` · **Problem:** Each claim chooses an address, and whichever claim transaction executes first consumes the shared daily room; older debt is not prioritized. · **Scenario:** A later claimant can use today’s capacity before an earlier-owed holder claims, delaying that holder. · **Fix:** If FIFO is required, record debt lots in order and process them sequentially. If first-come-to-claim is intentional, document that fairness policy.
+
+### W-4 [Medium] Vault-mint ratio is not proof of asset backing
+**Where:** `AGT.sol:25, 61–65, 88–90` · **Problem:** The work allowance is bounded by the *counter* `mintedByVault`, not verified assets. The 100 AGT bootstrap also permits work issuance with no Vault mints, so the 95% backing statement is not an unconditional guarantee. · **Scenario:** If the Vault can mint without matching assets—or is compromised—its counter raises work-mint headroom without increasing backing. · **Fix:** Describe the ratio as a counter-based issuance limit, not a backing guarantee; verify backing in the Vault design and account explicitly for the bootstrap exception.
+
+No reentrancy issue is apparent in the described OZ ERC20 v5 `_mint` path: it invokes no recipient hook. `AGT.sol` also adds no reviewer loop; per-reviewer call cost and the interaction with AGTWork’s per-trade ceiling need checking in AGTWork itself.
