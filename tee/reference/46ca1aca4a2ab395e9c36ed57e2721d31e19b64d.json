@@ -1,0 +1,8 @@
+{
+  "_": "Digests tools/repro-build.sh must produce from this commit on any machine. Added once, never modified (the workflow checks the git history). Embedded image only: the testnet rehearsal on agt-1, 2026-11-23.",
+  "commit": "46ca1aca4a2ab395e9c36ed57e2721d31e19b64d",
+  "buildkit": "v0.34.2",
+  "images": {
+    "embedded": "sha256:8c1ae816771ad0b249fb0b7c010b3d30881790cbe858996b7a0d3341b8ab3bc7"
+  }
+}

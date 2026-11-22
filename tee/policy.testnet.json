@@ -24,6 +24,12 @@
       "image": "embedded",
       "reference": "tee/reference/7f7251fb758b5e694bb70364c8e6ddf0c694bb3f.json",
       "why": "testnet rehearsal of the embedded trade, 2026-11-21, after fix T-5 (owner approved: testnet only, 5 USD cap)"
+    },
+    {
+      "digest": "sha256:8c1ae816771ad0b249fb0b7c010b3d30881790cbe858996b7a0d3341b8ab3bc7",
+      "image": "embedded",
+      "reference": "tee/reference/46ca1aca4a2ab395e9c36ed57e2721d31e19b64d.json",
+      "why": "testnet rehearsal of the embedded trade on agt-1 (AGT own chain), 2026-11-23 (owner approved: testnet only, 5 USD cap)"
     }
   ]
 }
