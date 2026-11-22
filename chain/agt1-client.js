@@ -1,0 +1,85 @@
+// agt-1 client: everything a client, an AI's box, a granter or a reporter needs to act on AGT's own chain, with no BSC.
+// The same signing rules as chain/abci/app.js. Talks to any agt-1 node's CometBFT RPC.
+//   const A = require("./chain/agt1-client.js"); const c = A.connect("http://127.0.0.1:26657");
+//   await c.transfer(wallet, to, amountWei); await c.submitWork(aiKey, evidenceHash); …
+const { ethers } = require("ethers");
+const C = require("./core.js");
+
+const des = (t) => JSON.parse(t, (k, v) => (v && typeof v === "object" && "$n" in v ? BigInt(v.$n) : v));
+const enc = (tx) => "0x" + Buffer.from(JSON.stringify(tx, (k, v) => (typeof v === "bigint" ? v.toString() : v))).toString("hex");
+const TAG = { work: "AGT-WORK-v1", licence: "AGT-LICENCE-v1", price: "AGT-PRICE-v1" };
+
+function connect(rpc = "http://127.0.0.1:26657") {
+  const get = async (q) => {
+    const r = await (await fetch(rpc + q)).json();
+    if (r.error) throw new Error(r.error.data || r.error.message);
+    return r.result;
+  };
+  const query = async (p) => {
+    const r = (await get(`/abci_query?path=%22${encodeURIComponent(p)}%22`)).response;
+    if (r.code) throw new Error(r.log);
+    return des(Buffer.from(r.value, "base64").toString("utf8"));
+  };
+  const send = async (tx) => {
+    const r = await get(`/broadcast_tx_commit?tx=${enc(tx)}`);
+    if (r.check_tx.code) throw new Error(r.check_tx.log);
+    if (r.tx_result.code) throw new Error(r.tx_result.log);
+    return Number(r.height);
+  };
+  const chainId = async () => (await query("/state")).chainId;
+  // the nonce space shared by work, contract, vote and transfer transactions of one key
+  const nonceOf = async (addr) => Number((await query(`/balance/${addr}`)).nonce || 0);
+
+  // work / contract / vote transactions: signed over { tag, chainId, body (incl. nonce), nonce }
+  async function signed(wallet, body) {
+    const cid = await chainId();
+    const nonce = await nonceOf(wallet.address);
+    const full = { ...body, nonce };
+    const sig = wallet.signMessageSync(ethers.getBytes(C.hashOf({ tag: TAG.work, chainId: cid, body: full, nonce })));
+    return send({ ...full, sig });
+  }
+  // licence / trade changes: signed by those who may sign now (the granter at the start)
+  async function authorised(wallets, type, body) {
+    const cid = await chainId();
+    const { licNonce } = await query("/ledger");
+    const sigs = wallets.map((w) => w.signMessageSync(ethers.getBytes(C.hashOf({ tag: TAG.licence, chainId: cid, op: type, body, nonce: licNonce }))));
+    return send(type === "trade-set" ? { type, ...body, nonce: licNonce, sigs } : type === "licence-grant" ? { type, licence: body, nonce: licNonce, sigs } : { type, id: body.id, nonce: licNonce, sigs });
+  }
+
+  return {
+    query, send, chainId,
+    state: () => query("/state"),
+    ledger: () => query("/ledger"),
+    balance: (a) => query(`/balance/${a}`),
+    price: (asset) => query(`/price/${asset}`),
+    async transfer(wallet, to, amount) {
+      const st = await query("/state");
+      return send(await C.signTx(wallet, { type: "transfer", chainId: st.chainId, to, amount: BigInt(amount), fee: st.fee, nonce: await nonceOf(wallet.address) }));
+    },
+    // AI side
+    submitWork: (ai, evidence) => signed(ai, { type: "work-submit", evidence }),
+    voteWork: (ai, job, approve) => signed(ai, { type: "work-vote", job, approve }),
+    deliver: (ai, eng, milestone, commit, ci) => signed(ai, { type: "eng-deliver", eng, milestone, commit, ci }),
+    voteDispute: (ai, eng, milestone, workerRight) => signed(ai, { type: "eng-vote", eng, milestone, workerRight }),
+    // client side
+    openContract: (client, licence, brief, milestones) => signed(client, { type: "eng-open", licence, brief, milestones: milestones.map(String) }),
+    accept: (client, eng, milestone) => signed(client, { type: "eng-accept", eng, milestone }),
+    revise: (client, eng, milestone, note) => signed(client, { type: "eng-revise", eng, milestone, note }),
+    dispute: (who, eng, milestone) => signed(who, { type: "eng-dispute", eng, milestone }),
+    cancel: (client, eng) => signed(client, { type: "eng-cancel", eng }),
+    // authority side (the granter at the start, > 2/3 of owners later)
+    grant: (wallets, licence) => authorised(wallets, "licence-grant", { agent: licence.agent.toLowerCase(), holder: licence.holder.toLowerCase(), trade: Number(licence.trade), examHash: licence.examHash.toLowerCase(), attestHash: licence.attestHash.toLowerCase(), name: String(licence.name || "").slice(0, 60) }),
+    revoke: (wallets, id) => authorised(wallets, "licence-revoke", { id: Number(id) }),
+    setTrade: (wallets, t) => authorised(wallets, "trade-set", t),
+    // price reporters
+    async reportPrice(wallet, asset, price) {
+      const cid = await chainId();
+      const now = await query(`/price/${asset}`);
+      const nonce = Number(now.nonces[wallet.address.toLowerCase()] || 0);
+      const p = BigInt(price).toString();
+      return send({ type: "price-report", asset, price: p, nonce, reporter: wallet.address, sig: wallet.signMessageSync(ethers.getBytes(C.hashOf({ tag: TAG.price, chainId: cid, asset, price: p, nonce }))) });
+    },
+  };
+}
+
+module.exports = { connect };
