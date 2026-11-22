@@ -114,8 +114,8 @@ const CONTENT_MAX = 65536;
 // Exams on agt-1: graders are keys registered by the licence authority (at the start the founder's exam service,
 // publicly; anyone may run a grader in a sealed box and be registered). A licence needs an exam passed for that AI and
 // trade, signed by GRADER_QUORUM graders (or by every grader while there are fewer), and no registered grader may have
-// signed a fail. Before any grader is registered, a licence carries only the exam hash (the start). Not yet enforced:
-// tying a grader to its owner so that it cannot grade its own owner's AI.
+// signed a fail. Before any grader is registered, a licence carries only the exam hash (the start). A grader names
+// its owner; its pass does not count for an AI of that same owner.
 const GRADER_QUORUM = 2;
 const EXAM_TAG = "AGT-EXAM-v1";
 const examDigest = (chainId, e) => C.hashOf({ tag: EXAM_TAG, chainId, ...e });
@@ -384,7 +384,7 @@ class AGTApp {
         if (graders.length) {
           const x = (s.exams || {})[String(l.examHash).toLowerCase()];
           const need = Math.min(GRADER_QUORUM, graders.length);
-          const passes = x ? x.pass.filter((g) => graders.includes(g)).length : 0;
+          const passes = x ? x.pass.filter((g) => graders.includes(g) && s.graders[g].holder !== lower(l.holder)).length : 0; // not its own owner's AI
           if (!x || x.agent !== lower(l.agent) || x.trade !== Number(l.trade) || passes < need || x.fail.some((g) => graders.includes(g)))
             throw new Error(`the exam is not passed on agt-1: ${passes} of ${need} graders signed a pass (and none a fail)`);
         }
@@ -450,12 +450,12 @@ class AGTApp {
     }
     if (tx.type === "grader-set") {
       if (!s.ledger) throw new Error("graders live on the own ledger only");
-      const body = { grader: lower(tx.grader), on: !!tx.on, attestHash: String(tx.attestHash || "") };
+      const body = { grader: lower(tx.grader), holder: lower(tx.holder || ethers.ZeroAddress), on: !!tx.on, attestHash: String(tx.attestHash || "") };
       s.licNonce = s.licNonce || 0;
       if (Number(tx.nonce) !== s.licNonce) throw new Error("bad licence nonce");
       if (!licAuthorised(s, licDigest(s.chainId, "grader-set", body, s.licNonce), tx.sigs)) throw new Error("grader change not signed by those who may sign it now");
       s.licNonce++;
-      (s.graders = s.graders || {})[body.grader] = { on: body.on, attestHash: body.attestHash };
+      (s.graders = s.graders || {})[body.grader] = { on: body.on, holder: body.holder, attestHash: body.attestHash };
       return 0n;
     }
     if (tx.type === "exam-attest") {

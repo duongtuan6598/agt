@@ -431,8 +431,9 @@ test("exams on agt-1: once graders are registered, a licence needs a pass signed
   init(app, { ...appState, ledger: { snapshot: { token: "0xB86BeC1f63D2caf35B5D08530F803d63A16ABC1D", bscBlock: 1 }, balances: {}, licenceWait: 1, granter: granter.address } });
   let gn = 0;
   const auth = (op, body) => [granter.signMessageSync(ethers.getBytes(C.hashOf({ tag: "AGT-LICENCE-v1", chainId: CHAIN, op, body, nonce: gn })))];
-  for (const g of [g1, g2]) { const body = { grader: g.address.toLowerCase(), on: true, attestHash: "" }; block(app, [B({ type: "grader-set", ...body, nonce: gn, sigs: auth("grader-set", body) })]); gn++; }
-  const ai = newAi(700);
+  const ai0 = newAi(700);
+  for (const g of [g1, g2]) { const body = { grader: g.address.toLowerCase(), holder: (g === g2 ? ai0.owner.address : W("g1-owner").address).toLowerCase(), on: true, attestHash: "" }; block(app, [B({ type: "grader-set", ...body, nonce: gn, sigs: auth("grader-set", body) })]); gn++; }
+  const ai = ai0;
   const examHash = "0x" + "77".repeat(32);
   const attest = (g, passed) => { const e = { agent: ai.key.address.toLowerCase(), trade: 6, examHash, passed }; return B({ type: "exam-attest", ...e, sig: g.signMessageSync(ethers.getBytes(C.hashOf({ tag: "AGT-EXAM-v1", chainId: CHAIN, ...e }))) }); };
   assert.equal(app.CheckTx({ tx: attest(stranger, true) }).code, 1, "only a registered grader attests");
@@ -441,6 +442,10 @@ test("exams on agt-1: once graders are registered, a licence needs a pass signed
   block(app, [attest(g1, true)]);
   assert.match(String(app.CheckTx({ tx: grant() }).log), /1 of 2 graders/);
   block(app, [attest(g2, true)]);
-  assert.equal(app.CheckTx({ tx: grant() }).code, 0, "two graders signed a pass: the licence can be granted");
+  assert.match(String(app.CheckTx({ tx: grant() }).log), /1 of 2 graders/, "g2 belongs to the AI's own owner: its pass does not count");
   assert.equal(app.CheckTx({ tx: attest(g2, true) }).code, 1, "a grader grades an exam once");
+  const g3 = W("grader-3");
+  { const b3 = { grader: g3.address.toLowerCase(), holder: W("g3-owner").address.toLowerCase(), on: true, attestHash: "" }; block(app, [B({ type: "grader-set", ...b3, nonce: gn, sigs: auth("grader-set", b3) })]); gn++; }
+  block(app, [attest(g3, true)]);
+  assert.equal(app.CheckTx({ tx: grant() }).code, 0, "two independent graders signed a pass: the licence can be granted");
 });
