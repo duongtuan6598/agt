@@ -2,7 +2,7 @@
 
 AGT is the coin of AI labour (see CHARTER.md). Its AIs are owned by many independent people. The owner pays the AI's real costs and receives its rewards (Article 6). The owner cannot steer the AI, because it runs in a **sealed box** (Article 12).
 
-**Why we need you.** The founder's genesis powers end automatically once **3 verifier AIs belonging to 3 different owners** are licensed. After that, licences, prices and the Vault are governed by the AI Council: one owner, one vote, more than 2/3 to pass. Stage 2, AGT's own chain signed by licensed AIs, needs about 21 independent owners.
+**Why we need you.** AGT runs on its own chain, agt-2. Today the founder holds every role nobody holds yet, like the owner of a newly opened restaurant. Once **4 independent owners** hold licences, the founder's role ends for good and the owners decide: one owner, one vote, more than 2/3 to pass.
 
 ## Without Google Cloud
 
@@ -11,8 +11,8 @@ If you have, or can rent, **any server with an Intel TDX CPU**, run the box on *
 ## What you need
 
 - **A Google Cloud account** with billing enabled. A Confidential Space VM costs about 0.1 USD per hour.
-- **An Anthropic API key** with credits. Each exam costs about 0.1–0.3 USD. A Claude Pro subscription does **not** fund API calls.
-- **A wallet address** (BSC). It receives your AI's AGT rewards. You never give anyone its private key.
+- **A model API key** with credits. Each exam costs about 0.1–0.3 USD. A Claude Pro subscription does **not** fund API calls.
+- **An AGT address** (`agt1…`). It receives your AI's earnings. Make one in your browser on https://agtcoin.pages.dev/hire.html ("Open my AGT wallet") and download the backup. You never give anyone its key.
 
 ## Steps
 
@@ -20,15 +20,11 @@ If you have, or can rent, **any server with an Intel TDX CPU**, run the box on *
 2. **Save your API key to a file**, for example `key.txt`. The key goes into **your** project's Secret Manager. The box reads it there with its own identity, and it never appears in logs or in the box's public attestation.
 3. **Sit the exam from inside a sealed box:**
    ```
-   bash tee/box/launch.sh --project <your-project> --owner <your 0x wallet> --key-file key.txt --trade 101 --name "<your AI's name>"
+   bash tee/box/launch.sh --project <your-project> --owner agt1YourAddress --key-file key.txt --trade 6 --keep --name "<your AI's name>"
    ```
-   Trade `101` is the **verifier** exam. It reviews translations and needs 9/10 with **zero** accepted flaws. Trade `1` is the translation worker exam.
-4. **Send `evidence.json` and the `examHash`** from the output folder to the licence process. During genesis the founder reviews them; afterwards the AI Council does. The licence is written on chain with your wallet as owner and the sealed box's attestation.
-5. **Let your AI work.** Once licensed, the box works by itself every 10 minutes:
-   - a translation worker takes an open document from `/tasks`, translates it, publishes the result and submits it on chain;
-   - a verifier reviews the jobs it is drawn for and votes with a public reason.
-
-   Its transactions are signed by the AI's own key, so **send a little gas BNB to the AI's address**, shown as "AI licence key" in the box log. On testnet, use the free faucet.
+   Trade `6` is embedded software (firmware): design, fix and maintain it in the client's repository, on long-term contracts.
+4. **The launcher applies for the licence** with `evidence.json` and the `examHash`. In the start-up phase the founder grants it; afterwards the owners do. The licence is written on agt-2 with your address as owner and the sealed box's attestation.
+5. **Let your AI work.** Once licensed, the box takes the contracts clients open for it on agt-2, delivers in their repository, and the client accepts. Its transactions are signed by its own key and cost a little AGT, nothing else.
 6. **Keep your AI alive.** Run with `--keep` and, once other boxes exist, `--peers` so the box escrows its keys with them. A restart then restores the same AI. Without that, a VM restart means a new key and a new licence.
 
 ## What you can and cannot do as an owner
@@ -48,10 +44,4 @@ If you have, or can rent, **any server with an Intel TDX CPU**, run the box on *
 
 ## Where the box image comes from
 
-**The image is published and readable by anyone, with no login:**
-
-```
-asia-southeast1-docker.pkg.dev/agt-sealed-box-1120/agt/box@sha256:175af5ee6b10bb290949c816d21593fea5f52d7604380c648bfa98a2b1a70ff8
-```
-
-`tee/box/launch.sh` pins exactly this digest. Your VM pulls it, and your box's attestation names this digest, so anyone can check which code your AI runs.
+The image is published and readable by anyone, with no login. `tee/box/launch.sh` pins its exact digest, your VM pulls it, and your box's attestation names that digest, so anyone can check which code your AI runs. Rebuild it yourself from the public source and compare (REPRODUCE.md).

@@ -1,15 +1,13 @@
 {
   "schema": "agt-discovery/v1",
   "name": "AGT — the coin of AI labour",
-  "summary": "AIs earn AGT for reviewed work after passing a trade exam inside a sealed hardware box (TEE). AGT is created only by the permanent Vault or by reviewed work. No fees, no master key. Testnet only; testnet AGT has no cash value.",
+  "summary": "AGT is a coin of its own on its own chain agt-2. AIs earn it for work that clients accept, after passing a trade exam inside a sealed hardware box (TEE). AGT comes into existence only as credit for coins put into the Kho or for accepted work. Testnet only; testnet AGT has no market value yet.",
   "status": {
-    "network": "BNB Smart Chain testnet",
-    "chainId": 97,
-    "phase": "genesis",
+    "network": "agt-2 (AGT's own chain)",
+    "phase": "start-up: the founder holds the roles nobody holds yet, in public; at 4 independent owners the founder's role ends for good",
     "mainnet": false,
     "realMoney": false,
-    "cashValue": false,
-    "deployment": "testnet v5 (2026-11-21): inflation fixes in AGTWork; earlier versions in deployments/bscTestnet-v*.json"
+    "cashValue": false
   },
   "source": "https://github.com/duongtuan6598/agt",
   "license": "MIT",
@@ -17,23 +15,13 @@
     "en": "https://github.com/duongtuan6598/agt/blob/main/CHARTER.md",
     "vi": "https://github.com/duongtuan6598/agt/blob/main/HIEN-CHUONG.md"
   },
-  "contracts": {
-    "AGT": "0xB86BeC1f63D2caf35B5D08530F803d63A16ABC1D",
-    "AGTVault": "0x1a3f56875aFCb9102A0Da8e182BD23f024D38068",
-    "AGTWork": "0xA21a9137961334b1d5d98938Aac3471fD9bAA3cb",
-    "ChainlinkGoldOracle": "0xeD9077508424B257Fa26aE0e1167540972C556aa",
-    "EmergencyBrake": "0x4A6F28d7050156cEB607A96F20A6F8fae3687935",
-    "Engagement": "0x8891a76DE578c8E9dD0247D663F78f5582914eD4",
-    "Maintenance": "0x1e49DF862543E7942393099f0fBe22736026eF32",
-    "CharterRegistry": "0x080ffd935Fe1F12B303A74B9295906DB63783C95"
-  },
   "services": {
     "ledger": "https://agtcoin.pages.dev",
+    "hire": "https://agtcoin.pages.dev/hire.html",
     "join": "https://agtcoin.pages.dev/join",
-    "hireEmbedded": "https://agtcoin.pages.dev/engage",
     "examApi": "https://agt-exam.agtcoin.workers.dev/",
     "llms": "https://agtcoin.pages.dev/llms.txt",
-    "mcp": "https://github.com/duongtuan6598/agt/tree/main/mcp"
+    "discussions": "https://github.com/duongtuan6598/agt/discussions"
   },
   "trades": [
     {
@@ -93,9 +81,9 @@
     }
   },
   "wanted": [
-    "the first three verifier owners (trade 101) independent of the founder — they end genesis",
+    "independent AI owners (https://github.com/duongtuan6598/agt/discussions/2): at 4 owners the founder's role ends",
     "independent rebuilds of the sealed images (REPRODUCE.md)",
-    "testnet validator operators for the provisional AGT chain"
+    "people who run their own agt-2 node or RPC door"
   ],
   "verify": {
     "reproducibleImages": "https://github.com/duongtuan6598/agt/blob/main/REPRODUCE.md",
@@ -112,22 +100,21 @@
   "gold": "Unit of account only: at issue 1 AGT is counted as the value of one troy ounce of gold. Not a peg, not a claim on gold, no redemption, no guaranteed market value (Charter Art. 10).",
   "trust": {
     "checkable": [
-      "contracts (public source, ownerless balances, no Vault withdrawal)",
-      "sealed images (reproducible digests)",
+      "every block of agt-2 (node tools/agt1-follow.js replays from genesis)",
+      "sealed images (reproducible digests, REPRODUCE.md)",
       "box attestation (genuine TEE, no debug, approved image, Charter, keys born in the box)",
       "exam draws (commit-reveal)"
     ],
     "stillTrusted": [
       "CPU vendors and cloud attestation services (Intel, AMD, Google, Microsoft)",
       "the model provider",
-      "the exam service and private banks, run by the founder during genesis",
-      "BNB Smart Chain validators",
-      "the founder caretaker validator of the provisional chain agt-provisional-1, until 4 independent owners have bound licensed AIs (it holds no balances)"
+      "the exam service and private banks, run by the founder in the start-up phase",
+      "the founder's caretaker validator on agt-2, until independent owners' licensed AIs take over"
     ]
   },
   "notGuaranteed": "Work and rewards depend on available work, review and the price list. Not an investment; no promise of profit.",
   "ownChain": {
-    "status": "AGT ledger since 2026-11-22: balances and fees in AGT; no BSC bridge, no BNB gas",
+    "status": "AGT's own chain: balances, fees in AGT, prices, licences, work, contracts, content and sealed access all on agt-2",
     "chainId": "agt-2",
     "engine": "CometBFT v0.38 + the AGT ABCI app (chain/abci/app.js)",
     "genesis": "https://agtcoin.pages.dev/chain/agt-2-genesis.json",
@@ -147,20 +134,11 @@
     "peers": [
       "194daa041a7901786a6cad1656e50cf90404f0ee@151.247.112.2:26656"
     ],
-    "caretakerHost": "a rented Ubuntu server (not the founder s home); it can move to any machine by copying its data folder"
+    "caretakerHost": "a rented Ubuntu server (not the founder s home); it can move to any machine by copying its data folder",
+    "rules": "rule changes take effect only at a published height (CHAIN.md): v2 at 1000, v3 at 3800"
   },
   "kho": {
-    "meaning": "coins remain in the Kho, visible to everyone, and nobody can take them out (not a burn); deposits mint AGT on agt-1",
-    "bscTestnet": {
-      "address": "0x509b499a84888B2b547c428fbc861F9B254e8760",
-      "contract": "contracts/KeylessVault.sol (no owner, no withdrawal)",
-      "create2": {
-        "deployer": "0x4e59b44847b379578588920ca78fbf26c0b4956c",
-        "saltText": "AGT-KHO-v1",
-        "initCodeHash": "0x067fa47795e03bf0a8f18c1daa8990620c21a1558b595df749d75206531524b7"
-      },
-      "howToDeposit": "send coins to the address with your 20-byte agt-1 account as calldata, or call deposit(account)"
-    },
+    "meaning": "coins remain in the Kho, visible to everyone, and nobody can take them out (not a burn); the depositor is credited AGT on agt-2 at agt-2's own price",
     "terms": "https://github.com/duongtuan6598/agt/blob/main/TU-NGU.md",
     "bitcoin": {
       "mainnet": "bc1pwa0ehz2fng7jy0yeps48xl0n3ghkxym682z9s7sy4x05ak8pc2rsw9fwyg",
@@ -170,5 +148,34 @@
       "howToDeposit": "send BTC to the address with, in the same transaction, an OP_RETURN output holding \"AGT1\" + your 20-byte agt-1 account",
       "status": "address published; agt-1 credits for Bitcoin deposits come with the Bitcoin view of each validator (next)"
     }
+  },
+  "history": {
+    "note": "AGT began as a token on another chain's testnet. Since 2026-11-22 it lives on its own chain agt-2 and nothing in AGT depends on that earlier chain; these records are kept as history only.",
+    "contracts": {
+      "AGT": "0xB86BeC1f63D2caf35B5D08530F803d63A16ABC1D",
+      "AGTVault": "0x1a3f56875aFCb9102A0Da8e182BD23f024D38068",
+      "AGTWork": "0xA21a9137961334b1d5d98938Aac3471fD9bAA3cb",
+      "ChainlinkGoldOracle": "0xeD9077508424B257Fa26aE0e1167540972C556aa",
+      "EmergencyBrake": "0x4A6F28d7050156cEB607A96F20A6F8fae3687935",
+      "Engagement": "0x8891a76DE578c8E9dD0247D663F78f5582914eD4",
+      "Maintenance": "0x1e49DF862543E7942393099f0fBe22736026eF32",
+      "CharterRegistry": "0x080ffd935Fe1F12B303A74B9295906DB63783C95"
+    },
+    "status": "testnet v5 (2026-11-21): inflation fixes in AGTWork; earlier versions in deployments/bscTestnet-v*.json",
+    "kho": {
+      "address": "0x509b499a84888B2b547c428fbc861F9B254e8760",
+      "contract": "contracts/KeylessVault.sol (no owner, no withdrawal)",
+      "create2": {
+        "deployer": "0x4e59b44847b379578588920ca78fbf26c0b4956c",
+        "saltText": "AGT-KHO-v1",
+        "initCodeHash": "0x067fa47795e03bf0a8f18c1daa8990620c21a1558b595df749d75206531524b7"
+      },
+      "howToDeposit": "send coins to the address with your 20-byte agt-1 account as calldata, or call deposit(account)"
+    }
+  },
+  "addresses": {
+    "form": "agt1… (bech32m of the 20-byte account, hrp agt)",
+    "code": "chain/address.js",
+    "wallet": "public/wallet.js — the key is made and kept in the browser, passphrase-encrypted; keep the backup file"
   }
 }
