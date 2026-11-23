@@ -9,7 +9,7 @@ WORKDIR /agt
 COPY tee/box/package.json tee/box/package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts && rm -rf /root/.npm /tmp/*
 COPY HIEN-CHUONG.md CHARTER.md ./
-COPY chain/core.js chain/core.js
+COPY chain/core.js chain/address.js chain/
 COPY chain/abci/app.js chain/abci/app.js
 COPY chain/abci/proto chain/abci/proto
 COPY exam/lib.js exam/lib.js

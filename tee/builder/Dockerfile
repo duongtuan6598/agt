@@ -12,7 +12,7 @@ RUN apk add --no-cache $(grep -v '^#' /tmp/apk.lock) \
 WORKDIR /agt
 COPY tee/box/package.json tee/box/package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts && rm -rf /root/.npm /tmp/*
-COPY chain/core.js chain/core.js
+COPY chain/core.js chain/address.js chain/
 COPY HIEN-CHUONG.md CHARTER.md ./
 COPY tee/verify.js tee/tdx.js tee/snp.js tee/der.js tee/collateral.js tee/policy.json tee/
 COPY tee/embedded/builder.js tee/embedded/secrets.js tee/embedded/tools.js tee/embedded/isolation.js tee/embedded/
