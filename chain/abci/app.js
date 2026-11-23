@@ -223,7 +223,8 @@ function licAuthorised(s, digest, sigs) {
 }
 const KHO_EVENT = "event Deposited(address indexed from, address indexed beneficiary, uint256 amount)";
 const BIND_TAG = "AGT-BIND-VALIDATOR-v1";
-const lower = (a) => ethers.getAddress(a).toLowerCase();
+const AGTAddress = require("../address.js");
+const lower = (a) => ethers.getAddress(AGTAddress.toHex(a)).toLowerCase(); // accepts agt1… (AGT's own form) and 0x…
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
 
 // ---------- persistence (bigints survive JSON) ----------
@@ -1117,7 +1118,7 @@ class AGTApp {
     }
     if (p.startsWith("/balance/")) {
       const a = lower(p.slice(9));
-      return reply({ address: a, balance: s.balances[a] || 0n, nonce: s.nonces[a] || 0 });
+      return reply({ address: AGTAddress.toAgt(a), hex: a, balance: s.balances[a] || 0n, nonce: s.nonces[a] || 0 });
     }
     if (p.startsWith("/release/")) {
       // Ready-to-submit package for AGTBridge.release(): one signature per owner, sorted by owner address.

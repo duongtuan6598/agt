@@ -17,7 +17,8 @@ const BLOCK_TAG = "AGT-BLOCK-v1";
 const FEE_TAG = "AGT-SET-FEE-v1";
 const RELEASE_TAG = ethers.id("AGT-CHAIN-RELEASE-v1");
 
-const lower = (a) => ethers.getAddress(a).toLowerCase();
+const AGTAddress = require("./address.js");
+const lower = (a) => ethers.getAddress(AGTAddress.toHex(a)).toLowerCase(); // accepts agt1… (AGT's own form) and 0x…
 
 // Canonical JSON with bigints written as decimal strings, keys sorted.
 function canon(v) {

@@ -36,6 +36,12 @@
       "image": "embedded",
       "reference": "tee/reference/e89ee67ad540bd4b6fb0acadf15076e8a396c2ad.json",
       "why": "testnet rehearsal of the embedded trade on agt-1, 2026-11-23, after fix T-10 (owner approved: testnet only, 5 USD cap)"
+    },
+    {
+      "digest": "sha256:351428552a48eb4033b749fd0f9bb84774af828938fc8489edd7116d8d66cd74",
+      "image": "embedded",
+      "reference": "tee/reference/4209a5431f8cbf24b8b32fadd393d931450c0f92.json",
+      "why": "the embedded trade on agt-2 with no BSC and no BNB at all, 2026-11-23 (founder: AGT depends on no other coin)"
     }
   ]
 }
