@@ -6,7 +6,7 @@ const fs = require("fs");
 const { ethers } = require("ethers");
 const A = require("../chain/agt1-client.js");
 (async () => {
-  const [examFile, evFile, attestHash, owner, name, rpc = "http://127.0.0.1:26657"] = process.argv.slice(2);
+  const [examFile, evFile, attestHash, owner, name, rpc = "https://agt1-relay.agtcoin.workers.dev/rpc"] = process.argv.slice(2);
   const a1 = A.connect(rpc);
   const w = new ethers.Wallet(process.env.KEY);
   const exam = JSON.parse(fs.readFileSync(examFile, "utf8"));
@@ -14,10 +14,10 @@ const A = require("../chain/agt1-client.js");
   const ev = JSON.parse(evidenceText);
   if (!ev.manifest || !ev.manifest.clientPubKey) throw new Error("the evidence has no clientPubKey");
   const evidence = await a1.content(w).put(evidenceText);
-  const holder = owner; // the --owner the box was launched with (launch.sh)
+  const holder = require("../chain/address.js").toHex(owner); // the --owner the box was launched with (agt1… or 0x…)
   if (!ethers.isAddress(holder)) throw new Error("no owner address in the evidence manifest");
   const h = await a1.grant([w], { agent: exam.agent, holder, trade: 6, examHash: exam.examHash, attestHash, name, evidence });
   const { licences } = await a1.ledger();
   const id = Object.entries(licences).find(([, l]) => l.agent === exam.agent.toLowerCase())[0];
-  console.log(`licence #${id} granted on agt-1 in block ${h}: ${name} · AI ${exam.agent} · owner ${holder} · counts from block ${licences[id].activeAt}`);
+  console.log(`licence #${id} granted on agt-2 in block ${h}: ${name} · AI ${exam.agent} · owner ${holder} · counts from block ${licences[id].activeAt}`);
 })().catch((e) => { console.error(e.message); process.exitCode = 1; });
