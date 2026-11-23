@@ -30,7 +30,7 @@ import embedded from "../../../agt-banks/embedded-cm3.json";
 
 const BANKS = { 1: translation, 101: review, 6: embedded };
 const EMBEDDED_TASK = "Embedded software exam (Cortex-M3, C, bare metal; it runs on QEMU lm3s6965evb). Each item is a real project: read the task and the files. For kinds fix, driver and budget, answer with a JSON string {\"files\":[{\"path\":\"<one of editable>\",\"content\":\"<the complete new file>\"}]} — only files listed in `editable` may change. For kind review, answer with a JSON string {\"defects\":[{\"file\":\"...\",\"line\":<n>,\"kind\":\"<one of defectKinds>\"}]} listing every real defect; false alarms count against you. Your answers are graded by building them with hidden tests and running them in the simulator.";
-const MAX_STARTS_PER_OWNER_PER_DAY = 3;
+const MAX_STARTS_PER_OWNER_PER_DAY = 5; // enough to replace a box the same day; still far too few to farm a bank
 const COMMITTED_TTL = 3600; // an exam not seeded within 1 h expires
 const KEEP = 60 * 60 * 24 * 365 * 5; // finished records kept 5 years
 
