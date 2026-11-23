@@ -217,7 +217,7 @@ async function main() {
   }
 
   // 6. Work: once licensed, the AI works by itself (worker: translate open tasks; verifier: review when drawn).
-  if (env.AGT1_RPC || (env.WORK && env.BSC_RPC)) startWork(k.agent.privateKey, provider, k).catch((e) => log(`work loop stopped: ${e.message}`));
+  if (env.AGT1_RPC) startWork(k.agent.privateKey, provider, k).catch((e) => log(`work loop stopped: ${e.message}`));
 
   // 7. Chain
   if (!env.AGT_GENESIS_URL) return log("no AGT_GENESIS_URL: serving evidence only — the chain starts once a genesis is given");
@@ -260,51 +260,26 @@ async function startLocalModel() {
 
 async function startWork(agentKey, modelProvider = "anthropic", keys = null) {
   const { ethers } = require("ethers");
-  const { AgentLoop, WORK_ABI, httpContent, httpPrices, makeModel } = require("./agent.js");
+  const { makeModel } = require("./agent.js");
   const { secretFromManager } = require("./answer.js");
   if (modelProvider === "local") await startLocalModel();
   const apiKey = modelProvider === "local" ? null : await secretFromManager(env.AGT_MODEL_KEY_SECRET);
   const systemPrompt = fs.readFileSync(path.join(__dirname, "system-prompt.txt"), "utf8");
   const wallet = new ethers.Wallet(agentKey);
-  // AGT's own chain agt-2: with AGT1_RPC the AI works there alone. No BSC, no BNB, no gas balance to check.
-  const own = !!env.AGT1_RPC;
-  let loop = null, provider = null;
-  if (!own && env.WORK && env.BSC_RPC) {
-    provider = new ethers.JsonRpcProvider(env.BSC_RPC);
-    const w = wallet.connect(provider);
-    loop = new AgentLoop({
-      work: new ethers.Contract(env.WORK, WORK_ABI, w), me: w.address,
-      content: httpContent(env.AGT_EXAM_URL || "https://agt-exam.agtcoin.workers.dev", w),
-      model: makeModel({ provider: modelProvider, apiKey, systemPrompt }), log, trade: Number(env.AGT_TRADE || 1),
-      prices: env.AGT_PRICE_FEEDS ? {
-        feeds: Object.fromEntries(env.AGT_PRICE_FEEDS.split(",").map((kv) => kv.split("=").map((x) => x.trim()))),
-        chainId: Number((await provider.getNetwork()).chainId),
-        collector: httpPrices(env.AGT_EXAM_URL || "https://agt-exam.agtcoin.workers.dev"),
-      } : null,
-    });
-  }
-  log(own ? `work loop: AI ${wallet.address} on agt-2 (${env.AGT1_RPC})` : `work loop: AI ${wallet.address} on ${env.WORK} (legacy BSC testnet)`);
+  // The AI works on AGT's own chain agt-2 and nowhere else: no other chain, no gas, nothing to fund.
+  log(`work loop: AI ${wallet.address} on agt-2 (${env.AGT1_RPC})`);
   // Long-term work (embedded trade). §12 (joint decision of Claude and Codex): the client's code never runs in this
   // box; its own CI runs N1–N4. The TEE sockets are still locked to root as defence in depth (tee/embedded/isolation.js).
   let engage = null;
-  if ((own || (env.ENGAGEMENT && env.MAINTENANCE)) && keys && fs.existsSync(path.join(__dirname, "..", "embedded", "engage-agent.js"))) {
+  if (keys && fs.existsSync(path.join(__dirname, "..", "embedded", "engage-agent.js"))) {
     require("../embedded/isolation.js").lockDown(log);
     // §14–§15: builders are trusted only with an attested image on policy.builderImages (none approved yet)
     const verifyBuilder = require("../builder/verify-builder.js").makeVerifyBuilder({ jwks: await T.fetchJwks(), policy: POLICY, log });
-    engage = await require("./engage-wiring.js").makeEngage({ env, wallet: provider ? wallet.connect(provider) : wallet, model: makeModel({ provider: modelProvider, apiKey, systemPrompt }), keys, verifyBuilder, log });
-    log(own ? "long-term work: contracts on agt-2" : `long-term work: Engagement ${env.ENGAGEMENT}, Maintenance ${env.MAINTENANCE}`);
-  }
+    engage = await require("./engage-wiring.js").makeEngage({ env, wallet, model: makeModel({ provider: modelProvider, apiKey, systemPrompt }), keys, verifyBuilder, log });
+    log("long-term work: contracts on agt-2");
+  } else log("this box has no long-term work for its trade on agt-2 yet");
   for (;;) {
-    try {
-      if (!own && provider && (await provider.getBalance(wallet.address)) === 0n) log(`work loop: no gas — send a little BNB to ${wallet.address}`);
-      else {
-        // each loop on its own: a failure in one must never stop the other
-        if (loop) try { await loop.step(); } catch (e) { log(`work loop: ${e.shortMessage || e.message}`); }
-        if (engage) try { await engage.step(); } catch (e) { log(`long-term work: ${e.shortMessage || e.message}`); }
-      }
-    } catch (e) {
-      log(`work loop: ${e.shortMessage || e.message}`);
-    }
+    if (engage) try { await engage.step(); } catch (e) { log(`long-term work: ${e.shortMessage || e.message}`); }
     await new Promise((r) => setTimeout(r, Number(env.AGT_WORK_EVERY_SEC || 600) * 1000));
   }
 }

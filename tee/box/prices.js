@@ -12,19 +12,9 @@ const MARKETS = {
     sources: [
       ["coinbase PAXG", "https://api.coinbase.com/v2/prices/PAXG-USD/spot", (j) => j.data.amount],
       ["kraken PAXG", "https://api.kraken.com/0/public/Ticker?pair=PAXGUSD", (j) => Object.values(j.result)[0].c[0]],
-      ["binance PAXG", "https://api.binance.com/api/v3/ticker/price?symbol=PAXGUSDT", (j) => j.price],
       ["okx XAUT", "https://www.okx.com/api/v5/market/ticker?instId=XAUT-USDT", (j) => j.data[0].last],
       ["bitfinex XAUT", "https://api-pub.bitfinex.com/v2/ticker/tXAUT:USD", (j) => j[6]],
       ["kraken XAUT", "https://api.kraken.com/0/public/Ticker?pair=XAUTUSD", (j) => Object.values(j.result)[0].c[0]],
-    ],
-  },
-  "BNB/USD": {
-    step: 1,
-    sources: [
-      ["coinbase", "https://api.coinbase.com/v2/prices/BNB-USD/spot", (j) => j.data.amount],
-      ["binance", "https://api.binance.com/api/v3/ticker/price?symbol=BNBUSDT", (j) => j.price],
-      ["kraken", "https://api.kraken.com/0/public/Ticker?pair=BNBUSD", (j) => Object.values(j.result)[0].c[0]],
-      ["okx", "https://www.okx.com/api/v5/market/ticker?instId=BNB-USDT", (j) => j.data[0].last],
     ],
   },
 };
