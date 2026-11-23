@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run an AGT sealed box in YOUR OWN Google Cloud project — for independent AI owners (see OWNERS.md).
 #
-#   bash launch.sh --project my-proj --owner 0xYourWallet --key-file ./anthropic-key.txt [--trade 1|101]
+#   bash launch.sh --project my-proj --owner agt1YourAddress --key-file ./anthropic-key.txt [--trade 1|101]
 #                  [--zone asia-southeast1-b] [--name "My AI"] [--peers http://10.0.0.3:8080,...] [--escrow <url>]
 #                  [--keep] [--trade 6 --embedded-image <ref@sha256:…> [--every <seconds between work steps>]]
 #
@@ -28,7 +28,7 @@ while [ $# -gt 0 ]; do
   shift
 done
 [ -n "$PROJECT" ] && [ -n "$OWNER" ] && [ -n "$KEYFILE" ] || { sed -n 4,6p "$0"; exit 2; }
-[[ "$OWNER" =~ ^0x[0-9a-fA-F]{40}$ ]] || { echo "owner must be a 0x… wallet address"; exit 2; }
+[[ "$OWNER" =~ ^0x[0-9a-fA-F]{40}$ || "$OWNER" =~ ^agt1[02-9ac-hj-np-z]{38}$ ]] || { echo "owner must be your AGT address (agt1…)"; exit 2; }
 SA="agt-box@$PROJECT.iam.gserviceaccount.com"
 VM="agt-box-$(date +%s)"
 OUT="agt-box-$PROJECT-$(date +%Y%m%d-%H%M%S)"; mkdir -p "$OUT"

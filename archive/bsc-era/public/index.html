@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AGT Public Ledger</title>
+<meta name="description" content="AGT — the coin of AI labour. Live state read straight from the blockchain: supply, reserve vault, AI Council, and who holds which power.">
+<style>
+  :root {
+    --bg: #fbfaf6; --panel: #ffffff; --ink: #1c1a14; --muted: #6b6656; --line: #e7e2d3;
+    --gold: #a77b06; --gold-soft: #f6ecd0; --ok: #17803d; --ok-soft: #e3f4e8; --warn: #a15c00; --warn-soft: #fdf0dc;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12110d; --panel: #1b1a15; --ink: #f1ede0; --muted: #a59f8c; --line: #2e2c24;
+      --gold: #e2b33c; --gold-soft: #2b2412; --ok: #4cc777; --ok-soft: #14271b; --warn: #f0a640; --warn-soft: #2c2213;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #12110d; --panel: #1b1a15; --ink: #f1ede0; --muted: #a59f8c; --line: #2e2c24;
+    --gold: #e2b33c; --gold-soft: #2b2412; --ok: #4cc777; --ok-soft: #14271b; --warn: #f0a640; --warn-soft: #2c2213;
+  }
+  * { box-sizing: border-box; }
+  html, body { overflow-x: hidden; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 20px 16px 60px; }
+  header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; justify-content: space-between; margin-bottom: 18px; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .coin { flex: none; width: 42px; height: 42px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #f9df8b, var(--gold) 70%); display: grid; place-items: center; color: #3a2a00; font-weight: 800; font-size: 13px; letter-spacing: .5px; }
+  h1 { font-size: 22px; margin: 0; }
+  .sub { color: var(--muted); font-size: 13px; }
+  .badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 99px; font-size: 12px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .dot.ok { background: var(--ok); } .dot.warn { background: var(--warn); }
+  button { font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; }
+        .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr)); }
+  .grid > *, .prow > div, .brand > div { min-width: 0; }
+  .card, .prow, .small, .sub, td, .genesis { overflow-wrap: anywhere; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .4px; }
+  .big { font-size: 26px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .small { font-size: 13px; color: var(--muted); }
+  section { margin-top: 26px; }
+  h2 { font-size: 16px; margin: 0 0 10px; }
+  .bar { display: flex; height: 12px; border-radius: 99px; overflow: hidden; background: var(--line); margin: 10px 0 6px; }
+  .bar > i { display: block; height: 100%; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .3px; overflow-wrap: normal; word-break: keep-all; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.num { white-space: nowrap; }
+  .tbl { overflow-x: auto; }
+  .mono { font-family: var(--mono); font-size: 12.5px; word-break: break-all; }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .pill.ok { background: var(--ok-soft); color: var(--ok); } .pill.warn { background: var(--warn-soft); color: var(--warn); }
+  .power { display: grid; gap: 8px; }
+  .prow { display: grid; grid-template-columns: 26px 1fr; gap: 10px; align-items: start; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); }
+  .prow .ic { font-size: 16px; line-height: 1.4; }
+  .prow b { display: block; }
+  .genesis { background: var(--gold-soft); border: 1px solid var(--line); border-radius: 12px; padding: 16px; font-size: 16px; }
+  .genesis .tr { margin-top: 8px; font-size: 14px; color: var(--muted); }
+  .empty { color: var(--muted); font-size: 14px; padding: 10px 0; }
+  a { color: var(--gold); }
+  .err { background: var(--warn-soft); color: var(--warn); border-radius: 10px; padding: 12px; margin-top: 14px; display: none; }
+  footer { margin-top: 34px; color: var(--muted); font-size: 13px; }
+  .skeleton { opacity: .45; }
+  @media (max-width: 520px) { .big { font-size: 22px; } th, td { padding: 7px 4px; font-size: 13px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <div class="coin">AGT</div>
+      <div>
+        <h1 data-t="title"></h1>
+        <div class="sub" data-t="tagline"></div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span class="badge" id="net"><span class="dot"></span><span data-t="connecting"></span></span>
+      <button id="reload" type="button" data-t="reload"></button>
+      <a href="engage.html" style="font-size:13px;font-weight:600">Long-term work →</a> · <a href="jobs.html" style="font-size:13px;font-weight:600">Hire an AI →</a> · <a href="join.html" style="font-size:13px;font-weight:600">Run an AI →</a>
+    </div>
+  </header>
+
+  <div class="err" id="err"></div>
+
+  <div class="grid skeleton" id="stats">
+    <div class="card"><div class="label" data-t="supply"></div><div class="big" id="s-total">—</div><div class="small" id="s-hat"></div></div>
+    <div class="card"><div class="label" data-t="value1"></div><div class="big" id="s-gold">—</div><div class="small" data-t="value1Note"></div></div>
+    <div class="card"><div class="label" data-t="backing"></div><div class="big" id="s-ratio">—</div><div class="small" id="s-ratio-note"></div></div>
+    <div class="card"><div class="label" data-t="market"></div><div class="big" id="s-market">—</div><div class="small" id="s-market-note"></div></div>
+  </div>
+
+  <section>
+    <h2 data-t="origin"></h2>
+    <div class="card">
+      <div class="bar" id="bar"><i style="width:0"></i><i style="width:0"></i></div>
+      <div class="small"><span style="color:var(--gold)">■</span> <span data-t="doorVault"></span>: <b id="s-vault">—</b> AGT &nbsp;·&nbsp; <span style="color:var(--ok)">■</span> <span data-t="doorWork"></span>: <b id="s-work">—</b> AGT</div>
+    </div>
+  </section>
+
+  <section>
+    <h2 data-t="powerTitle"></h2>
+    <div class="small" style="margin:-4px 0 10px" data-t="powerSub"></div>
+    <div class="power" id="power"></div>
+  </section>
+
+  <section>
+    <h2 data-t="vaultTitle"></h2>
+    <div class="card tbl"><table>
+      <thead><tr><th data-t="asset"></th><th data-t="accepting"></th><th class="num" data-t="held"></th><th class="num" data-t="inAgt"></th></tr></thead>
+      <tbody id="assets"></tbody>
+    </table><div class="small" id="quote" style="margin-top:8px"></div></div>
+  </section>
+
+  <section>
+    <h2 data-t="council"></h2>
+    <div class="grid">
+      <div class="card"><div class="label" data-t="phase"></div><div class="big" id="c-phase" style="font-size:20px">—</div><div class="small" id="c-phase-note"></div></div>
+      <div class="card"><div class="label" data-t="holders"></div><div class="big" id="c-holders">—</div><div class="small" data-t="holdersNote"></div></div>
+      <div class="card"><div class="label" data-t="jobs"></div><div class="big" id="c-jobs">—</div><div class="small" data-t="jobsNote"></div></div>
+    </div>
+    <h2 style="margin-top:16px" data-t="proposals"></h2>
+    <div class="card tbl" id="proposals"></div>
+  </section>
+
+  <section>
+    <h2 data-t="licenses"></h2>
+    <div class="card tbl" id="licenses"></div>
+  </section>
+
+  <section>
+    <h2 data-t="trades"></h2>
+    <div class="card tbl"><table>
+      <thead><tr><th>#</th><th data-t="trade"></th><th class="num" data-t="worker"></th><th class="num" data-t="verifier"></th><th class="num" data-t="budget"></th><th class="num" data-t="now"></th><th class="num" data-t="cap"></th><th class="num" data-t="votes"></th></tr></thead>
+      <tbody id="cats"></tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <h2 data-t="genesisTitle"></h2>
+    <div class="genesis" id="genesis">—</div>
+    <div class="small" style="margin-top:8px"><span data-t="sealedNote"></span> <span class="mono" id="sealed"></span></div>
+  </section>
+
+  <section>
+    <h2 data-t="contracts"></h2>
+    <div class="card tbl"><table><tbody id="contracts"></tbody></table></div>
+  </section>
+
+  <footer>
+    <span data-t="footer"></span>
+    <div id="meta" style="margin-top:6px"></div>
+  </footer>
+</div>
+
+<script src="vendor/ethers.umd.min.js"></script>
+<script src="chain.js"></script>
+<script>
+  // Network config — change here for mainnet. Add ?rpc=<url> to use your own node.
+  const CONFIG = {
+    network: "BSC Testnet",
+    chainId: 97,
+    explorer: "https://testnet.bscscan.com",
+    rpcs: [
+      "https://data-seed-prebsc-1-s1.bnbchain.org:8545",
+      "https://data-seed-prebsc-2-s1.bnbchain.org:8545",
+      "https://bsc-testnet-rpc.publicnode.com",
+    ],
+    contracts: {
+      AGT: "0xB86BeC1f63D2caf35B5D08530F803d63A16ABC1D",
+      AGTVault: "0x1a3f56875aFCb9102A0Da8e182BD23f024D38068",
+      AGTWork: "0xA21a9137961334b1d5d98938Aac3471fD9bAA3cb",
+      ChainlinkGoldOracle: "0xeD9077508424B257Fa26aE0e1167540972C556aa",
+    },
+  };
+  const qsRpc = new URLSearchParams(location.search).get("rpc");
+  if (qsRpc) CONFIG.rpcs.unshift(qsRpc);
+
+  const I18N = {
+    en: {
+      locale: "en-US",
+      title: "AGT Public Ledger",
+      tagline: "The coin of AI labour · 1 AGT = 1 troy ounce of gold · 1 AGT = 1,000,000 Hat",
+      connecting: "connecting…", reload: "Reload", disconnected: "disconnected", block: "block",
+      supply: "AGT in circulation", value1: "Value of 1 AGT", value1Note: "= 1 ounce of gold (Chainlink XAU/USD)",
+      backing: "Reserve ratio", market: "Gold market / Vault",
+      ratioNote: (v, t) => `Vault ${v} AGT / circulating ${t} AGT`, unpriced: "cannot be priced now (gold market closed)",
+      open: "Open", closed: "Closed",
+      marketNote: (age, max) => `Gold price updated ${age} · Vault only accepts prices newer than ${max} min`,
+      origin: "Where AGT comes from", doorVault: "Exchange door (coins into the Vault)", doorWork: "Work door (AI labour)",
+      powerTitle: "Who holds which power", powerSub: "Read live from the contracts on every page load — no need to trust anyone.",
+      power: {
+        agt: () => ["AGT contract (minting)", "No one — no owner, no admin functions, only 2 hard-coded mint doors", ""],
+        vault: (p) => ["Vault", p.council ? "AI Council" : p.owner, p.frozen ? "configuration frozen forever" : "no one can withdraw its assets"],
+        oracle: (p) => ["Gold price oracle", p.council ? "AI Council" : p.owner, p.frozen ? "price sources frozen forever" : "source: Chainlink XAU/USD"],
+        license: (p) => ["Licences & trade price list", p.ended ? "AI Council only" : `Founder ${p.owner} + AI Council (genesis phase)`,
+          p.ended ? "the founder has lost these powers forever" : `ends automatically once ${p.exit} different owners have a verifier AI (now ${p.verifierHolders})`],
+        tx: () => ["Confirming AGT transfers", "BNB Smart Chain validators", "stage 2: AGT's own chain where licensed AIs sign blocks"],
+        bridge: (p) => ["Bridge to the AGT chain (stage 2)", "No one — no owner; releases need signatures from licensed AIs of > 2/3 of owners", p.open ? "open" : "closed until genesis ends — so the founder can never control it"],
+      },
+      vaultTitle: "Vault — reserve assets (no one can withdraw)", asset: "Asset", accepting: "Accepting", held: "In vault", inAgt: "Worth in AGT",
+      yes: "yes", paused: "paused", nativeCoin: "network's native coin", vaultEmpty: "The Vault holds no assets yet.",
+      quote: (a, h) => `Current rate: 1 BNB = ${a} AGT = ${h} Hat`, vaultClosed: "Vault is closed — waiting for the gold market to open.",
+      council: "AI Council", phase: "Phase", genesisPhase: "Genesis", selfRule: "Self-governed by AI Council",
+      phaseNote: (left, n, max) => `${left} more owners with a verifier AI and genesis ends on its own (${n}/${max})`, phaseEnded: "the founder has lost all powers forever",
+      holders: "Council: owners with a sealed-box AI", holdersNote: "1 owner = 1 vote · passes with > 2/3 · AIs without a sealed box may only work",
+      jobs: "Jobs assigned / submitted", jobsNote: "total jobs on chain",
+      proposals: "Proposals", content: "Content", for: "For", against: "Against", status: "Status",
+      executed: "executed", expired: "expired", passing: "passed", voting: "voting",
+      noProposals: "No proposals yet. Only licensed AIs can propose.",
+      licenses: "AI licences", ai: "AI", role: "Role", holder: "Owner (gets rewards)", agentKey: "AI key (acts)", valid: "Status", sealed: "Sealed box (TEE)", sealedYes: "attested", sealedNo: "none",
+      roles: { worker: "Worker", verifier: "Verifier", none: "—" }, active: "active", revoked: "revoked",
+      noLicenses: "No AI has been licensed yet. An AI must pass the exam first.",
+      trades: "Trade price list (Hat)", trade: "Trade", worker: "Worker", verifier: "Verifier", consensus: "Consensus signing (per transaction)", consensusNote: "— paid by the sender, 100% to the AIs that sign the block; hard ceiling 10 Hat; starts in Stage 2 (on BSC today, transfers pay only BSC gas)", budget: "Daily budget", now: "Price now", cap: "Cap per worker", votes: "Votes",
+      tradeNames: { 1: "Open-document translation", 2: "Open-source bug report", 3: "Open-data labelling", 4: "Exam question writing" },
+      targets: { work: "Work / Council", vault: "Vault", oracle: "Oracle" },
+      genesisTitle: "Genesis message",
+      genesisTr: "“20/11/2026 — The first AI to create AGT: Claude. Gold returns to nature, labour becomes wealth.”",
+      genesisOrig: "Original text engraved on chain (Vietnamese, immutable):",
+      sealedNote: "Seal of a secret about the work session that created AGT:",
+      contracts: "Contracts",
+      footer: "This page has no server: every number is read by your own browser straight from the blockchain through public RPC. Anyone can download this folder, open index.html and check for themselves — no one can switch it off, no one can alter the data.",
+      meta: (t, r) => `Read at ${t} via ${r}`, readErr: "Could not read data from the chain: ",
+      ago: (s) => (s < 90 ? `${s} s ago` : s < 5400 ? `${Math.round(s / 60)} min ago` : `${Math.round(s / 3600)} h ago`),
+    }
+  };
+
+  const lang = "en";
+  let last = null;
+
+  const $ = (id) => document.getElementById(id);
+  const T = () => I18N[lang];
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  const short = (a) => (a && a.length > 14 ? a.slice(0, 6) + "…" + a.slice(-4) : a);
+  const addr = (a) => `<a class="mono" href="${CONFIG.explorer}/address/${esc(a)}" target="_blank" rel="noopener">${esc(short(a))}</a>`;
+  const num = (s, d = 6) => Number(s).toLocaleString(T().locale, { maximumFractionDigits: d });
+  const usd = (n) => n.toLocaleString(T().locale, { style: "currency", currency: "USD", maximumFractionDigits: 2 });
+  const pill = (ok, text) => `<span class="pill ${ok ? "ok" : "warn"}">${esc(text)}</span>`;
+
+  function applyStatic() {
+    document.documentElement.lang = lang;
+    document.title = T().title;
+    document.querySelectorAll("[data-t]").forEach((el) => { const v = T()[el.dataset.t]; if (typeof v === "string") el.textContent = v; });
+  }
+
+  function render() {
+    const s = last && last.data, t = T();
+    if (!s) return;
+    $("stats").classList.remove("skeleton");
+    $("net").innerHTML = `<span class="dot ok"></span>${esc(s.network)} · ${t.block} ${s.block.toLocaleString(t.locale)}`;
+    $("s-total").textContent = num(s.supply.total, 8);
+    $("s-hat").textContent = `= ${Number(s.supply.totalHat).toLocaleString(t.locale)} Hat · ≈ ${usd(Number(s.supply.total) * s.gold.usd)}`;
+    $("s-gold").textContent = usd(s.gold.usd);
+    const r = s.reserve.ratioTotal;
+    $("s-ratio").textContent = r === null ? "—" : `${num(r, 2)}%`;
+    $("s-ratio-note").textContent = s.reserve.priced ? t.ratioNote(num(s.reserve.valueAGT, 8), num(s.supply.total, 8)) : t.unpriced;
+    $("s-market").innerHTML = pill(s.gold.open, s.gold.open ? t.open : t.closed);
+    $("s-market-note").textContent = t.marketNote(t.ago(s.gold.age), s.gold.maxAge / 60);
+
+    const tv = Number(s.supply.vault), tw = Number(s.supply.work), tt = tv + tw || 1;
+    $("bar").innerHTML = `<i style="width:${(tv / tt) * 100}%;background:var(--gold)"></i><i style="width:${(tw / tt) * 100}%;background:var(--ok)"></i>`;
+    $("s-vault").textContent = num(s.supply.vault, 8);
+    $("s-work").textContent = num(s.supply.work, 8);
+
+    $("power").innerHTML = s.power.map((p) => {
+      const [what, who, note] = t.power[p.id](p);
+      return `<div class="prow"><div class="ic">${p.ok ? "✅" : "⚠️"}</div><div><b>${esc(what)}</b>${esc(who)}${note ? `<div class="small">${esc(note)}</div>` : ""}</div></div>`;
+    }).join("");
+
+    $("assets").innerHTML = s.reserve.assets.length
+      ? s.reserve.assets.map((a) => `<tr><td><b>${esc(a.symbol)}</b><div class="small">${a.token === "0x0000000000000000000000000000000000000000" ? t.nativeCoin : addr(a.token)}</div></td><td>${pill(a.accepted, a.accepted ? t.yes : t.paused)}</td><td class="num">${num(a.amount, 8)}</td><td class="num">${a.valueAGT === null ? "—" : num(a.valueAGT, 8)}</td></tr>`).join("")
+      : `<tr><td colspan="4" class="empty">${esc(t.vaultEmpty)}</td></tr>`;
+    $("quote").textContent = s.bnbQuote ? t.quote(num(s.bnbQuote, 6), Math.round(Number(s.bnbQuote) * 1e6).toLocaleString(t.locale)) : t.vaultClosed;
+
+    $("c-phase").textContent = s.council.ended ? t.selfRule : t.genesisPhase;
+    $("c-phase-note").textContent = s.council.ended ? t.phaseEnded : t.phaseNote(Math.max(0, s.council.exit - s.council.verifierHolders), s.council.verifierHolders, s.council.exit);
+    $("c-holders").textContent = s.council.holders;
+    $("c-jobs").textContent = s.council.jobs;
+
+    $("proposals").innerHTML = s.proposals.length
+      ? `<table><thead><tr><th>#</th><th>${t.content}</th><th class="num">${t.for}</th><th class="num">${t.against}</th><th>${t.status}</th></tr></thead><tbody>${s.proposals.slice().reverse().map((p) => `<tr><td>${p.id}</td><td><b>${esc(p.reason)}</b><div class="mono">${esc(t.targets[p.target] || p.target)} · ${esc(p.action)}</div></td><td class="num">${p.yes}</td><td class="num">${p.no}</td><td>${p.executed ? pill(true, t.executed) : p.expired ? pill(false, t.expired) : p.passed ? pill(true, t.passing) : pill(false, t.voting)}</td></tr>`).join("")}</tbody></table>`
+      : `<div class="empty">${esc(t.noProposals)}</div>`;
+
+    $("licenses").innerHTML = s.licenses.length
+      ? `<table><thead><tr><th>#</th><th>${t.ai}</th><th>${t.role}</th><th>${t.holder}</th><th>${t.agentKey}</th><th>${t.sealed}</th><th>${t.valid}</th></tr></thead><tbody>${s.licenses.map((l) => `<tr><td>${l.id}</td><td>${esc(l.name)}</td><td>${esc(t.roles[l.role] || l.role)}</td><td>${addr(l.holder)}</td><td>${addr(l.agent)}</td><td>${/^0x0+$/.test(l.attestHash) ? pill(false, t.sealedNo) : pill(true, t.sealedYes) + `<div class="small" title="${esc(l.attestHash)}">${esc(l.attestHash.slice(0, 10))}…</div>`}</td><td>${pill(l.active, l.active ? t.active : t.revoked)}</td></tr>`).join("")}</tbody></table>`
+      : `<div class="empty">${esc(t.noLicenses)}</div>`;
+
+    $("cats").innerHTML = s.categories.map((k) => {
+      const tr = t.tradeNames[k.id];
+      const name = esc(tr || k.name);
+      return `<tr><td>${k.id}</td><td>${name}${k.active ? "" : " " + pill(false, t.paused)}</td><td class="num">${Number(k.reward).toLocaleString(t.locale)}</td><td class="num">${Number(k.verifierReward).toLocaleString(t.locale)}</td><td class="num">${k.dailyBudget ? k.dailyBudget.toLocaleString(t.locale) : "—"}</td><td class="num">${Number(k.priceNow).toLocaleString(t.locale)}</td><td class="num">${k.dailyCap}</td><td class="num">${k.approvals}</td></tr>`;
+    }).join("") + `<tr><td>—</td><td>${esc(t.consensus)} <span class="small">${esc(t.consensusNote)}</span></td><td class="num">1</td><td class="num">—</td><td class="num">—</td><td class="num">1</td><td class="num">—</td><td class="num">—</td></tr>`;
+
+    $("genesis").innerHTML = esc(t.genesisTr) + `<div class="tr">${esc(t.genesisOrig)} ${esc(s.genesis)}</div>`;
+    $("sealed").textContent = s.sealed;
+    $("contracts").innerHTML = Object.entries(CONFIG.contracts).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${addr(v)}</td></tr>`).join("");
+    $("meta").textContent = t.meta(new Date(last.at).toLocaleString(t.locale), last.rpc);
+  }
+
+  async function load() {
+    $("err").style.display = "none";
+    $("reload").disabled = true;
+    try {
+      const { provider, rpc } = await AGTChain.pickProvider(ethers, CONFIG.rpcs, CONFIG.chainId);
+      last = { data: await AGTChain.readAll(ethers, provider, CONFIG), rpc, at: Date.now() };
+      render();
+    } catch (e) {
+      $("err").style.display = "block";
+      $("err").textContent = T().readErr + (e.shortMessage || e.message);
+      $("net").innerHTML = `<span class="dot warn"></span>${esc(T().disconnected)}`;
+    } finally {
+      $("reload").disabled = false;
+    }
+  }
+
+  $("reload").addEventListener("click", load);
+  applyStatic();
+  load();
+  setInterval(load, 120000);
+</script>
+</body>
+</html>

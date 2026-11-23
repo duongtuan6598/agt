@@ -48,6 +48,7 @@
       ledger: () => query("/ledger"),
       engs: () => query("/engs"),
       balance: (a) => query(`/balance/${a}`),
+      price: (asset) => query(`/price/${asset}`),
       async content(hash) { const r = await query(`/content/${hash}`); if (r.text == null) throw new Error("not on agt-1"); return r.text; },
       async putContent(signer, text) { await signed(signer, { type: "content-put", text }); return ethers.keccak256(ethers.toUtf8Bytes(text)); },
       openContract: (s, licence, brief, milestones) => signed(s, { type: "eng-open", licence, brief, milestones: milestones.map(String) }),

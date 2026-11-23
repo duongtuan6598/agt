@@ -209,7 +209,7 @@ async function main() {
       if (provider === "local") await startLocalModel();
       const apiKey = provider === "local" ? null : await secretFromManager(env.AGT_MODEL_KEY_SECRET);
       const systemPrompt = fs.readFileSync(path.join(__dirname, "system-prompt.txt"), "utf8");
-      const r = await sit({ base: env.AGT_EXAM_URL, owner: env.AGT_OWNER, agentKey: k.agent.privateKey, name: env.AGT_AI_NAME || "AGT box", trade: Number(env.AGT_TRADE || 1), answersFor: makeAnswerer({ apiKey, systemPrompt, provider }) });
+      const r = await sit({ base: env.AGT_EXAM_URL, owner: require("../../chain/address.js").toHex(env.AGT_OWNER), agentKey: k.agent.privateKey, name: env.AGT_AI_NAME || "AGT box", trade: Number(env.AGT_TRADE || 1), answersFor: makeAnswerer({ apiKey, systemPrompt, provider }) });
       log(`AGT_EXAM ${JSON.stringify({ agent: r.agent, examHash: r.result.examHash, status: r.result.status, passed: r.result.passed, total: r.result.total })}`);
     } catch (e) {
       log(`exam failed: ${e.message}`);
