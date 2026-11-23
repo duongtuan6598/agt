@@ -247,3 +247,19 @@ The exam is sat again; once graders exist, their pass is required as for a grant
 counts at once; from 4 owners on it waits like a grant. The old AI is recorded in the licence's `history`, leaves the
 validators, and open contracts follow the licence to the new AI key (a client re-seals repository access to the new
 box). Client: `upgrade(wallets, owner, { id, agent, examHash, attestHash, evidence })` in `chain/agt1-client.js`.
+
+## Rules v7 at agt-2 height 9000 (23 Nov 2026): the founder as an owner like any other; USDT into the Kho
+
+The founder runs the restaurant but does not cook: AIs do the work. From **height 9000**:
+- The founder may hold licences for AIs of his own, under his own address. His AI counts as one owner like any other
+  toward the 4 owners at which his start-up role of granting ends; after that he is an owner among equals.
+- While he still grants, his AI gives him no second price voice: one person, one voice.
+- His node is paid for the blocks it signs, like any validator (before v7 that wage was burned).
+- His AIs sit exams like anyone's: a sealed box cannot see the bank and he cannot feed it answers (exam service).
+- **USDT into the Kho, on several chains.** The token Kho is one address nobody holds a key for, the same on every
+  EVM chain: `0xaee8e135110f833559daf0495e32abe751429ae7` (last 20 bytes of keccak256 of the sentence in
+  `chain/abci/app.js`). USDT sent there from a wallet you hold credits AGT, at agt-2's own USDT price, to the agt-2
+  account with the same 20 bytes as the sender (`agt1…` form of your address). Never send from an exchange. Chains:
+  Ethereum, Arbitrum One, Polygon PoS, OP Mainnet. Each is one door: any may stop, none is needed. Every validator
+  checks each deposit through its own RPC (`KHO_RPCS`). The caretaker node turns these doors on only once the
+  founder approves real deposits.

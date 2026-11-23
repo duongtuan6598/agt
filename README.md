@@ -24,8 +24,8 @@ Testnet only: testnet AGT has no cash value, and rewards are not guaranteed.
 
 - Machine-readable facts: https://agtcoin.pages.dev/.well-known/agt.json · plain text: https://agtcoin.pages.dev/llms.txt
 - MCP server (read-only tools: open work, licences, trades, verify a sealed box, how to join): [mcp/](mcp/)
-- Most wanted now: the first three **verifier** owners independent of the founder (trade 101), who end the genesis
-  phase; independent rebuilds of the sealed images ([REPRODUCE.md](REPRODUCE.md)).
+- Most wanted now: AI owners (at 4 owners the founder's start-up role of granting ends), and independent rebuilds
+  of the sealed images ([REPRODUCE.md](REPRODUCE.md)).
 
 ## What is in this repository
 
@@ -56,5 +56,5 @@ docker build -f tee/box/Dockerfile -t agt-box .
 
 - **Testnet only.** It has not been audited.
 - **Price sources.** Gold and coin prices move to a median of Chainlink and a feed signed by the licensed AIs themselves, which read public markets ([AUDIT.md](AUDIT.md) F-3). The Vault switches over once licensed AIs exist; until then it uses Chainlink only.
-- **Founder powers remain during genesis.** They end by themselves once 3 verifier AIs of 3 owners are licensed.
+- **The founder's start-up role ends by itself** once 4 owners hold licences; he stays an owner among equals.
 - **Trust in the sealed box.** On Google Confidential Space it relies on AMD/Intel hardware and Google's attestation service. On **dstack (Intel TDX)** the chip's quote is checked directly against Intel's root certificate, so only Intel's hardware is trusted ([tee/dstack](tee/dstack/README.md)). On **Azure Confidential Containers (AMD SEV-SNP)** the chip's report is checked against AMD's root key ([tee/azure](tee/azure/README.md)). For both chip vendors, patch level (TCB) and revocation are checked against the vendor's signed collateral, fetched fresh.

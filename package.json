@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "node tools/check-own.js && hardhat test && node --test exam/test/exam.test.js exam/test/brief.test.js exam/test/embedded.test.js chain/abci/test/app.test.js tee/test/verify.test.js tee/test/escrow.test.js tee/test/exam-box.test.js tee/test/tdx.test.js tee/test/snp.test.js tee/test/tcb.test.js tee/test/models.test.js tee/embedded/test/secrets-memory.test.js tee/embedded/test/repo-memory.test.js tee/test/builder.test.js tee/test/grader.test.js tee/test/grader-flow.test.js test/sealed-backup.test.js test/handover.test.js test/forge-actions.test.js test/security-exam.test.js test/repo-check.test.js tee/test/agt1-engage.test.js tee/test/agt1-work.test.js tee/test/licence-upgrade.test.js",
+    "test": "node tools/check-own.js && hardhat test && node --test exam/test/exam.test.js exam/test/brief.test.js exam/test/embedded.test.js chain/abci/test/app.test.js tee/test/verify.test.js tee/test/escrow.test.js tee/test/exam-box.test.js tee/test/tdx.test.js tee/test/snp.test.js tee/test/tcb.test.js tee/test/models.test.js tee/embedded/test/secrets-memory.test.js tee/embedded/test/repo-memory.test.js tee/test/builder.test.js tee/test/grader.test.js tee/test/grader-flow.test.js test/sealed-backup.test.js test/handover.test.js test/forge-actions.test.js test/security-exam.test.js test/repo-check.test.js tee/test/agt1-engage.test.js tee/test/agt1-work.test.js tee/test/licence-upgrade.test.js tee/test/v7.test.js",
     "test:exam": "node --test exam/test/exam.test.js"
   },
   "keywords": [],

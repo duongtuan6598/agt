@@ -27,6 +27,20 @@ const OK = 0, BAD = 1;
 // its agt-1 account in an OP_RETURN "AGT1" + 20 bytes of the same transaction. BTC_CONF confirmations.
 const KHO_BTC = { chain: "btc", asset: "btc:native", decimals: 8, script: "5120775f9b89499a3d223c990c2a737df38a2f63137a3a84587a04a99f4ed8e1c287" };
 const BTC_CONF = 6;
+// The token Kho (rules v7): one address that nobody holds a key for, the same on every EVM chain:
+// last 20 bytes of keccak256 of the sentence below. Tokens sent there still exist, stay visible, and nobody can take
+// them out. The AGT goes to the agt-2 account with the SAME 20 bytes as the sender (the same key on both chains):
+// send from a wallet you hold, never from an exchange. Each chain is one door: any may stop, none is needed.
+const KHO_SENTENCE = "AGT KHO v1: coins sent here still exist, stay visible to everyone, and nobody can take them out";
+const KHO_ADDRESS = "0x" + ethers.keccak256(ethers.toUtf8Bytes(KHO_SENTENCE)).slice(-40);
+const KHO_TOKENS = {
+  "1:0xdac17f958d2ee523a2206206994597c13d831ec7": { chain: 1, token: "0xdac17f958d2ee523a2206206994597c13d831ec7", asset: "usdt", decimals: 6, conf: 12, fromBlock: 26477255 }, // Ethereum
+  "42161:0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9": { chain: 42161, token: "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9", asset: "usdt", decimals: 6, conf: 120, fromBlock: 526779397 }, // Arbitrum One
+  "137:0xc2132d05d31c914a87c6611c10748aeb04b58e8f": { chain: 137, token: "0xc2132d05d31c914a87c6611c10748aeb04b58e8f", asset: "usdt", decimals: 6, conf: 128, fromBlock: 97816309 }, // Polygon PoS
+  "10:0x94b008aa00579c1307b0ef2c499ad98a8ce58e58": { chain: 10, token: "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58", asset: "usdt", decimals: 6, conf: 60, fromBlock: 159915577 }, // OP Mainnet
+};
+const tokKey = (tx) => `${Number(tx.chain)}:${String(tx.token || "").toLowerCase()}`;
+const TRANSFER_TOPIC = ethers.id("Transfer(address,address,uint256)");
 // one deposit per Bitcoin transaction: the sum of its outputs to the Kho, and the account in its OP_RETURN
 function btcDepositOf(tx) {
   const toKho = tx.vout.map((o, i) => ({ o, i })).filter(({ o }) => o.scriptpubkey === KHO_BTC.script);
@@ -190,6 +204,7 @@ function priceReporterOk(s, who) {
   const mine = Object.entries(s.licences || {}).filter(([, l]) => l.active && l.agent === who);
   if (mine.length) {
     const holder = mine[0][1].holder; // one voice per owner: only the owner's lowest-id active licence reports (Codex A-2)
+    if (v7(s) && holder === ((s.ledger && s.ledger.granter) || FOUNDER) && granterActive(s)) return false; // the founder already reports as granter: one voice
     const first = Object.entries(s.licences).filter(([, l]) => l.active && l.holder === holder).sort((a, b) => Number(a[0]) - Number(b[0]))[0];
     return first[1].agent === who;
   }
@@ -255,6 +270,53 @@ const cmtAddress = (pubKeyB64) => crypto.createHash("sha256").update(Buffer.from
 // ---------- views of the outside (only used to PROPOSE and VOTE on Kho credits, never inside FinalizeBlock) ----------
 function makeViews(env = process.env) {
   const view = { name: [] };
+  // KHO_RPCS='{"1":"https://…","42161":"https://…"}' — each validator reads the chains it chooses through its own RPCs
+  if (env.KHO_RPCS) {
+    const rpcs = JSON.parse(env.KHO_RPCS);
+    const call = async (url, method, params) => {
+      const r = await (await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) })).json();
+      if (r.error) throw new Error(`${method}: ${r.error.message}`);
+      return r.result;
+    };
+    const pad = (a) => "0x" + "0".repeat(24) + a.slice(2).toLowerCase();
+    const scanned = {}, found = {};
+    view.tokenDeposits = async () => {
+      const out = [];
+      for (const k of Object.values(KHO_TOKENS)) {
+        const url = rpcs[k.chain];
+        if (!url) continue;
+        try {
+          const head = Number(await call(url, "eth_blockNumber", [])) - k.conf;
+          let from = scanned[k.chain] ?? k.fromBlock;
+          found[k.chain] = found[k.chain] || [];
+          while (from <= head) {
+            const to = Math.min(from + 9999, head);
+            const logs = await call(url, "eth_getLogs", [{ address: k.token, fromBlock: "0x" + from.toString(16), toBlock: "0x" + to.toString(16), topics: [TRANSFER_TOPIC, null, pad(KHO_ADDRESS)] }]);
+            for (const lg of logs) {
+              const sender = "0x" + lg.topics[1].slice(26);
+              found[k.chain].push({ chain: k.chain, token: k.token, txHash: lg.transactionHash, logIndex: Number(lg.logIndex), block: Number(lg.blockNumber), from: sender, beneficiary: sender, amount: BigInt(lg.data).toString() });
+            }
+            from = to + 1;
+            scanned[k.chain] = from;
+          }
+          out.push(...found[k.chain]);
+        } catch (e) { log(`token Kho on chain ${k.chain} unavailable:`, e.message); }
+      }
+      return out;
+    };
+    view.tokenDeposit = async (tx) => {
+      const k = KHO_TOKENS[tokKey(tx)], url = k && rpcs[k.chain];
+      if (!url) return null;
+      const head = Number(await call(url, "eth_blockNumber", [])) - k.conf;
+      const r = await call(url, "eth_getTransactionReceipt", [tx.txHash]);
+      if (!r || Number(r.blockNumber) > head || r.status !== "0x1") return null;
+      const lg = r.logs.find((x) => Number(x.logIndex) === Number(tx.logIndex));
+      if (!lg || lg.address.toLowerCase() !== k.token || lg.topics[0] !== TRANSFER_TOPIC || lg.topics[2] !== pad(KHO_ADDRESS)) return null;
+      const sender = "0x" + lg.topics[1].slice(26);
+      return { block: Number(r.blockNumber), from: sender, beneficiary: sender, amount: BigInt(lg.data).toString() };
+    };
+    view.name.push(`token Kho ${KHO_ADDRESS} on chains ${Object.keys(rpcs).join(", ")}`);
+  }
   if (env.BTC_ESPLORA) {
     const api = env.BTC_ESPLORA.replace(/\/$/, "");
     const j = async (p) => { const r = await fetch(api + p); if (!r.ok) throw new Error(`esplora ${r.status}`); return r.json(); };
@@ -305,6 +367,13 @@ const V3_AT = 3800;
 // from 4 owners on it waits LICENCE_WAIT like a grant. Open contracts follow the licence to the new AI key.
 const V6_AT = 7500;
 const v6 = (s) => Number(s.height || 0) >= V6_AT;
+// Rules v7 (founder: "chưa tuyển được nhân viên thì chủ quán làm hết"), from height V7_AT: the founder may hold a
+// licence for an AI of his own, under his own address, like any owner, and it counts as one owner like any other.
+// While he grants alone, his AI gives him no second price voice (one person, one voice). His node is paid for the
+// blocks it signs, like any validator. Kho for USDT on several
+// chains (KHO_TOKENS): any of them may stop; none is needed.
+const V7_AT = 9000;
+const v7 = (s) => Number(s.height || 0) >= V7_AT;
 const v3 = (s) => Number(s.height || 0) >= V3_AT;        // one price report per reporter per ~hour (D-3)
 // A consensus key is exactly 32 bytes in CANONICAL base64: one key, one spelling (Codex P-4).
 const isKey = (k) => typeof k === "string" && Buffer.from(k, "base64").length === 32 && Buffer.from(k, "base64").toString("base64") === k;
@@ -386,7 +455,7 @@ class AGTApp {
         if (!ethers.isAddress(l.agent) || !ethers.isAddress(l.holder)) throw new Error("bad licence addresses");
         if (!/^0x[0-9a-fA-F]{64}$/.test(String(l.examHash)) || !/^0x[0-9a-fA-F]{64}$/.test(String(l.attestHash)) || /^0x0+$/.test(String(l.attestHash)))
           throw new Error("a licence carries the exam and the sealed-box attestation it was earned with");
-        if (licOwners(s).length < CARETAKER_UNTIL && lower(l.holder) === ((s.ledger && s.ledger.granter) || FOUNDER)) throw new Error("the founder grants during the start, so he cannot license an AI of his own");
+        if (!v7(s) && licOwners(s).length < CARETAKER_UNTIL && lower(l.holder) === ((s.ledger && s.ledger.granter) || FOUNDER)) throw new Error("the founder grants during the start, so he cannot license an AI of his own");
         if (Object.values(s.licences).some((x) => (x.active || x.pending) && x.agent === lower(l.agent))) throw new Error("that AI already holds a licence");
         const graders = Object.entries(s.graders || {}).filter(([, g]) => g.on).map(([k]) => k);
         if (graders.length) {
@@ -583,7 +652,7 @@ class AGTApp {
     if (tx.type === "price-report") {
       if (!s.ledger) throw new Error("prices live on the own ledger only");
       const who = lower(tx.reporter), price = BigInt(tx.price), asset = String(tx.asset);
-      if (!/^([0-9]+|btc):(native|0x[0-9a-f]{40})$/.test(asset)) throw new Error("bad asset name");
+      if (!/^([0-9]+|btc):(native|0x[0-9a-f]{40})$/.test(asset) && !(v7(s) && asset === "usdt")) throw new Error("bad asset name"); // v7: USDT has one price, whatever the chain
       if (price <= 0n) throw new Error("bad price");
       if (!priceReporterOk(s, who)) throw new Error("not a price reporter: a licensed AI, or the granter at the start");
       s.prices = s.prices || {};
@@ -607,8 +676,10 @@ class AGTApp {
       // validator re-checked it in ProcessProposal against its own view of the origin chain.
       if (!s.ledger) throw new Error("Kho deposits mint AGT only on the own ledger");
       if (!fromProposer) throw new Error("Kho credits only come from the proposer");
-      if (H.v5(s) && tx.chain !== "btc") throw new Error("the Bitcoin Kho is the only Kho");
-      const k = tx.chain === "btc" ? KHO_BTC : H.KHO_EARLIER[Number(tx.chain)];
+      const tokenKho = v7(s) && tx.chain !== "btc" ? KHO_TOKENS[tokKey(tx)] : null;
+      if (H.v5(s) && tx.chain !== "btc" && !tokenKho) throw new Error(v7(s) ? "no Kho for that coin on that chain" : "the Bitcoin Kho is the only Kho");
+      if (tokenKho && lower(tx.beneficiary) !== lower(tx.from)) throw new Error("a token deposit credits its sender's own account");
+      const k = tx.chain === "btc" ? KHO_BTC : tokenKho || H.KHO_EARLIER[Number(tx.chain)];
       if (!k) throw new Error("no Kho on that chain");
       if (!ethers.isAddress(tx.beneficiary)) throw new Error("bad agt-1 account");
       const id = `${tx.chain === "btc" ? "btc" : Number(tx.chain)}:${String(tx.txHash).toLowerCase()}:${Number(tx.logIndex)}`;
@@ -680,12 +751,13 @@ class AGTApp {
   }
 
   refreshKho() {
-    this.khoSeen = this.khoSeen || { at: 0, busy: false, btc: [] };
+    this.khoSeen = this.khoSeen || { at: 0, busy: false, btc: [], tok: [] };
     const k = this.khoSeen;
     if (k.busy) return k.job;
     if (Date.now() - k.at < 60000) return null;
     k.busy = true;
     return (k.job = (async () => {
+      try { if (this.views.tokenDeposits) k.tok = await this.views.tokenDeposits(); } catch (e) { log("token Kho view unavailable:", e.message); }
       try { if (this.views.btcDeposits) k.btc = await this.views.btcDeposits(); } catch (e) { log("Bitcoin view unavailable:", e.message); }
       k.at = Date.now(); k.busy = false;
     })());
@@ -704,6 +776,17 @@ class AGTApp {
     // the Kho views are scanned in the background (never while a block waits): proposing stays fast; each credit is
     // still checked one by one by every validator in ProcessProposal. Not consensus: only what the proposer offers.
     if (s.ledger) { const first = !this.khoSeen || !this.khoSeen.at; const job = this.refreshKho(); if (first && job) await job; } // only the very first scan is awaited
+    if (s.ledger && v7(s) && this.khoSeen.tok.length) try {
+      for (const d of this.khoSeen.tok) {
+        if ((s.khoCredited || {})[`${d.chain}:${d.txHash.toLowerCase()}:${d.logIndex}`]) continue;
+        if (priceOf(s, KHO_TOKENS[tokKey(d)].asset) <= 0n) break; // no agt-2 price yet: the deposit waits, nothing is lost
+        const tx = { type: "kho-credit", ...d };
+        this.applyAny(s, tx, { fromProposer: true });
+        if (!push(Buffer.from(JSON.stringify(tx)))) break;
+      }
+    } catch (e) {
+      log("token Kho: proposing without token credits:", e.message);
+    }
     if (s.ledger && this.khoSeen.btc.length) try {
       for (const d of this.khoSeen.btc) {
         if ((s.khoCredited || {})[`btc:${d.txHash.toLowerCase()}:${d.logIndex}`]) continue;
@@ -735,7 +818,7 @@ class AGTApp {
       for (const b of req.txs) {
         const tx = this.decode(b);
         if (tx.type === "kho-credit") {
-          const mine = tx.chain === "btc" && this.views.btcDeposit ? await this.views.btcDeposit(tx) : null;
+          const mine = tx.chain === "btc" ? (this.views.btcDeposit ? await this.views.btcDeposit(tx) : null) : this.views.tokenDeposit ? await this.views.tokenDeposit(tx) : null;
           if (!mine) throw new Error(`Kho deposit ${tx.txHash} not final or not seen by me`);
           for (const f of ["block", "from", "beneficiary", "amount"]) if (String(mine[f]) !== String(f === "block" ? Number(tx[f]) : f === "beneficiary" || (f === "from" && tx.chain !== "btc") ? lower(tx[f]) : tx[f])) throw new Error(`Kho deposit ${tx.txHash}: ${f} differs from my view`);
         }
@@ -768,6 +851,12 @@ class AGTApp {
           s.balances[o] = (s.balances[o] || 0n) + pay;
           s.wages[o] = (s.wages[o] || 0n) + pay;
         });
+        s.pendingWage = 0n;
+      } else if (s.ledger && v7(s)) {
+        // v7: the founder's node signs blocks like any validator, and is paid like any validator
+        const f = (s.ledger && s.ledger.granter) || FOUNDER;
+        s.balances[f] = (s.balances[f] || 0n) + s.pendingWage;
+        s.wages[f] = (s.wages[f] || 0n) + s.pendingWage;
         s.pendingWage = 0n;
       } else if (s.ledger) {
         s.supply -= s.pendingWage; // only the caretaker signed: the fee is burned, nobody profits from holding the role
@@ -967,5 +1056,5 @@ function serve(app, port) {
   return server;
 }
 
-module.exports = { btcDepositOf, AGTApp, serve, bindDigest, cmtAddress, ser, des, makeViews };
+module.exports = { btcDepositOf, AGTApp, serve, bindDigest, cmtAddress, ser, des, makeViews, KHO_ADDRESS, KHO_TOKENS };
 if (require.main === module) serve(new AGTApp(), Number(process.env.PORT || 26658));
