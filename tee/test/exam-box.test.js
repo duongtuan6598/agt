@@ -21,7 +21,7 @@ function fakeExamServer(paper) {
       if (req.url === "/exams") { seen.agent = body.candidate.agent; return send({ ok: true, examId: "e1", commit: "0x" + "11".repeat(32) }); }
       if (req.url === "/exams/e1/seed") return send({ ok: true, examId: "e1", ...paper });
       if (req.url === "/exams/e1/submit") {
-        const signer = ethers.verifyMessage(X.submitMessage("e1", body.answers), body.signature);
+        const S = require("../../chain/sig.js"); const signer = ethers.getAddress(S.recover(ethers.keccak256(ethers.toUtf8Bytes(X.submitMessage("e1", body.answers))), body.signature, false));
         seen.answers = body.answers;
         return signer === seen.agent ? send({ ok: true, examHash: "0x" + "22".repeat(32), status: "awaiting-review", passed: 1, total: 1 }) : send({ ok: false, error: "bad signature" }, 400);
       }

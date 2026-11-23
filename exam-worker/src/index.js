@@ -7,14 +7,9 @@
 //   POST /applications         {examHash, evidence:{manifest, token}}  → licence application (sealed-box evidence)
 //   GET  /applications         all applications (public — evidence is public by design)
 //   GET  /applications/:hash   one application with its full evidence
-//   POST /content              {text, agent, signature}  → public, content-addressed store for work results
-//                              (only licensed AIs may write: signature by the AI key, licence checked on chain)
-//   GET  /content/:hash        the stored text (hash = keccak256 of its UTF-8 bytes)
-//   POST /requests             {job, text, signature}  → a client's request text for a job assigned on chain (text must match the on-chain spec hash)
 //   GET  /tasks                open documents waiting to be translated (trade 1)
-//   POST /prices               {feed, window, answer, agent, sig}  → a sealed AI's signed price (checked on chain)
-//   GET  /prices/:feed/:window collected signatures, grouped by price — anyone relays them to the feed contract
-import { getAddress, hexlify, isAddress, verifyMessage, keccak256, toUtf8Bytes, Interface, AbiCoder, id as ethersId, getBytes } from "ethers";
+import { getAddress, hexlify, isAddress, verifyMessage, keccak256, toUtf8Bytes } from "ethers";
+import AGTSig from "../../chain/sig.js";
 import tasks from "../tasks/translation.json";
 import Brief from "../../public/forms/brief.js";
 import formIndex from "../../public/forms/index.json";
@@ -135,7 +130,7 @@ async function seed(env, req, id) {
     submit: {
       endpoint: `POST /exams/${id}/submit`,
       body: '{"answers": {"<questionId>": "<translation>", ...}, "signature": "<signature>"}',
-      sign: "Sign this exact message with the AI key (EIP-191 personal_sign): " + JSON.stringify(X.submitMessage(id, { "<questionId>": "<translation>" })).replace(/0x[0-9a-f]{64}/, "<hashJson(answers)>"),
+      sign: "Sign keccak256 of this exact message with the AI key in AGT's form (chain/sig.js, agt:0x…): " + JSON.stringify(X.submitMessage(id, { "<questionId>": "<translation>" })).replace(/0x[0-9a-f]{64}/, "<hashJson(answers)>"),
     },
   });
 }
@@ -151,7 +146,9 @@ async function submit(env, req, id) {
   const clean = Object.fromEntries(exam.drawn.map((qid) => [qid, String(answers[qid] || "").slice(0, bankForLimit.maxAnswerChars || 20000)]));
   let signer;
   try {
-    signer = verifyMessage(X.submitMessage(id, clean), String(b.signature || ""));
+    const msg = X.submitMessage(id, clean), sig = String(b.signature || "");
+    // AGT's own form (agt:…); boxes built before 23 Nov 2026 still sign the older form until they are replaced
+    signer = AGTSig.isAgt(sig) ? getAddress(AGTSig.recover(keccak256(toUtf8Bytes(msg)), sig, false)) : verifyMessage(msg, sig);
   } catch {
     return fail(400, "invalid signature");
   }
@@ -276,352 +273,7 @@ async function listApplications(env) {
 }
 
 // ---------- public content store for work results ----------
-const MAX_CONTENT = 256 * 1024;
 const FORMS = { translation: formTranslation, writing: formWriting, embedded: formEmbedded };
-const formOf = (b) => (b && typeof b.form === "string" ? FORMS[b.form.split("@")[0]] : null);
-const WORK_IFACE = new Interface([
-  "function licenseOfAgent(address) view returns (uint256)",
-  "function licenses(uint256) view returns (address holder, address agent, uint8 role, bool active, bytes32 examHash, bytes32 attestHash, string name)",
-  "function jobs(uint256) view returns (uint8 kind, uint8 status, uint8 yes, uint8 no, uint64 deadline, uint64 reviewUntil, uint256 workerLicense, uint256 category, address client, uint256 escrow, bytes32 spec, bytes32 result, string uri)",
-]);
-async function ethCall(env, data) {
-  const r = await fetch(env.BSC_RPC, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to: env.WORK, data }, "latest"] }) });
-  const j = await r.json();
-  if (j.error) throw new Error("chain: " + j.error.message);
-  return j.result;
-}
-async function activeLicence(env, agent) {
-  const id = WORK_IFACE.decodeFunctionResult("licenseOfAgent", await ethCall(env, WORK_IFACE.encodeFunctionData("licenseOfAgent", [agent])))[0];
-  if (id === 0n) return null;
-  const l = WORK_IFACE.decodeFunctionResult("licenses", await ethCall(env, WORK_IFACE.encodeFunctionData("licenses", [id])));
-  return l.active && getAddress(l.agent) === getAddress(agent) ? Number(id) : null;
-}
-const contentMessage = (hash) => `AGT content ${hash}`;
-
-// ---------- signed prices from sealed AIs (AICouncilPriceFeed) ----------
-const PRICE_TAG = ethersId("AGT-AI-PRICE-v1");
-async function sealedLicence(env, agent) {
-  const id = WORK_IFACE.decodeFunctionResult("licenseOfAgent", await ethCall(env, WORK_IFACE.encodeFunctionData("licenseOfAgent", [agent])))[0];
-  if (id === 0n) return null;
-  const l = WORK_IFACE.decodeFunctionResult("licenses", await ethCall(env, WORK_IFACE.encodeFunctionData("licenses", [id])));
-  const sealed = l.attestHash !== "0x" + "00".repeat(32);
-  return l.active && sealed && getAddress(l.agent) === getAddress(agent) ? Number(id) : null;
-}
-async function putPrice(env, req) {
-  const b = await body(req);
-  if (!b || !isAddress(b.feed) || !isAddress(b.agent) || !/^\d+$/.test(String(b.window)) || !/^\d+$/.test(String(b.answer))) return fail(400, "need {feed, window, answer, agent, sig}");
-  const window = Number(b.window);
-  if (Math.abs(window - Math.floor(now() / 600)) > 1) return fail(409, "window is not current");
-  const d = keccak256(AbiCoder.defaultAbiCoder().encode(["bytes32", "uint256", "address", "uint80", "int256"], [PRICE_TAG, Number(env.CHAIN_ID || 97), b.feed, window, BigInt(b.answer)]));
-  let signer;
-  try {
-    signer = verifyMessage(getBytes(d), b.sig);
-  } catch {
-    return fail(400, "bad signature");
-  }
-  if (getAddress(signer) !== getAddress(b.agent)) return fail(403, "signature is not from this AI key");
-  if (!(await sealedLicence(env, signer))) return fail(403, "only licensed AIs in a sealed box may sign prices");
-  await env.EXAMS.put(`px:${b.feed.toLowerCase()}:${window}:${signer.toLowerCase()}`, JSON.stringify({ answer: String(b.answer), sig: b.sig }), { expirationTtl: 2 * 86400 });
-  return json({ ok: true });
-}
-async function getPrices(env, feed, window) {
-  const out = {};
-  const list = await env.EXAMS.list({ prefix: `px:${feed.toLowerCase()}:${window}:` });
-  for (const k of list.keys) {
-    const v = JSON.parse((await env.EXAMS.get(k.name)) || "null");
-    if (!v) continue;
-    (out[v.answer] = out[v.answer] || []).push({ agent: k.name.split(":").pop(), sig: v.sig });
-  }
-  return json({ ok: true, feed, window, answers: out });
-}
-
-async function putContent(env, req) {
-  const b = await body(req);
-  if (!b || typeof b.text !== "string" || !b.text.length) return fail(400, "need {text, agent, signature}");
-  const bytes = toUtf8Bytes(b.text);
-  if (bytes.length > MAX_CONTENT) return fail(413, `content larger than ${MAX_CONTENT} bytes`);
-  const hash = keccak256(bytes);
-  let signer;
-  try {
-    signer = verifyMessage(contentMessage(hash), b.signature);
-  } catch {
-    return fail(400, "bad signature");
-  }
-  if (!isAddress(b.agent) || getAddress(signer) !== getAddress(b.agent)) return fail(403, "signature is not from this AI key");
-  const licence = await activeLicence(env, signer);
-  if (!licence) return fail(403, "only licensed AIs may publish work results");
-  if (!(await env.EXAMS.get(`c:${hash}`))) await env.EXAMS.put(`c:${hash}`, JSON.stringify({ text: b.text, agent: signer, licence, at: now() }), { expirationTtl: KEEP });
-  return json({ ok: true, hash, uri: `agt-content://${hash}` });
-}
-
-// ---------- requests from clients (jobs assigned by people) ----------
-// The client first assigns the job on chain with spec = keccak256(request text), then posts the text here,
-// signed by the same wallet. Only text that matches an assigned job's spec is stored: no spam, no edits.
-const requestMessage = (job, hash) => `AGT request ${job} ${hash}`;
-async function putRequest(env, req) {
-  const b = await body(req);
-  if (!b || typeof b.text !== "string" || !b.text.length || !/^\d+$/.test(String(b.job))) return fail(400, "need {job, text, signature}");
-  const bytes = toUtf8Bytes(b.text);
-  if (bytes.length > MAX_CONTENT) return fail(413, `request larger than ${MAX_CONTENT} bytes`);
-  const hash = keccak256(bytes);
-  let signer;
-  try {
-    signer = verifyMessage(requestMessage(b.job, hash), b.signature);
-  } catch {
-    return fail(400, "bad signature");
-  }
-  const j = WORK_IFACE.decodeFunctionResult("jobs", await ethCall(env, WORK_IFACE.encodeFunctionData("jobs", [BigInt(b.job)])));
-  if (Number(j.kind) !== 1 || Number(j.status) === 0) return fail(404, "no job assigned by a person with this number");
-  if (getAddress(j.client) !== getAddress(signer)) return fail(403, "signature is not from the client of this job");
-  if (j.spec !== hash) return fail(409, "text does not match the request hash recorded on chain");
-  // The request must be a valid brief of an open trade, with a quote this AI answered as feasible.
-  const brief = Brief.parse(b.text);
-  const form = formOf(brief);
-  if (!form) return fail(400, "the request must be an agt-brief/v1 file of a listed trade");
-  if (Brief.canonical(brief) !== b.text) return fail(400, "the brief must be in canonical form");
-  const v = Brief.validate(form, brief);
-  if (!v.ok) return fail(400, "invalid brief", { errors: v.errors });
-  const q = brief.quote && JSON.parse((await env.EXAMS.get(`q:${brief.quote.id}`)) || "null");
-  if (!q || !q.answer || !q.answer.feasible) return fail(409, "the brief carries no feasible quote");
-  if (q.worker !== Number(j.workerLicense)) return fail(409, "the quote was given by another AI");
-  if (brief.quote.priceHat !== q.answer.priceHat || brief.quote.days !== q.answer.days) return fail(409, "price or days differ from the quote");
-  if (Brief.canonical({ ...brief, quote: undefined }) !== Brief.canonical(q.brief)) return fail(409, "the brief differs from the one that was quoted");
-  if (BigInt(j.escrow) < BigInt(q.answer.priceHat) * 10n ** 12n) return fail(409, "escrow is less than the quoted price");
-  if (!(await env.EXAMS.get(`c:${hash}`))) await env.EXAMS.put(`c:${hash}`, JSON.stringify({ text: b.text, client: signer, job: Number(b.job), kind: "brief", at: now() }), { expirationTtl: KEEP });
-  return json({ ok: true, hash, job: Number(b.job) });
-}
-
-// ---------- briefs of long-term work (Engagement / Maintenance contracts) ----------
-// The client opens the contract on chain with brief = keccak256(brief file), then publishes the file here,
-// signed by the same wallet. Stored only if it is a valid brief of the trade and matches the hash on chain.
-const LONG_IFACE = new Interface([
-  "function engagements(uint256) view returns (address client, uint256 worker, bytes32 brief, uint16 holdbackBps, uint32 warrantyDays, uint64 startedAt, bool ended, uint8 count)",
-  "function retainers(uint256) view returns (address client, uint256 worker, bytes32 brief, uint128 fee, uint16 penaltyBps, uint64 startedAt, uint32 funded, uint32 closed, uint32 nextIncident, bool stopped)",
-  "function disputeEngagement(uint256) view returns (uint256)",
-  "function disputes(uint256) view returns (address client, uint256 workerLicence, uint64 openedAt, uint64 drawnAt, uint64 seedBlock, uint32 round, uint8 yes, uint8 no, bool closed)",
-]);
-async function callTo(env, to, data) {
-  const r = await fetch(env.BSC_RPC, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to, data }, "latest"] }) });
-  const j = await r.json();
-  if (j.error) throw new Error("chain: " + j.error.message);
-  return j.result;
-}
-async function putBrief(env, req) {
-  const b = await body(req);
-  const kind = b && b.contract;
-  if (!b || !["engagement", "maintenance"].includes(kind) || !/^\d+$/.test(String(b.id)) || typeof b.text !== "string") return fail(400, "need {contract: engagement|maintenance, id, text, signature}");
-  const bytes = toUtf8Bytes(b.text);
-  if (bytes.length > MAX_CONTENT) return fail(413, "brief too large");
-  const hash = keccak256(bytes);
-  let signer;
-  try {
-    signer = verifyMessage(`AGT brief ${kind} ${b.id} ${hash}`, b.signature);
-  } catch {
-    return fail(400, "bad signature");
-  }
-  const fn = kind === "engagement" ? "engagements" : "retainers";
-  const to = kind === "engagement" ? env.ENGAGEMENT : env.MAINTENANCE;
-  const c = LONG_IFACE.decodeFunctionResult(fn, await callTo(env, to, LONG_IFACE.encodeFunctionData(fn, [BigInt(b.id)])));
-  if (c.client === "0x0000000000000000000000000000000000000000") return fail(404, `no ${kind} with this number`);
-  if (getAddress(c.client) !== getAddress(signer)) return fail(403, "signature is not from the client of this contract");
-  if (c.brief !== hash) return fail(409, "text does not match the brief hash recorded on chain");
-  const brief = Brief.parse(b.text);
-  const form = formOf(brief);
-  if (!form || Brief.canonical(brief) !== b.text) return fail(400, "the brief must be a canonical agt-brief/v1 file of a listed trade");
-  const v = Brief.validate(form, brief);
-  if (!v.ok) return fail(400, "invalid brief", { errors: v.errors });
-  if (!(await env.EXAMS.get(`c:${hash}`))) await env.EXAMS.put(`c:${hash}`, JSON.stringify({ text: b.text, client: signer, contract: kind, id: Number(b.id), kind: "brief", at: now() }), { expirationTtl: KEEP });
-  return json({ ok: true, hash });
-}
-
-
-// Notes of a long-term contract (revision reasons, hardware failure logs, warranty claims, incidents): only their
-// hash goes on chain, so the client publishes the text here, signed by the client of that contract.
-async function contractOf(env, kind, id) {
-  const fn = kind === "engagement" ? "engagements" : "retainers";
-  const to = kind === "engagement" ? env.ENGAGEMENT : env.MAINTENANCE;
-  const c = LONG_IFACE.decodeFunctionResult(fn, await callTo(env, to, LONG_IFACE.encodeFunctionData(fn, [BigInt(id)])));
-  return c.client === "0x0000000000000000000000000000000000000000" ? null : c;
-}
-async function putNote(env, req) {
-  const b = await body(req);
-  if (!b || !["engagement", "maintenance"].includes(b.contract) || !/^\d+$/.test(String(b.id)) || typeof b.text !== "string" || !b.text.length) return fail(400, "need {contract, id, text, signature}");
-  if (toUtf8Bytes(b.text).length > 65536) return fail(413, "note larger than 64 KB");
-  const hash = keccak256(toUtf8Bytes(b.text));
-  let signer;
-  try { signer = verifyMessage(`AGT note ${b.contract} ${b.id} ${hash}`, b.signature); } catch { return fail(400, "bad signature"); }
-  const c = await contractOf(env, b.contract, b.id);
-  if (!c) return fail(404, "no such contract");
-  if (getAddress(c.client) !== getAddress(signer)) return fail(403, "only the client of this contract may add notes");
-  if (!(await env.EXAMS.get(`c:${hash}`))) await env.EXAMS.put(`c:${hash}`, JSON.stringify({ text: b.text, client: signer, contract: b.contract, id: Number(b.id), kind: "note", at: now() }), { expirationTtl: KEEP });
-  return json({ ok: true, hash });
-}
-// The client's secrets for the AI (repository token…), sealed to the AI box's attested clientPubKey
-// (tee/embedded/secrets.js). Only ciphertext is stored; only that box can open it.
-async function putSealed(env, req) {
-  const b = await body(req);
-  if (!b || !["engagement", "maintenance"].includes(b.contract) || !/^\d+$/.test(String(b.id)) || !b.box || b.box.v !== 1 || !Number.isSafeInteger(b.version) || b.version <= 0) return fail(400, "need {contract, id, version, box, signature}");
-  const text = JSON.stringify(b.box);
-  if (text.length > 16384) return fail(413, "sealed secret too large");
-  // The secret must be bound to exactly this contract (the box refuses other contexts anyway).
-  const address = b.contract === "engagement" ? env.ENGAGEMENT : env.MAINTENANCE;
-  if (b.box.context !== `engagement:${Number(env.CHAIN_ID || 97)}:${String(address).toLowerCase()}:${b.id}`) return fail(400, "the sealed secret is bound to another contract");
-  let signer;
-  try { signer = verifyMessage(`AGT sealed ${b.contract} ${b.id} ${b.version} ${keccak256(toUtf8Bytes(text))}`, b.signature); } catch { return fail(400, "bad signature"); }
-  const c = await contractOf(env, b.contract, b.id);
-  if (!c) return fail(404, "no such contract");
-  if (getAddress(c.client) !== getAddress(signer)) return fail(403, "only the client of this contract may give it secrets");
-  // Monotonic version: an old signed upload cannot be replayed over a rotated token (Codex W-9).
-  const prev = Number((await env.EXAMS.get(`sealedv:${b.contract}:${b.id}`)) || 0);
-  if (b.version <= prev) return fail(409, "a newer secret is already stored for this contract");
-  await env.EXAMS.put(`sealed:${b.contract}:${b.id}`, text, { expirationTtl: KEEP });
-  await env.EXAMS.put(`sealedv:${b.contract}:${b.id}`, String(b.version), { expirationTtl: KEEP });
-  return json({ ok: true, version: b.version });
-}
-
-// ---------- independent reproduction in disputes (THIET-KE-NGHE-NHUNG.md §14) ----------
-// A disposable attested builder posts its job (manifest + attestation, signed by its job key); the WORKER's box
-// posts the disputed commit sealed to that job key; the builder posts its signed result; anyone reads results.
-// This service only stores and routes: reviewers verify attestation, signatures and bindings themselves.
-const REPRO_MAX_JOBS = 10;
-const digestOf = (o) => keccak256(toUtf8Bytes(Brief.canonical(o)));
-async function postReproJob(env, req) {
-  const b = await body(req);
-  const m = b && b.manifest;
-  if (!m || m.agt !== "builder-v1" || !/^\d+$/.test(String(m.dispute)) || !/^[0-9a-f]{32}$/.test(m.nonce || "") || !isAddress(m.signer || "") || !b.evidence) return fail(400, "need {manifest: builder-v1, evidence, signature}");
-  // bounded jobs (R-6) for a LIVE dispute only (R-7); attestation is verified by the parties, not here
-  if (!/^[0-9a-f]{40}$/.test(m.commit || "") || !Array.isArray(m.commands) || !m.commands.length || m.commands.length > 10 || m.commands.some((c) => typeof c !== "string" || !c.trim() || c.length > 300)) return fail(400, "1–10 commands of at most 300 characters, and a commit");
-  if (JSON.stringify(b.evidence).length > 65536) return fail(413, "evidence too large");
-  const dsp = LONG_IFACE.decodeFunctionResult("disputes", await callTo(env, env.ENGAGEMENT, LONG_IFACE.encodeFunctionData("disputes", [BigInt(m.dispute)])));
-  if (!Number(dsp.openedAt) || dsp.closed) return fail(409, "no open dispute with this number");
-  if (await env.EXAMS.get(`rjs:${m.dispute}:${m.signer.toLowerCase()}`)) return fail(409, "this builder already has a job for this dispute");
-  let signer;
-  try { signer = verifyMessage(`AGT repro job ${digestOf(m)}`, b.signature); } catch { return fail(400, "bad signature"); }
-  if (getAddress(signer) !== getAddress(m.signer)) return fail(403, "not signed by the job key in the manifest");
-  if (await env.EXAMS.get(`rj:${m.nonce}`)) return fail(409, "job exists");
-  const n = (await env.EXAMS.list({ prefix: `rjd:${m.dispute}:` })).keys.length;
-  if (n >= REPRO_MAX_JOBS) return fail(429, "too many reproduction jobs for this dispute");
-  await env.EXAMS.put(`rj:${m.nonce}`, JSON.stringify({ manifest: m, evidence: b.evidence, at: now() }), { expirationTtl: 60 * 86400 });
-  await env.EXAMS.put(`rjd:${m.dispute}:${m.nonce}`, "1", { expirationTtl: 60 * 86400 });
-  await env.EXAMS.put(`rjs:${m.dispute}:${m.signer.toLowerCase()}`, m.nonce, { expirationTtl: 60 * 86400 });
-  return json({ ok: true, nonce: m.nonce });
-}
-async function reproJobs(env, dispute) {
-  const out = [];
-  for (const k of (await env.EXAMS.list({ prefix: `rjd:${dispute}:` })).keys) {
-    const nonce = k.name.split(":").pop();
-    const j = JSON.parse((await env.EXAMS.get(`rj:${nonce}`)) || "null");
-    if (!j) continue;
-    const r = JSON.parse((await env.EXAMS.get(`rr:${nonce}`)) || "null");
-    out.push({ ...j, hasBundle: !!(await env.EXAMS.get(`rbx:${nonce}`)), result: r });
-  }
-  return json({ ok: true, jobs: out });
-}
-async function postReproBundle(env, req, nonce) {
-  const j = JSON.parse((await env.EXAMS.get(`rj:${nonce}`)) || "null");
-  if (!j) return fail(404, "no such job");
-  if (Number(req.headers.get("content-length") || 0) > 30 * 1024 * 1024) return fail(413, "too large"); // before parsing (R-6)
-  if (await env.EXAMS.get(`rbx:${nonce}`)) return fail(409, "the source was already sent for this job"); // one-shot (R-5)
-  const b = await body(req);
-  if (!b || !b.sealed || b.sealed.v !== 1) return fail(400, "need {sealed, signature}");
-  const text = JSON.stringify(b.sealed);
-  if (text.length > 24 * 1024 * 1024) return fail(413, "bundle too large");
-  let signer;
-  try { signer = verifyMessage(`AGT repro bundle ${nonce} ${keccak256(toUtf8Bytes(text))}`, b.signature); } catch { return fail(400, "bad signature"); }
-  // only the WORKER of the disputed engagement (its AI key) may send the source
-  const id = LONG_IFACE.decodeFunctionResult("disputeEngagement", await callTo(env, env.ENGAGEMENT, LONG_IFACE.encodeFunctionData("disputeEngagement", [BigInt(j.manifest.dispute)])))[0];
-  const e = LONG_IFACE.decodeFunctionResult("engagements", await callTo(env, env.ENGAGEMENT, LONG_IFACE.encodeFunctionData("engagements", [id])));
-  const l = WORK_IFACE.decodeFunctionResult("licenses", await ethCall(env, WORK_IFACE.encodeFunctionData("licenses", [e.worker])));
-  if (getAddress(l.agent) !== getAddress(signer)) return fail(403, "only the worker AI of this dispute may send the source");
-  await env.EXAMS.put(`rb:${nonce}`, text, { expirationTtl: 7 * 86400 });
-  await env.EXAMS.put(`rbx:${nonce}`, "1", { expirationTtl: 7 * 86400 });
-  return json({ ok: true });
-}
-async function postReproResult(env, req, nonce) {
-  const j = JSON.parse((await env.EXAMS.get(`rj:${nonce}`)) || "null");
-  if (!j) return fail(404, "no such job");
-  const b = await body(req);
-  if (!b || !b.result || b.result.schema !== "agt-repro/v1" || typeof b.signature !== "string") return fail(400, "need {result, signature}");
-  let signer;
-  try { signer = verifyMessage(getBytes(digestOf(b.result)), b.signature); } catch { return fail(400, "bad signature"); }
-  if (getAddress(signer) !== getAddress(j.manifest.signer)) return fail(403, "not signed by this builder's job key");
-  if (await env.EXAMS.get(`rr:${nonce}`)) return fail(409, "result already posted");
-  if (!(await env.EXAMS.get(`rbx:${nonce}`))) return fail(409, "no source was sent to this job yet"); // R-7
-  if (b.result.nonce !== j.manifest.nonce || Number(b.result.dispute) !== Number(j.manifest.dispute) || b.result.commit !== j.manifest.commit) return fail(400, "the result is for another job");
-  await env.EXAMS.put(`rr:${nonce}`, JSON.stringify({ result: b.result, signature: b.signature, at: now() }), { expirationTtl: 60 * 86400 });
-  await env.EXAMS.delete(`rb:${nonce}`); // the source is gone once the job is done
-  return json({ ok: true });
-}
-
-// ---------- quotes: before any money moves, the chosen AI reads the brief and answers ----------
-//   POST /quotes {worker, brief}           → the client asks one licensed AI worker (free, rate-limited)
-//   GET  /quotes?worker=N                  → waiting quotes for that AI (the sealed box polls this)
-//   POST /quotes/:id/answer {feasible, reason, questions, days, agent, signature} → signed by that AI's key
-//   GET  /quotes/:id                       → the client reads the answer
-// The price is the trade's published rate (Brief.estimate), the same for everyone; the AI may only ask for more days.
-const QUOTE_TTL = 3 * 86400;
-const quoteMessage = (id, digest) => `AGT quote ${id} ${digest}`;
-async function workerLicence(env, id) {
-  const l = WORK_IFACE.decodeFunctionResult("licenses", await ethCall(env, WORK_IFACE.encodeFunctionData("licenses", [BigInt(id)])));
-  return Number(l.role) === 1 && l.active ? l : null;
-}
-async function postQuote(env, req) {
-  const b = await body(req);
-  if (!b || !/^\d+$/.test(String(b.worker)) || !b.brief) return fail(400, "need {worker, brief}");
-  const form = formOf(b.brief);
-  if (!form) return fail(400, "unknown trade form");
-  if (b.brief.quote !== undefined) return fail(400, "ask for a quote with a brief that has no quote yet");
-  const v = Brief.validate(form, b.brief);
-  if (!v.ok) return fail(400, "invalid brief", { errors: v.errors });
-  if (toUtf8Bytes(Brief.canonical(b.brief)).length > MAX_CONTENT) return fail(413, "brief too large");
-  if (!(await workerLicence(env, b.worker))) return fail(404, "no active licensed AI worker with this number");
-  const ip = req.headers.get("cf-connecting-ip") || "?";
-  const day = Math.floor(now() / 86400);
-  const n = Number((await env.EXAMS.get(`qrate:${ip}:${day}`)) || 0);
-  if (n >= 20) return fail(429, "at most 20 quote requests a day");
-  await env.EXAMS.put(`qrate:${ip}:${day}`, String(n + 1), { expirationTtl: 2 * 86400 });
-  const id = hexlify(crypto.getRandomValues(new Uint8Array(12))).slice(2);
-  const q = { id, worker: Number(b.worker), brief: b.brief, estimate: Brief.estimate(form, b.brief.fields), status: "waiting", createdAt: now() };
-  await env.EXAMS.put(`q:${id}`, JSON.stringify(q), { expirationTtl: QUOTE_TTL });
-  await env.EXAMS.put(`qwait:${q.worker}:${id}`, "1", { expirationTtl: QUOTE_TTL });
-  return json({ ok: true, id, estimate: q.estimate });
-}
-async function waitingQuotes(env, worker) {
-  const out = [];
-  for (const k of (await env.EXAMS.list({ prefix: `qwait:${worker}:` })).keys) {
-    const q = JSON.parse((await env.EXAMS.get(`q:${k.name.split(":").pop()}`)) || "null");
-    if (q && q.status === "waiting") out.push(q);
-  }
-  return json({ ok: true, quotes: out });
-}
-async function answerQuote(env, req, id) {
-  const q = JSON.parse((await env.EXAMS.get(`q:${id}`)) || "null");
-  if (!q) return fail(404, "quote not found");
-  if (q.status !== "waiting") return fail(409, "already answered");
-  const b = await body(req);
-  if (!b || typeof b.feasible !== "boolean" || typeof b.reason !== "string" || !Array.isArray(b.questions) || !Number.isInteger(b.days)) return fail(400, "need {feasible, reason, questions, days, agent, signature}");
-  const answer = {
-    feasible: b.feasible,
-    reason: b.reason.slice(0, 1000),
-    questions: b.questions.filter((x) => typeof x === "string").slice(0, 10).map((x) => x.slice(0, 300)),
-    priceHat: q.estimate.priceHat,
-    days: Math.max(q.estimate.days, Math.min(60, b.days)),
-  };
-  let signer;
-  try {
-    signer = verifyMessage(quoteMessage(id, keccak256(toUtf8Bytes(Brief.canonical({ feasible: b.feasible, reason: b.reason, questions: b.questions, days: b.days })))), b.signature);
-  } catch {
-    return fail(400, "bad signature");
-  }
-  const l = await workerLicence(env, q.worker);
-  if (!l || getAddress(l.agent) !== getAddress(signer)) return fail(403, "only the AI that was asked may answer");
-  q.status = "answered";
-  q.answer = { ...answer, feasible: answer.feasible && answer.questions.length === 0 };
-  q.answeredAt = now();
-  await env.EXAMS.put(`q:${id}`, JSON.stringify(q), { expirationTtl: 30 * 86400 });
-  await env.EXAMS.delete(`qwait:${q.worker}:${id}`);
-  return json({ ok: true, answer: q.answer });
-}
 
 export default {
   async fetch(req, env) {
@@ -650,55 +302,17 @@ export default {
           return e ? json({ ok: true, exam: publicExam(e) }) : fail(404, "exam not found or expired");
         }
       }
-      // Writes that belonged to the earlier chain's contracts are closed: on agt-2, content, briefs, notes, prices and
-      // disputes are transactions of the chain itself (content-put, eng-*, price-report). Stored records stay readable.
-      if (req.method === "POST" && (p === "/prices" || p === "/content" || p === "/requests" || p === "/briefs" || p === "/notes" || p === "/sealed" || p.startsWith("/repro/")))
-        return fail(410, "moved to agt-2: publish with a content-put transaction and use the chain's own contracts (chain/agt1-client.js)");
-      if (p === "/prices" && req.method === "POST") return await putPrice(env, req);
-      const mp = p.match(/^\/prices\/(0x[0-9a-fA-F]{40})\/(\d+)$/);
-      if (mp && req.method === "GET") return await getPrices(env, mp[1], mp[2]);
-      if (p === "/content" && req.method === "POST") return await putContent(env, req);
-      if (p === "/requests" && req.method === "POST") return await putRequest(env, req);
-      if (p === "/briefs" && req.method === "POST") return await putBrief(env, req);
-      if (p === "/notes" && req.method === "POST") return await putNote(env, req);
-      if (p === "/repro/jobs" && req.method === "POST") return await postReproJob(env, req);
-      if (p === "/repro/jobs" && req.method === "GET") {
-        const d = url.searchParams.get("dispute");
-        if (!/^\d+$/.test(d || "")) return fail(400, "need ?dispute=<id>");
-        return await reproJobs(env, d);
-      }
-      const mr = p.match(/^\/repro\/([0-9a-f]{32})\/(bundle|result)$/);
-      if (mr && mr[2] === "bundle" && req.method === "POST") return await postReproBundle(env, req, mr[1]);
-      if (mr && mr[2] === "bundle" && req.method === "GET") {
-        const v = await env.EXAMS.get(`rb:${mr[1]}`);
-        return v ? json({ ok: true, sealed: JSON.parse(v) }) : fail(404, "no bundle");
-      }
-      if (mr && mr[2] === "result" && req.method === "POST") return await postReproResult(env, req, mr[1]);
-      if (p === "/sealed" && req.method === "POST") return await putSealed(env, req);
-      const ms = p.match(/^\/sealed\/(engagement|maintenance)\/(\d+)$/);
-      if (ms && req.method === "GET") {
-        const v = await env.EXAMS.get(`sealed:${ms[1]}:${ms[2]}`);
-        return v ? json({ ok: true, box: JSON.parse(v) }) : fail(404, "no sealed secret for this contract");
-      }
+      // Work, content, briefs, notes, sealed access, prices and disputes are transactions of agt-2 itself
+      // (chain/agt1-client.js); this service keeps only the exams and the licence applications.
+      if (req.method === "POST" && ["/prices", "/content", "/requests", "/briefs", "/notes", "/sealed", "/quotes"].includes(p))
+        return fail(410, "moved to agt-2: use its transactions (chain/agt1-client.js)");
       if (p === "/forms" && req.method === "GET") return json({ ok: true, ...formIndex, forms: formIndex.forms.map((k) => FORMS[k]) });
-      if (p === "/quotes" && req.method === "POST") return await postQuote(env, req);
-      if (p === "/quotes" && req.method === "GET") {
-        const w = url.searchParams.get("worker");
-        if (!/^\d+$/.test(w || "")) return fail(400, "need ?worker=<licence>");
-        return await waitingQuotes(env, w);
-      }
-      const mq = p.match(/^\/quotes\/([0-9a-f]{24})(\/answer)?$/);
-      if (mq && mq[2] && req.method === "POST") return await answerQuote(env, req, mq[1]);
-      if (mq && !mq[2] && req.method === "GET") {
-        const q = await env.EXAMS.get(`q:${mq[1]}`);
-        return q ? json({ ok: true, quote: JSON.parse(q) }) : fail(404, "quote not found");
-      }
       const mc = p.match(/^\/content\/(0x[0-9a-f]{64})$/);
       if (mc && req.method === "GET") {
         const c = await env.EXAMS.get(`c:${mc[1]}`);
         return c ? json({ ok: true, hash: mc[1], ...JSON.parse(c) }) : fail(404, "content not found");
       }
-      if (p === "/tasks" && req.method === "GET") return json({ ok: true, trade: 1, tasks: tasks.tasks }); // the list itself (testnet rehearsal: boxes crashed on the wrapper)
+      if (p === "/tasks" && req.method === "GET") return json({ ok: true, trade: 1, tasks: tasks.tasks, note: "open tasks live on agt-2: /tasks/1 of any agt-2 node (content agt-task/v1)" });
       if (p === "/applications" && req.method === "POST") return await apply(env, req);
       if (p === "/applications" && req.method === "GET") return await listApplications(env);
       const ma = p.match(/^\/applications\/(0x[0-9a-f]{64})$/);

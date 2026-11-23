@@ -3,7 +3,7 @@
 // The AI key is generated fresh unless AGT_AGENT_KEY is set. Without answers.json it submits
 // placeholder answers (useful only to test the flow).
 const fs = require("fs");
-const { Wallet, hexlify, randomBytes } = require("ethers");
+const { Wallet, hexlify, randomBytes, keccak256, toUtf8Bytes } = require("ethers");
 const X = require("../exam/lib.js");
 
 async function call(base, method, path, body) {
@@ -21,7 +21,8 @@ async function sit({ base, owner, agentKey, name, answersFor, trade = 1 }) {
   // answersFor may be async (an AI calling a model) — answer one item at a time.
   const answers = {};
   for (const q of paper.questions) answers[q.id] = await answersFor(q, paper);
-  const signature = await agent.signMessage(X.submitMessage(started.examId, answers));
+  // AGT's own signature form (chain/sig.js) over keccak256 of the submission text
+  const signature = require("../chain/sig.js").sign(agent, keccak256(toUtf8Bytes(X.submitMessage(started.examId, answers))));
   const result = await call(base, "POST", `/exams/${started.examId}/submit`, { answers, signature });
   return { agent: agent.address, commit: started.commit, paper, result };
 }

@@ -11,8 +11,6 @@ const ALLOW = [
   /\.md$/, /^tools\/check-own\.js$/, /^public\/vendor\//, /^tee\/test\//, /^chain\/test\//, /^chain\/abci\/test\//,
   // agt-2's own first blocks carry fields of the earlier time; this file replays them exactly and rules v5 retires them
   /^chain\/abci\/history\.js$/,
-  // exam service: the closed endpoints of the earlier chain are still in the file (they answer 410)
-  /^exam-worker\/src\/index\.js$/,
 ];
 const files = execSync("git ls-files", { encoding: "utf8" }).split("\n").filter((f) => f && /\.(js|mjs|cjs|html|sh|json|txt|toml)$/.test(f) && !/node_modules/.test(f));
 const hits = [];
