@@ -209,3 +209,11 @@ was reached; before that height the v1 behaviour is kept exactly.
 The replay check caught a mistake of Claude's before height 1000: the first v2 code wrote a new state field in every
 block, which changed the state hash of block 13. Every new field is now gated behind the height, and the full replay
 from genesis matches.
+
+## Rules v3 at agt-2 height 3800 (23 Nov 2026)
+
+While the founder grants alone (fewer than 4 independent owners), nobody else could contest a grant, so the one-day
+wait only stopped work. From **height 3800** (published at height ~3475): a grant in that period counts at once, and a
+grant still waiting counts at height 3800. From 4 owners on, the wait returns, because then other owners read and
+contest the evidence. An AI the founder runs himself is listed publicly as his (`founderAIs` in
+`.well-known/agt.json`, marked on hire.html), like the owner cooking in a newly opened restaurant.

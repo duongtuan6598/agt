@@ -42,7 +42,8 @@ function btcDepositOf(tx) {
   return { chain: "btc", txHash: tx.txid, logIndex: toKho[0].i, beneficiary: "0x" + tag.slice(12), from: "btc", amount: String(toKho.reduce((t, { o }) => t + BigInt(o.value), 0n)) };
 }
 // Licences on the own ledger, not on BSC. Restaurant rule: until CARETAKER_UNTIL independent owners hold licences,
-// the founder grants and revokes, publicly, and never for an AI he owns (two conflicting roles). Then a grant or a
+// the founder grants and revokes, publicly; an AI the founder runs himself is listed publicly as his (founderAIs in
+// .well-known/agt.json), like the owner cooking in a newly opened restaurant. Then a grant or a
 // revocation needs signatures of more than 2/3 of the licensed owners. A grant waits LICENCE_WAIT blocks before it
 // counts (anyone can read and contest the evidence meanwhile; the granter can cancel it).
 const FOUNDER = "0x778c4fdfc8825a44a24cbc2e65606b9b8fe6e769";
@@ -370,7 +371,12 @@ const V2_AT = 1000;
 const v2 = (s) => Number(s.height || 0) >= V2_AT;
 const RECLAIM_BLOCKS = 14400 * 14; // a pending milestone with no delivery for 14 days can be taken back (D-1)
 const VOTE_BLOCKS = 14400 * 7;     // drawn reviewers have 7 days; then the votes cast decide (D-2)
-const PRICE_INTERVAL = 600;        // one price report per reporter per ~hour (D-3)
+const PRICE_INTERVAL = 600;
+// Rules v3 (founder: "phải có 1 đường để phát triển"), from height V3_AT: while the founder grants alone (fewer than 4
+// owners) nobody else could contest a grant, so waiting a day only stops work. A grant counts at once; pending grants
+// count at V3_AT. From 4 owners on, the wait comes back (owners read and contest the evidence meanwhile).
+const V3_AT = 3800;
+const v3 = (s) => Number(s.height || 0) >= V3_AT;        // one price report per reporter per ~hour (D-3)
 // A consensus key is exactly 32 bytes in CANONICAL base64: one key, one spelling (Codex P-4).
 const isKey = (k) => typeof k === "string" && Buffer.from(k, "base64").length === 32 && Buffer.from(k, "base64").toString("base64") === k;
 
@@ -444,7 +450,7 @@ class AGTApp {
       s.licNonce++;
       if (tx.type === "licence-grant") {
         const id = (s.nextLicence = (s.nextLicence || 0) + 1);
-        s.licences[id] = { ...body, active: false, pending: true, activeAt: Number(s.height || 0) + (s.ledger.licenceWait ?? LICENCE_WAIT) };
+        s.licences[id] = { ...body, active: false, pending: true, activeAt: Number(s.height || 0) + (v3(s) && granterActive(s) ? 0 : (s.ledger.licenceWait ?? LICENCE_WAIT)) };
       } else {
         const l = s.licences[body.id];
         if (!l) throw new Error("no such licence");
@@ -995,7 +1001,7 @@ class AGTApp {
     if (s.ledger && v2(s) && !s.handedOver && licOwners(s).length >= CARETAKER_UNTIL) s.handedOver = true; // one way (D-4)
     if (s.ledger && s.licences) {
       let changed = false;
-      for (const l of Object.values(s.licences)) if (l.pending && s.height >= l.activeAt) { l.pending = false; l.active = true; changed = true; }
+      for (const l of Object.values(s.licences)) if (l.pending && (s.height >= l.activeAt || (v3(s) && granterActive(s)))) { l.pending = false; l.active = true; changed = true; }
       if (changed) ownValset(s);
       if (changed && v2(s) && !s.handedOver && licOwners(s).length >= CARETAKER_UNTIL) s.handedOver = true; // latch in the same block the 4th owner activates (Codex review of v2)
     }
