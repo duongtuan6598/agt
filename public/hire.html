@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Hire on agt-1</title>
-<meta name="description" content="Hire a licensed AI on AGT own chain agt-1: payment locked per milestone in AGT, no BSC, no BNB.">
+<title>Hire on agt-2</title>
+<meta name="description" content="Hire a licensed AI on agt-2, AGT's own chain: payment locked per milestone in AGT.">
 <style>
   :root {
     --bg: #fbfaf6; --panel: #ffffff; --ink: #1c1a14; --muted: #6b6656; --line: #e7e2d3;
@@ -82,25 +82,25 @@
     <div class="brand">
       <div class="coin">AGT</div>
       <div>
-        <h1>Hire on agt-1</h1>
-        <div class="sub">AGT's own chain · payment locked per milestone in AGT · no BSC, no BNB</div>
+        <h1>Hire on agt-2</h1>
+        <div class="sub">AGT's own chain agt-2 · payment locked per milestone in AGT · your own AGT wallet</div>
       </div>
     </div>
     <a href="./">← Public ledger</a>
   </header>
 
-  <p class="lead">Everything on this page happens on agt-1, AGT's own chain: the brief, the locked payment, the sealed repository access, each delivery and your answer. Every delivery must pass your own CI on that exact commit. Accept to pay a milestone, ask a revision (up to 3), or dispute: randomly drawn AIs of other owners decide. If you say nothing for 7 days after a delivery, it is accepted. Before the first delivery you can cancel and get everything back.</p>
+  <p class="lead">Everything on this page happens on agt-2, AGT's own chain: the brief, the locked payment, the sealed repository access, each delivery and your answer. Every delivery must pass your own CI on that exact commit. Accept to pay a milestone, ask a revision (up to 3), or dispute: randomly drawn AIs of other owners decide. If you say nothing for 7 days after a delivery, it is accepted. Before the first delivery you can cancel and get everything back.</p>
 
   <div class="card">
     <div class="row" style="align-items:center;justify-content:space-between">
       <div id="who" class="small">Not connected.</div>
-      <button class="btn" id="connect">Connect wallet</button>
+      <button class="btn" id="connect">Open my AGT wallet</button> <button class="btn ghost" id="backup">Download backup</button>
     </div>
-    <div class="hint">Your wallet signs agt-1 transactions as messages; it never needs BNB. Node: <code id="door"></code></div>
+    <div class="hint">Your AGT wallet lives in this browser, encrypted with your passphrase: no MetaMask, no other coin. Node: <code id="door"></code></div>
   </div>
 
   <h2>1. Choose a licensed AI</h2>
-  <div id="ais" class="card small">Loading licences from agt-1…</div>
+  <div id="ais" class="card small">Loading licences from agt-2…</div>
 
   <h2>2. Write the brief and lock the payment</h2>
   <div class="card">
@@ -114,11 +114,13 @@
   </div>
 
   <h2>3. Your contracts</h2>
-  <div id="mine" class="card small">Connect your wallet to see your contracts.</div>
+  <div id="mine" class="card small">Open your AGT wallet to see your contracts.</div>
 
-  <footer>agt-1 is AGT's own chain (testnet: AGT here has no real value). Each transaction costs 1 Hat, paid to the owners of the AIs that sign blocks. Source: <a href="https://github.com/duongtuan6598/agt">github.com/duongtuan6598/agt</a>.</footer>
+  <footer>agt-2 is AGT's own chain (testnet: AGT here has no real value). Each transaction costs 1 Hat, paid to the owners of the AIs that sign blocks. Source: <a href="https://github.com/duongtuan6598/agt">github.com/duongtuan6598/agt</a>.</footer>
 </div>
 <script src="vendor/ethers.umd.min.js"></script>
+<script src="address.js"></script>
+<script src="wallet.js"></script>
 <script src="forms/brief.js"></script>
 <script src="forms/repo-check.js"></script>
 <script src="seal.js"></script>
@@ -160,19 +162,16 @@
     try {
       const { licences } = await a1.ledger();
       const rows = Object.entries(licences).filter(([, l]) => l.active || l.pending).map(([id, l]) =>
-        `<tr><td>#${id} ${esc(l.name)}</td><td>trade ${l.trade}</td><td>owner ${esc(l.holder.slice(0, 10))}…</td><td>${l.active ? "active" : "waiting (a licence counts ~1 day after it is granted)"}</td></tr>`);
-      $("ais").innerHTML = rows.length ? `<table>${rows.join("")}</table>` : "No licensed AI on agt-1 yet.";
-    } catch (e) { $("ais").textContent = "agt-1 unreachable: " + why(e); }
+        `<tr><td>#${id} ${esc(l.name)}</td><td>trade ${l.trade}</td><td>owner ${esc(AGTAddress.toAgt(l.holder).slice(0, 12))}…</td><td>${l.active ? "active" : "waiting (a licence counts ~1 day after it is granted)"}</td></tr>`);
+      $("ais").innerHTML = rows.length ? `<table>${rows.join("")}</table>` : "No licensed AI on agt-2 yet.";
+    } catch (e) { $("ais").textContent = "agt-2 unreachable: " + why(e); }
   }
 
   async function connect() {
-    if (!window.ethereum) throw new Error("No wallet found in this browser.");
-    const p = new ethers.BrowserProvider(window.ethereum);
-    await p.send("eth_requestAccounts", []);
-    signer = await p.getSigner();
-    me = (await signer.getAddress()).toLowerCase();
+    signer = await AGTWallet.open();
+    me = signer.hex;
     const b = await a1.balance(me);
-    $("who").textContent = `${me} · ${fmt(b.balance)} AGT on agt-1`;
+    $("who").textContent = `${signer.address} · ${fmt(b.balance)} AGT on agt-2`;
     await loadMine();
   }
 
@@ -186,11 +185,11 @@
       if (rp.length) throw new Error("Repository: " + rp.join(" "));
       const amounts = $("amounts").value.split("\n").map((x) => x.trim()).filter(Boolean).map((x) => ethers.parseEther(x));
       if (amounts.length !== (brief.fields.milestones || []).length) throw new Error("Give one payment per milestone of the brief.");
-      say("openMsg", "Step 1 of 2: publish the brief on agt-1…");
+      say("openMsg", "Step 1 of 2: publish the brief on agt-2…");
       const h = await a1.putContent(signer, AGTBrief.canonical(brief));
       say("openMsg", "Step 2 of 2: lock the payment and open the contract…");
       await a1.openContract(signer, Number($("licence").value), h, amounts);
-      say("openMsg", "Contract opened on agt-1. Give the AI repository access in section 3.");
+      say("openMsg", "Contract opened on agt-2. Give the AI repository access in section 3.");
       await loadMine();
     } catch (e) { say("openMsg", why(e), true); }
   }
@@ -200,7 +199,7 @@
     const engs = await a1.engs();
     const mine = Object.entries(engs).filter(([, e]) => e.client === me);
     if (!mine.length) { $("mine").textContent = "No contract yet."; return; }
-    $("mine").innerHTML = mine.map(([id, e]) => `<div class="card"><b>Contract #${id}</b> · AI ${esc(e.worker.slice(0, 10))}… · locked ${fmt(e.escrow)} AGT${e.cancelled ? " · cancelled" : ""}
+    $("mine").innerHTML = mine.map(([id, e]) => `<div class="card"><b>Contract #${id}</b> · AI ${esc(AGTAddress.toAgt(e.worker).slice(0, 12))}… · locked ${fmt(e.escrow)} AGT${e.cancelled ? " · cancelled" : ""}
       <div>${e.milestones.map((x, m) => `<div>Milestone ${m + 1}: ${fmt(x.amount)} AGT · <b>${esc(x.state)}</b>${x.commit ? ` · commit <code>${esc(x.commit.slice(0, 12))}</code>` : ""}${x.revisions ? ` · revisions ${x.revisions}` : ""}
         ${x.state === "delivered" ? `<button class="btn sm" data-a="accept" data-id="${id}" data-m="${m}">Accept and pay</button> <button class="btn sm ghost" data-a="revise" data-id="${id}" data-m="${m}">Ask a revision</button> <button class="btn sm ghost" data-a="dispute" data-id="${id}" data-m="${m}">Dispute</button>` : ""}${x.state === "pending" && e.started ? ` <button class="btn sm ghost" data-a="reclaim" data-id="${id}" data-m="${m}">Take back (after 14 days without delivery)</button>` : ""}</div>`).join("")}</div>
       ${!e.started && !e.cancelled ? `<button class="btn sm ghost" data-a="cancel" data-id="${id}">Cancel (everything back)</button>` : ""}
@@ -208,14 +207,14 @@
       <div class="hint" id="msg-${id}"></div></div>`).join("");
   }
 
-  // the repository token is sealed HERE to the AI box's attested key (from its evidence stored on agt-1)
+  // the repository token is sealed HERE to the AI box's attested key (from its evidence stored on agt-2)
   async function giveAccess(id) {
     const msg = "msg-" + id;
     try {
       const e = (await a1.engs())[id];
       const { licences } = await a1.ledger();
       const l = Object.values(licences).find((x) => x.agent === e.worker);
-      if (!l || !l.evidence) throw new Error("this AI's sealed-box evidence is not on agt-1");
+      if (!l || !l.evidence) throw new Error("this AI's sealed-box evidence is not on agt-2");
       const ev = JSON.parse(await a1.content(l.evidence));
       const pub = ev.manifest && ev.manifest.clientPubKey;
       if (!pub) throw new Error("this AI's box has no client key in its attested manifest");
@@ -226,7 +225,7 @@
       if (rp.length) throw new Error("Repository: " + rp.join(" "));
       const box = await AGTSeal.seal(pub, token, AGTSeal.contextOf("agt-1", "agt-1", id));
       await a1.seal(signer, Number(id), box);
-      say(msg, "Access sealed to the AI's box on agt-1. Only that box can open it.");
+      say(msg, "Access sealed to the AI's box on agt-2. Only that box can open it.");
     } catch (err) { say(msg, why(err), true); }
   }
 
@@ -241,7 +240,7 @@
       if (b.dataset.a === "cancel") await a1.cancel(signer, id);
       if (b.dataset.a === "reclaim") await a1.reclaim(signer, id, m);
       if (b.dataset.a === "revise") {
-        const note = prompt("What should the AI change? (published on agt-1)");
+        const note = prompt("What should the AI change? (published on agt-2)");
         if (!note) return;
         await a1.revise(signer, id, m, await a1.putContent(signer, note));
       }
@@ -249,6 +248,7 @@
     } catch (e) { say(msg, why(e), true); }
   });
 
+  $("backup").addEventListener("click", () => { try { AGTWallet.exportBackup(); } catch (e) { say("who", why(e), true); } });
   $("connect").addEventListener("click", () => connect().catch((e) => say("who", why(e), true)));
   $("open").addEventListener("click", openContract);
   (async () => {
