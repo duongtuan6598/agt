@@ -1,7 +1,7 @@
 // Follow agt-1 and check every block yourself: download the genesis and each block through any agt-1 RPC (the public
 // door by default), replay it through the AGT rules on YOUR machine (chain/abci/app.js), and compare your state hash
 // with the one the next block commits to. If the caretaker (or anyone) ever produced a block that breaks the rules,
-// your replay disagrees and this stops at that height. No key, no BSC, no trust.
+// your replay disagrees and this stops at that height. No key, no trust.
 //   node tools/agt1-follow.js [rpc] [--to <height>]
 const fs = require("fs");
 const os = require("os");

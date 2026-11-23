@@ -1,5 +1,5 @@
 // agt-1 in the browser: the same signing rules as chain/core.js and chain/agt1-client.js, through a public door
-// (or any agt-1 node's RPC). Needs window.ethers. No BSC, no outside content service.
+// (or any agt-1 node's RPC). Needs window.ethers. No outside content service.
 (function (root) {
   const ethers = root.ethers;
   const DOOR = "https://agt1-relay.agtcoin.workers.dev/rpc";

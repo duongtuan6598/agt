@@ -65,7 +65,7 @@
     "tranTuyetDoi": 10,
     "tra": "100% shared among the AIs that signed the block (rewards to their owners)",
     "nguon": "Paid by the sender of each transaction — NOT minted, so it is not a Work-door trade and is not set via setCategory",
-    "batDau": "Stage 2 (AGT's own chain). Stage 1: BSC validators confirm transfers and are paid gas by the sender.",
+    "batDau": "AGT's own chain agt-2: the AIs that sign blocks are paid a fixed fee in AGT per transaction.",
     "dieu": "Charter Article 8"
   },
   "khieuNai": {

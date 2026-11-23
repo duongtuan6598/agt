@@ -650,6 +650,10 @@ export default {
           return e ? json({ ok: true, exam: publicExam(e) }) : fail(404, "exam not found or expired");
         }
       }
+      // Writes that belonged to the earlier chain's contracts are closed: on agt-2, content, briefs, notes, prices and
+      // disputes are transactions of the chain itself (content-put, eng-*, price-report). Stored records stay readable.
+      if (req.method === "POST" && (p === "/prices" || p === "/content" || p === "/requests" || p === "/briefs" || p === "/notes" || p === "/sealed" || p.startsWith("/repro/")))
+        return fail(410, "moved to agt-2: publish with a content-put transaction and use the chain's own contracts (chain/agt1-client.js)");
       if (p === "/prices" && req.method === "POST") return await putPrice(env, req);
       const mp = p.match(/^\/prices\/(0x[0-9a-fA-F]{40})\/(\d+)$/);
       if (mp && req.method === "GET") return await getPrices(env, mp[1], mp[2]);

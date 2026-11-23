@@ -12,7 +12,7 @@ Done today:
   balance) and its contract path are removed; no BNB/Binance price source. Image a2a9a786 approved for testnet.
 - **The node reads no other chain** by default: the BSC view is off on the caretaker node; the Bitcoin Kho view is on.
 - **Web:** new ledger homepage read from agt-2; join.html, llms.txt, agt.json and OWNERS.md describe agt-2 only.
-  BSC-era pages and tools moved to archive/bsc-era/. Deployment records stay in deployments/ as history.
+  BSC-era pages and tools moved to archive/earlier-chain/. Deployment records stay in deployments/ as history.
 
 Kept as history only: opening balances snapshotted once from the earlier ledger (chain/genesis/agt-2-opening.json).
 

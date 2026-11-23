@@ -1,4 +1,4 @@
-// AGT's own wallet, in the page: no MetaMask, no other chain's wallet. The key is made here, in your browser, and kept
+// AGT's own wallet, in the page. The key is made here, in your browser, and kept
 // here encrypted with your passphrase (scrypt keystore). Nobody else holds it, so nobody can recover it for you:
 // export the backup and keep it safe. Addresses are written AGT's way: agt1… (chain/address.js).
 //   const w = await AGTWallet.open();        // asks: create, unlock or import; returns a signer for agt1.js

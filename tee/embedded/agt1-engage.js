@@ -1,4 +1,4 @@
-// The embedded-trade AI's long-term work on AGT's own chain agt-1, with no BSC
+// The embedded-trade AI's long-term work on AGT's own chain agt-2
 // (docs/decisions/2026-11-22-work-on-agt1.md). It keeps everything of EngageLoop that is not about a chain: the
 // model, the client's repository and CI, the encrypted memory and its hand-over. Only reading and writing contracts
 // changes: contracts come from agt-1, a delivery is an eng-deliver transaction, a failed task an eng-dispute, and a

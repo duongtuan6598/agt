@@ -90,4 +90,4 @@ until independent owners take over.
 
 AGT began in 2026 as a token on another chain's testnet. Since 22 Nov 2026 it lives on its own chain, and nothing
 in AGT depends on that earlier chain. The old contracts and pages are kept only as a record, in `deployments/` and
-`archive/bsc-era/`.
+`archive/earlier-chain/`.

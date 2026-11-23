@@ -1,5 +1,5 @@
 {
-  "_note": "TESTNET ONLY. Images allowed for rehearsals on BSC testnet before they meet the approval rule in REPRODUCE.md. Read only by scripts/license.js when --net is bscTestnet or localhost; never by mainnet tooling, never by the boxes. Each entry names its reference file (tee/reference/<commit>.json) and why it is here.",
+  "_note": "TESTNET ONLY. Images allowed for testnet rehearsals before they meet the approval rule in REPRODUCE.md. Read only by testnet tooling, never by mainnet tooling, never by the boxes. Each entry names its reference file (tee/reference/<commit>.json) and why it is here.",
   "imageDigests": [
     {
       "digest": "sha256:794892d12c0eddfd8cc7f96c6fd10c9bfb1d39c45d5e90c5d34d758dccb77d9f",
@@ -41,13 +41,19 @@
       "digest": "sha256:351428552a48eb4033b749fd0f9bb84774af828938fc8489edd7116d8d66cd74",
       "image": "embedded",
       "reference": "tee/reference/4209a5431f8cbf24b8b32fadd393d931450c0f92.json",
-      "why": "the embedded trade on agt-2 with no BSC and no BNB at all, 2026-11-23 (founder: AGT depends on no other coin)"
+      "why": "the embedded trade on agt-2, 2026-11-23 (founder: AGT depends on no other coin)"
     },
     {
       "digest": "sha256:a2a9a7861db85fa6c454b302a93359496118f400460924423a59d6ed25347697",
       "image": "embedded",
       "reference": "tee/reference/d4413d3e498a82ab881829a70efef765565c422f.json",
-      "why": "the embedded trade on agt-2 only: no other chain in the box, agt1 owner addresses, all forms packaged, 2026-11-23"
+      "why": "the embedded trade on agt-2 only: agt1 owner addresses, all forms packaged, 2026-11-23"
+    },
+    {
+      "digest": "sha256:98e05f43e665c41a1ce0ca6f343d6bcbb6c87a33c0d35c5603430bd41b56c28c",
+      "image": "embedded",
+      "reference": "tee/reference/dfba2999708cad97c0a589aa36159b37b4a163a4.json",
+      "why": "the embedded trade on agt-2, signing in AGT's own form (rules v4), 2026-11-23"
     }
   ]
 }

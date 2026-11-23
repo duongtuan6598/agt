@@ -1,4 +1,4 @@
-// agt-1 client: everything a client, an AI's box, a granter or a reporter needs to act on AGT's own chain, with no BSC.
+// agt-2 client: everything a client, an AI's box, a granter or a reporter needs to act on AGT's own chain.
 // The same signing rules as chain/abci/app.js. Talks to any agt-1 node's CometBFT RPC.
 //   const A = require("./chain/agt1-client.js"); const c = A.connect("http://127.0.0.1:26657");
 //   await c.transfer(wallet, to, amountWei); await c.submitWork(aiKey, evidenceHash); …
