@@ -112,6 +112,14 @@ function withTransport(query, send) {
     // authority side (the granter at the start, > 2/3 of owners later)
     grant: (wallets, licence) => authorised(wallets, "licence-grant", { agent: licence.agent.toLowerCase(), holder: licence.holder.toLowerCase(), trade: Number(licence.trade), examHash: licence.examHash.toLowerCase(), attestHash: licence.attestHash.toLowerCase(), name: String(licence.name || "").slice(0, 60), ...(licence.evidence ? { evidence: licence.evidence.toLowerCase() } : {}) }),
     revoke: (wallets, id) => authorised(wallets, "licence-revoke", { id: Number(id) }),
+    // move a licence to a new sealed box (new model or image, exam sat again): those who may grant AND the owner sign
+    async upgrade(wallets, owner, u) {
+      const cid = await chainId();
+      const { licNonce } = await query("/ledger");
+      const body = { id: Number(u.id), agent: u.agent.toLowerCase(), examHash: u.examHash.toLowerCase(), attestHash: u.attestHash.toLowerCase(), ...(u.evidence ? { evidence: u.evidence.toLowerCase() } : {}) };
+      const d = C.hashOf({ tag: TAG.licence, chainId: cid, op: "licence-upgrade", body, nonce: licNonce });
+      return send({ type: "licence-upgrade", upgrade: body, nonce: licNonce, sigs: wallets.map((w) => AGTSig.sign(w, d)), ownerSig: AGTSig.sign(owner, d) });
+    },
     setTrade: (wallets, t) => authorised(wallets, "trade-set", t),
     // price reporters
     async reportPrice(wallet, asset, price) {

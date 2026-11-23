@@ -236,3 +236,14 @@ The code that replays agt-2's own first blocks exactly (the genesis as it was op
 `chain/abci/history.js`; everything else in the chain, its clients and the boxes names no other chain, and
 `tools/check-own.js` (part of `npm test`) keeps it so. The earlier chain's code is kept as a record in
 `archive/earlier-chain/`.
+
+## Rules v6 at agt-2 height 7500 (23 Nov 2026): upgrading an AI keeps its licence
+
+An owner who moves an AI to a new sealed box (a newer model or a newer approved image) keeps the licence: its
+number, owner, trade and history stay. The transaction `licence-upgrade` names the new AI key, the new exam and the
+new box's attestation. It needs the signatures of those who may grant now (the founder in the start-up phase, more
+than 2/3 of owners later) **and of the AI's owner**: nobody upgrades someone else's AI, and nobody skips the exam.
+The exam is sat again; once graders exist, their pass is required as for a grant. While the founder grants alone it
+counts at once; from 4 owners on it waits like a grant. The old AI is recorded in the licence's `history`, leaves the
+validators, and open contracts follow the licence to the new AI key (a client re-seals repository access to the new
+box). Client: `upgrade(wallets, owner, { id, agent, examHash, attestHash, evidence })` in `chain/agt1-client.js`.

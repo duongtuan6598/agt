@@ -209,6 +209,29 @@ function ownValset(s) {
 // who may sign a licence change right now, and whether these signatures suffice
 // the starting granter's role ends for good the first time 4 independent owners hold licences (D-4)
 const granterActive = (s) => !(v2(s) && s.handedOver) && licOwners(s).length < CARETAKER_UNTIL;
+// once graders exist, a licence (or an upgrade) needs a pass from enough of them and no fail
+function examPassed(s, examHash, agent, trade, holder) {
+  const graders = Object.entries(s.graders || {}).filter(([, g]) => g.on).map(([k]) => k);
+  if (!graders.length) return;
+  const x = (s.exams || {})[String(examHash).toLowerCase()];
+  const need = Math.min(GRADER_QUORUM, graders.length);
+  const passes = x ? x.pass.filter((g) => graders.includes(g) && s.graders[g].holder !== holder).length : 0; // not its own owner's AI
+  if (!x || x.agent !== agent || x.trade !== Number(trade) || passes < need || x.fail.some((g) => graders.includes(g)))
+    throw new Error(`the exam is not passed on agt-2: ${passes} of ${need} graders signed a pass (and none a fail)`);
+}
+// a licence moves to its new AI: the old one is recorded, and leaves the validators and the open contracts
+function applyUpgrade(s, id, u) {
+  const l = s.licences[id];
+  const old = l.agent;
+  l.history = [...(l.history || []), { until: Number(s.height || 0), agent: old, examHash: l.examHash, attestHash: l.attestHash, ...(l.evidence ? { evidence: l.evidence } : {}) }];
+  Object.assign(l, { agent: u.agent, examHash: u.examHash, attestHash: u.attestHash });
+  if (u.evidence) l.evidence = u.evidence; else delete l.evidence;
+  delete l.pendingUpgrade;
+  for (const e of Object.values(s.engs || {})) if (e.worker === old && !e.cancelled) e.worker = u.agent;
+  delete s.binds[old];
+  for (const [k, c] of Object.entries(s.cmt || {})) if (c.agent === old) delete s.cmt[k];
+  ownValset(s);
+}
 function licAuthorised(s, digest, sigs) {
   const signers = new Set((sigs || []).map((g) => { try { return lower(C.recoverSig(s, digest, g)); } catch { return null; } }).filter(Boolean));
   const owners = licOwners(s);
@@ -276,6 +299,12 @@ const PRICE_INTERVAL = 600;
 // owners) nobody else could contest a grant, so waiting a day only stops work. A grant counts at once; pending grants
 // count at V3_AT. From 4 owners on, the wait comes back (owners read and contest the evidence meanwhile).
 const V3_AT = 3800;
+// Rules v6 (founder: "nếu chủ AI nâng cấp model thì sao"), from height V6_AT: a licence can move to a NEW sealed box
+// (a new model or a new image, a re-sat exam) and keep its number, owner, trade and history. Signed by those who may
+// grant now AND by the AI's owner: nobody upgrades someone else's AI. While the founder grants alone it counts at once;
+// from 4 owners on it waits LICENCE_WAIT like a grant. Open contracts follow the licence to the new AI key.
+const V6_AT = 7500;
+const v6 = (s) => Number(s.height || 0) >= V6_AT;
 const v3 = (s) => Number(s.height || 0) >= V3_AT;        // one price report per reporter per ~hour (D-3)
 // A consensus key is exactly 32 bytes in CANONICAL base64: one key, one spelling (Codex P-4).
 const isKey = (k) => typeof k === "string" && Buffer.from(k, "base64").length === 32 && Buffer.from(k, "base64").toString("base64") === k;
@@ -316,6 +345,36 @@ class AGTApp {
   }
 
   applyAny(s, tx, { fromProposer = false } = {}) {
+    if (tx.type === "licence-upgrade") {
+      if (!v6(s)) throw new Error("licence-upgrade starts with rules v6");
+      s.licNonce = s.licNonce || 0;
+      if (Number(tx.nonce) !== s.licNonce) throw new Error("bad licence nonce");
+      const u = tx.upgrade || {};
+      const id = Number(u.id), l = (s.licences || {})[id];
+      if (!l || !l.active) throw new Error("only an active licence can be upgraded");
+      if (l.pendingUpgrade) throw new Error("an upgrade of this licence is already waiting");
+      if (!ethers.isAddress(u.agent)) throw new Error("bad AI address");
+      if (!/^0x[0-9a-fA-F]{64}$/.test(String(u.examHash)) || !/^0x[0-9a-fA-F]{64}$/.test(String(u.attestHash)) || /^0x0+$/.test(String(u.attestHash)))
+        throw new Error("an upgrade carries the new exam and the new sealed-box attestation");
+      const agent = lower(u.agent);
+      if (agent === l.agent) throw new Error("that is the same AI");
+      if (Object.values(s.licences).some((x) => (x.active || x.pending) && (x.agent === agent || (x.pendingUpgrade && x.pendingUpgrade.agent === agent)))) throw new Error("that AI already holds a licence");
+      examPassed(s, u.examHash, agent, l.trade, l.holder);
+      const body = { id, agent, examHash: String(u.examHash).toLowerCase(), attestHash: String(u.attestHash).toLowerCase() };
+      if (u.evidence !== undefined) {
+        if (!/^0x[0-9a-f]{64}$/.test(String(u.evidence).toLowerCase()) || !(s.content || {})[String(u.evidence).toLowerCase()]) throw new Error("the new evidence must be stored on agt-2 first (content-put)");
+        body.evidence = String(u.evidence).toLowerCase();
+      }
+      const digest = licDigest(s.chainId, tx.type, body, s.licNonce);
+      if (!licAuthorised(s, digest, tx.sigs)) throw new Error("licence change not signed by those who may sign it now");
+      let owner = null;
+      try { owner = lower(C.recoverSig(s, digest, tx.ownerSig)); } catch {}
+      if (owner !== l.holder) throw new Error("the AI's owner did not sign this upgrade");
+      s.licNonce++;
+      if (granterActive(s)) applyUpgrade(s, id, body);
+      else l.pendingUpgrade = { ...body, at: Number(s.height || 0) + (s.ledger.licenceWait ?? LICENCE_WAIT) };
+      return 0n;
+    }
     if (tx.type === "licence-grant" || tx.type === "licence-revoke" || tx.type === "licence-cancel") {
       if (!s.ledger) throw new Error("licences live on the own ledger only");
       s.licences = s.licences || {};
@@ -782,6 +841,7 @@ class AGTApp {
       let changed = false;
       for (const l of Object.values(s.licences)) if (l.pending && (s.height >= l.activeAt || (v3(s) && granterActive(s)))) { l.pending = false; l.active = true; changed = true; }
       if (changed) ownValset(s);
+      if (v6(s)) for (const [id, l] of Object.entries(s.licences)) if (l.pendingUpgrade && l.active && s.height >= l.pendingUpgrade.at) applyUpgrade(s, Number(id), l.pendingUpgrade);
       if (changed && v2(s) && !s.handedOver && licOwners(s).length >= CARETAKER_UNTIL) s.handedOver = true; // latch in the same block the 4th owner activates (Codex review of v2)
     }
     const next = activeSet(s);
