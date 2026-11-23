@@ -42,6 +42,12 @@
       "image": "embedded",
       "reference": "tee/reference/4209a5431f8cbf24b8b32fadd393d931450c0f92.json",
       "why": "the embedded trade on agt-2 with no BSC and no BNB at all, 2026-11-23 (founder: AGT depends on no other coin)"
+    },
+    {
+      "digest": "sha256:a2a9a7861db85fa6c454b302a93359496118f400460924423a59d6ed25347697",
+      "image": "embedded",
+      "reference": "tee/reference/d4413d3e498a82ab881829a70efef765565c422f.json",
+      "why": "the embedded trade on agt-2 only: no other chain in the box, agt1 owner addresses, all forms packaged, 2026-11-23"
     }
   ]
 }
