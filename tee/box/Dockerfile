@@ -9,14 +9,14 @@ WORKDIR /agt
 COPY tee/box/package.json tee/box/package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts && rm -rf /root/.npm /tmp/*
 COPY HIEN-CHUONG.md CHARTER.md ./
-COPY chain/core.js chain/address.js chain/sig.js chain/
+COPY chain/core.js chain/address.js chain/sig.js chain/agt1-client.js chain/
 COPY chain/abci/app.js chain/abci/app.js
 COPY chain/abci/proto chain/abci/proto
 COPY exam/lib.js exam/lib.js
 COPY exam-worker/client.js exam-worker/client.js
 COPY tee/verify.js tee/escrow.js tee/tdx.js tee/snp.js tee/der.js tee/collateral.js tee/policy.json tee/
-COPY public/forms/brief.js public/forms/index.json public/forms/translation.json public/forms/writing.json public/forms/embedded.json public/forms/
-COPY tee/box/start.js tee/box/answer.js tee/box/agent.js tee/box/models.js tee/box/models.json tee/box/prices.js tee/box/system-prompt.txt tee/box/
+COPY public/forms public/forms
+COPY tee/box/start.js tee/box/agt1-work.js tee/box/answer.js tee/box/agent.js tee/box/models.js tee/box/models.json tee/box/prices.js tee/box/system-prompt.txt tee/box/
 
 # Confidential Space launch policy: the operator may only point the box at public data.
 # It cannot override the command, cannot inject keys, and logs never contain secrets.

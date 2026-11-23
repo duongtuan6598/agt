@@ -76,6 +76,7 @@ function withTransport(query, send) {
     query, send, chainId,
     state: () => query("/state"),
     ledger: () => query("/ledger"),
+    jobs: () => query("/jobs"),
     balance: (a) => query(`/balance/${a}`),
     price: (asset) => query(`/price/${asset}`),
     // content on agt-1 (briefs, notes, CI reports), addressed by keccak256 of the text

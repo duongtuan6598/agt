@@ -260,7 +260,7 @@ async function startLocalModel() {
 
 async function startWork(agentKey, modelProvider = "anthropic", keys = null) {
   const { ethers } = require("ethers");
-  const { makeModel } = require("./agent.js");
+  const { makeModel, httpContent } = require("./agent.js");
   const { secretFromManager } = require("./answer.js");
   if (modelProvider === "local") await startLocalModel();
   const apiKey = modelProvider === "local" ? null : await secretFromManager(env.AGT_MODEL_KEY_SECRET);
@@ -277,9 +277,19 @@ async function startWork(agentKey, modelProvider = "anthropic", keys = null) {
     const verifyBuilder = require("../builder/verify-builder.js").makeVerifyBuilder({ jwks: await T.fetchJwks(), policy: POLICY, log });
     engage = await require("./engage-wiring.js").makeEngage({ env, wallet, model: makeModel({ provider: modelProvider, apiKey, systemPrompt }), keys, verifyBuilder, log });
     log("long-term work: contracts on agt-2");
-  } else log("this box has no long-term work for its trade on agt-2 yet");
+  }
+  // Per-job work (translation of open documents, and reviewing other owners' jobs of the same trade) on agt-2.
+  let jobs = null;
+  if (!engage) {
+    const { Agt1WorkLoop } = require("./agt1-work.js");
+    const a1 = require("../../chain/agt1-client.js").connect(env.AGT1_RPC);
+    const list = httpContent(env.AGT_EXAM_URL || "https://agt-exam.agtcoin.workers.dev", wallet);
+    jobs = new Agt1WorkLoop({ a1, wallet, tasks: () => list.tasks(), model: makeModel({ provider: modelProvider, apiKey, systemPrompt }), log });
+    log("per-job work on agt-2");
+  }
   for (;;) {
     if (engage) try { await engage.step(); } catch (e) { log(`long-term work: ${e.shortMessage || e.message}`); }
+    if (jobs) try { await jobs.step(); } catch (e) { log(`work: ${e.shortMessage || e.message}`); }
     await new Promise((r) => setTimeout(r, Number(env.AGT_WORK_EVERY_SEC || 600) * 1000));
   }
 }

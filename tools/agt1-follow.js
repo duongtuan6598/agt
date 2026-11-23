@@ -10,7 +10,13 @@ const { AGTApp } = require("../chain/abci/app.js");
 
 const rpc = (process.argv[2] && !process.argv[2].startsWith("--") ? process.argv[2] : "https://agt1-relay.agtcoin.workers.dev/rpc").replace(/\/$/, "");
 const toArg = process.argv.indexOf("--to");
-const get = async (q) => { const r = await (await fetch(rpc + q)).json(); if (r.error) throw new Error(JSON.stringify(r.error)); return r.result; };
+// a public door can drop a request (a node restart, a busy moment): retry before giving up
+const get = async (q) => {
+  for (let i = 0; ; i++) {
+    try { const r = await (await fetch(rpc + q)).json(); if (r.error) throw new Error(JSON.stringify(r.error)); return r.result; }
+    catch (e) { if (i >= 6) throw e; await new Promise((ok) => setTimeout(ok, 2000 * (i + 1))); }
+  }
+};
 
 (async () => {
   const g = (await get("/genesis")).genesis;
