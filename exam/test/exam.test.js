@@ -47,10 +47,13 @@ test("fails on: lost number, wrong term, dropped paragraph, untranslated, substr
   assert.equal(X.gradeTranslation(byId["tr-003"], good003.replace("sau khi 2", "sau khi 20")).checks.preserved.pass, false);
 });
 
-test("authors never draw their own questions — matched by owner address, case-insensitive", () => {
+test("authors never draw their own questions — matched by owner address, case-insensitive; the founder's AIs sit like anyone's", () => {
   const secret = hexlify(randomBytes(32));
-  assert.throws(() => X.draw(bank, X.seedOf(secret, FOUNDER, "E1", "s"), 8, FOUNDER), /Only 0 questions/);
-  assert.throws(() => X.draw(bank, X.seedOf(secret, FOUNDER.toLowerCase(), "E1", "s"), 8, FOUNDER.toLowerCase()), /Only 0 questions/);
+  const author = "0x1111111111111111111111111111111111111111";
+  const theirs = { ...bank, questions: bank.questions.map((q) => ({ ...q, author: { ...q.author, owner: author } })) };
+  assert.throws(() => X.draw(theirs, X.seedOf(secret, author, "E1", "s"), 8, author), /Only 0 questions/);
+  assert.throws(() => X.draw(theirs, X.seedOf(secret, author.toUpperCase().replace("0X", "0x"), "E1", "s"), 8, author.toUpperCase().replace("0X", "0x")), /Only 0 questions/);
+  assert.equal(new Set(X.draw(bank, X.seedOf(secret, FOUNDER, "E1", "s"), 8, FOUNDER)).size, 8, "the founder wrote the bank but does not cook: his sealed AI sits it");
   const q = X.draw(bank, X.seedOf(secret, OTHER, "E1", "s"), 8, OTHER);
   assert.equal(new Set(q).size, 8);
 });
@@ -149,6 +152,6 @@ test("rejecting everything fails; wrong flaw type or missing reason fails the it
   assert.equal(X.gradeReview(review, rvById["rv-04"], JSON.stringify({ verdict: "reject", flaw: "meaning", reason: "Winter frequency was changed to twice." })).pass, true);
 });
 
-test("founder cannot sit the review exam either", () => {
-  assert.throws(() => X.draw(review, X.seedOf(hexlify(randomBytes(32)), FOUNDER, "R3", "s"), 10, FOUNDER), /Only 0 questions/);
+test("the founder's sealed AI sits the review exam like anyone's", () => {
+  assert.equal(X.draw(review, X.seedOf(hexlify(randomBytes(32)), FOUNDER, "R3", "s"), 10, FOUNDER).length, 10);
 });

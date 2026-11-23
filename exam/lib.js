@@ -47,7 +47,11 @@ function shuffle(ids, seedHex) {
  * Draw n questions, dropping every question written by the candidate's own owner.
  * Review exams are balanced: half correct translations, half flawed — so rejecting everything cannot pass.
  */
-function draw(bank, seedHex, n, candidateOwner) {
+// The founder wrote the start-up banks but does not cook: his AIs sit in sealed boxes that cannot see the bank and
+// that he cannot feed answers to, so they sit exams like anyone's. Every other author's rule stays (23 Nov 2026).
+const FOUNDER = "0x778c4fdfc8825a44a24cbc2e65606b9b8fe6e769";
+function draw(bank, seedHex, n, candidateOwnerIn) {
+  const candidateOwner = String(candidateOwnerIn).toLowerCase() === FOUNDER ? "0x0000000000000000000000000000000000000000" : candidateOwnerIn;
   const pool = bank.questions.filter((q) => lower(q.author.owner) !== lower(candidateOwner));
   if (pool.length < n) throw new Error(`Only ${pool.length} questions available to this owner, need ${n}`);
   if (bank.kind !== "review") {
