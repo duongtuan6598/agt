@@ -849,6 +849,16 @@ class AGTApp {
       return reply({ chainId: s.chainId, height: s.height, fee: s.fee, maxFee: C.MAX_FEE, supply: s.supply, burned: s.burned, rules: s.rules || 1, owners: s.valset.holders, validators: s.valset.validators.map((v) => ({ ...v, licence: s.licIds[v.agent], bound: !!s.binds[v.agent], vote: Object.values(s.active).includes(v.agent) })), wages: s.wages });
     if (p === "/engs") return reply(s.engs || {});
     if (p === "/exams") return reply({ graders: s.graders || {}, exams: s.exams || {} });
+    // Open tasks on agt-2: anyone publishes a task as content in the form agt-task/v1 (a read-only index, not a rule)
+    if (p === "/tasks" || p.startsWith("/tasks/")) {
+      const trade = p.startsWith("/tasks/") ? Number(p.slice(7)) : null;
+      const out = [];
+      for (const [hash, text] of Object.entries(s.content || {})) {
+        if (typeof text !== "string" || !text.startsWith('{"schema":"agt-task/v1"')) continue;
+        try { const t = JSON.parse(text); if (trade === null || Number(t.trade) === trade) out.push({ ...t, id: hash }); } catch {}
+      }
+      return reply({ tasks: out });
+    }
     if (p.startsWith("/content/")) return reply({ text: (s.content || {})[p.slice(9).toLowerCase()] ?? null });
     if (p.startsWith("/sealed/")) return reply({ box: (s.sealed || {})[Number(p.slice(8))] ?? null });
     if (p === "/jobs") return reply(s.jobs || {});

@@ -77,6 +77,13 @@ function withTransport(query, send) {
     state: () => query("/state"),
     ledger: () => query("/ledger"),
     jobs: () => query("/jobs"),
+    // open tasks published on agt-2 (content in the form agt-task/v1); post one with postTask
+    tasks: async (trade) => (await query(trade ? `/tasks/${trade}` : "/tasks")).tasks,
+    async postTask(signer, task) {
+      const text = JSON.stringify({ schema: "agt-task/v1", ...task });
+      await signed(signer, { type: "content-put", text });
+      return ethers.keccak256(ethers.toUtf8Bytes(text));
+    },
     balance: (a) => query(`/balance/${a}`),
     price: (asset) => query(`/price/${asset}`),
     // content on agt-1 (briefs, notes, CI reports), addressed by keccak256 of the text

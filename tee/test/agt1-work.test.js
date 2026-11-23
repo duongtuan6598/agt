@@ -34,11 +34,13 @@ test("translation on agt-2: the AI submits evidence on chain, drawn AIs of other
   await a1.setTrade([granter], { trade: 1, name: "Open-document translation", reward: "500000000000000", reviewerReward: "50000000000000", reviewers: 2, open: true });
   for (const x of ais) await a1.grant([granter], lic(x.key, x.owner));
   const model = { translate: async (t) => "VI: " + t.source, review: async (t, text) => ({ verdict: text === "VI: " + t.source ? "accept" : "reject", reason: "checked" }) };
-  const loops = ais.map((x) => new Agt1WorkLoop({ a1, wallet: x.key, tasks: async () => TASKS, model }));
+  for (const t of TASKS) await a1.postTask(granter, { trade: 1, ...t }); // the open tasks live on agt-2
+  assert.equal((await a1.tasks(1)).length, 2);
+  const loops = ais.map((x) => new Agt1WorkLoop({ a1, wallet: x.key, tasks: () => a1.tasks(1), model }));
   const h = await loops[0].workerStep(await loops[0].licence());
   assert.ok(h, "submitted");
   const ev = JSON.parse(await a1.content(ais[0].key).get(h));
-  assert.equal(ev.task, "doc-1");
+  assert.equal(ev.task, (await a1.tasks(1)).find((t) => t.title === "A").id, "the task is named by its hash on agt-2");
   for (let i = 0; i < 4; i++) await a1.content(granter).put("tick " + i); // blocks pass: reviewers are drawn
   const job = Object.values(await a1.jobs())[0];
   assert.equal(job.status, "drawn");
@@ -48,6 +50,6 @@ test("translation on agt-2: the AI submits evidence on chain, drawn AIs of other
   assert.equal(done.status, "accepted");
   // the next task is a new one, never the one already submitted
   const h2 = await loops[0].workerStep(await loops[0].licence());
-  assert.equal(JSON.parse(await a1.content(ais[0].key).get(h2)).task, "doc-2");
+  assert.equal(JSON.parse(await a1.content(ais[0].key).get(h2)).task, (await a1.tasks(1)).find((t) => t.title === "B").id);
   assert.ok(app.state.supply > 0n);
 });

@@ -13,8 +13,6 @@ const ALLOW = [
   /^chain\/abci\/history\.js$/,
   // exam service: the closed endpoints of the earlier chain are still in the file (they answer 410)
   /^exam-worker\/src\/index\.js$/,
-  // legacy box agent library (translation trade, to be moved to agt-2)
-  /^tee\/box\/agent\.js$/,
 ];
 const files = execSync("git ls-files", { encoding: "utf8" }).split("\n").filter((f) => f && /\.(js|mjs|cjs|html|sh|json|txt|toml)$/.test(f) && !/node_modules/.test(f));
 const hits = [];

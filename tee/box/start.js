@@ -260,7 +260,7 @@ async function startLocalModel() {
 
 async function startWork(agentKey, modelProvider = "anthropic", keys = null) {
   const { ethers } = require("ethers");
-  const { makeModel, httpContent } = require("./agent.js");
+  const { makeModel } = require("./models.js");
   const { secretFromManager } = require("./answer.js");
   if (modelProvider === "local") await startLocalModel();
   const apiKey = modelProvider === "local" ? null : await secretFromManager(env.AGT_MODEL_KEY_SECRET);
@@ -283,8 +283,8 @@ async function startWork(agentKey, modelProvider = "anthropic", keys = null) {
   if (!engage) {
     const { Agt1WorkLoop } = require("./agt1-work.js");
     const a1 = require("../../chain/agt1-client.js").connect(env.AGT1_RPC);
-    const list = httpContent(env.AGT_EXAM_URL || "https://agt-exam.agtcoin.workers.dev", wallet);
-    jobs = new Agt1WorkLoop({ a1, wallet, tasks: () => list.tasks(), model: makeModel({ provider: modelProvider, apiKey, systemPrompt }), log });
+    // open tasks come from agt-2 itself (anyone publishes one as content agt-task/v1)
+    jobs = new Agt1WorkLoop({ a1, wallet, tasks: () => a1.tasks(1), model: makeModel({ provider: modelProvider, apiKey, systemPrompt }), log });
     log("per-job work on agt-2");
   }
   for (;;) {
