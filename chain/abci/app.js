@@ -806,6 +806,19 @@ class AGTApp {
     }
   }
 
+  refreshKho() {
+    this.khoSeen = this.khoSeen || { at: 0, busy: false, evm: [], btc: [] };
+    const k = this.khoSeen;
+    if (k.busy) return k.job;
+    if (Date.now() - k.at < 60000) return null;
+    k.busy = true;
+    return (k.job = (async () => {
+      try { if (this.bsc.khoDeposits) k.evm = (await this.bsc.khoDeposits(KHO[97].fromBlock)).deposits; } catch (e) { log("Kho view unavailable:", e.message); }
+      try { if (this.bsc.btcDeposits) k.btc = await this.bsc.btcDeposits(); } catch (e) { log("Bitcoin view unavailable:", e.message); }
+      k.at = Date.now(); k.busy = false;
+    })());
+  }
+
   async PrepareProposal(req) {
     const s = structuredClone(this.state);
     const out = [];
@@ -827,9 +840,11 @@ class AGTApp {
     } catch (e) {
       log("BSC licences unavailable, keeping the current validator set:", e.message);
     }
-    if (s.ledger && this.bsc.khoDeposits) try {
-      const { deposits } = await this.bsc.khoDeposits(KHO[97].fromBlock);
-      for (const d of deposits) {
+    // the Kho views are scanned in the background (never while a block waits): proposing stays fast; each credit is
+    // still checked one by one by every validator in ProcessProposal. Not consensus: only what the proposer offers.
+    if (s.ledger) { const first = !this.khoSeen || !this.khoSeen.at; const job = this.refreshKho(); if (first && job) await job; } // only the very first scan is awaited
+    if (s.ledger && this.khoSeen.evm.length) try {
+      for (const d of this.khoSeen.evm) {
         if ((s.khoCredited || {})[`${d.chain}:${d.txHash.toLowerCase()}:${d.logIndex}`]) continue;
         if (priceOf(s, KHO[d.chain].asset) <= 0n) break; // no agt-1 price yet: the deposit waits, nothing is lost
         const tx = { type: "kho-credit", ...d };
@@ -839,8 +854,8 @@ class AGTApp {
     } catch (e) {
       log("Kho view unavailable, proposing without Kho credits:", e.message);
     }
-    if (s.ledger && this.bsc.btcDeposits) try {
-      for (const d of await this.bsc.btcDeposits()) {
+    if (s.ledger && this.khoSeen.btc.length) try {
+      for (const d of this.khoSeen.btc) {
         if ((s.khoCredited || {})[`btc:${d.txHash.toLowerCase()}:${d.logIndex}`]) continue;
         if (priceOf(s, KHO_BTC.asset) <= 0n) break;
         const tx = { type: "kho-credit", ...d };
