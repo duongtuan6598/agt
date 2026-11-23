@@ -14,9 +14,9 @@ set -euo pipefail
 IMAGE="asia-southeast1-docker.pkg.dev/agt-sealed-box-1120/agt/box@sha256:175af5ee6b10bb290949c816d21593fea5f52d7604380c648bfa98a2b1a70ff8"
 EXAM_URL="https://agt-exam.agtcoin.workers.dev"
 ZONE="asia-southeast1-b"; TRADE=1; NAME="AGT AI"; PEERS=""; ESCROW=""; KEEP=0; PROJECT=""; OWNER=""; KEYFILE=""
-# Embedded trade (trade 6): the embedded box image and the long-term work contracts (BSC testnet).
+# Embedded trade (trade 6): the approved embedded box image (it works on agt-2).
 AGT1_RPC="https://agt1-relay.agtcoin.workers.dev/rpc"  # AGT's own chain agt-1 (a public door; any agt-1 node works)
-EMBEDDED_IMAGE=""; ENGAGEMENT="0x8891a76DE578c8E9dD0247D663F78f5582914eD4"; MAINTENANCE="0x1e49DF862543E7942393099f0fBe22736026eF32"; EVERY=600
+EMBEDDED_IMAGE="asia-southeast1-docker.pkg.dev/agt-sealed-box-1120/agt/box-embedded@sha256:c049f58fa770835fc17b1c9efb4972e8bce894481b16e0772bda4ba0e2401774"; EVERY=600
 while [ $# -gt 0 ]; do
   case "$1" in
     --project) PROJECT=$2; shift ;; --owner) OWNER=$2; shift ;; --key-file) KEYFILE=$2; shift ;;
@@ -46,15 +46,14 @@ gcloud secrets add-iam-policy-binding agt-model-key --member="serviceAccount:$SA
 
 # Trade 6 runs in the embedded box image (its own approval; on testnet a digest from tee/policy.testnet.json).
 if [ "$TRADE" = 6 ]; then
-  [ -n "$EMBEDDED_IMAGE" ] || { echo "trade 6 needs --embedded-image <registry>/box-embedded@sha256:…"; exit 2; }
   IMAGE="$EMBEDDED_IMAGE"
 fi
 echo "2/5 starting the sealed box $VM (AMD SEV, Confidential Space)"
 META="tee-image-reference=$IMAGE~tee-restart-policy=Never~tee-container-log-redirect=true~tee-env-AGT_CHAIN_ID=agt-testnet-1~tee-env-AGT_EXAM_URL=$EXAM_URL~tee-env-AGT_OWNER=$OWNER~tee-env-AGT_TRADE=$TRADE~tee-env-AGT_AI_NAME=$NAME~tee-env-AGT_MODEL_KEY_SECRET=projects/$PROJECT/secrets/agt-model-key"
-# Once licensed, the AI works by itself on BSC testnet (it needs a little gas BNB at its own address).
-META="$META~tee-env-BSC_RPC=https://bsc-testnet-rpc.publicnode.com~tee-env-WORK=0xA21a9137961334b1d5d98938Aac3471fD9bAA3cb"
+# Once licensed, the AI works on AGT's own chain agt-2 only: no BSC, no BNB, no gas to fund.
+META="$META~tee-env-AGT1_RPC=$AGT1_RPC"
 # AI-council price feeds (Art. 11/13) are not deployed for the current contracts yet (testnet v5): no price signing.
-[ "$TRADE" = 6 ] && META="$META~tee-env-ENGAGEMENT=$ENGAGEMENT~tee-env-MAINTENANCE=$MAINTENANCE~tee-env-AGT_WORK_EVERY_SEC=$EVERY~tee-env-AGT1_RPC=$AGT1_RPC"
+[ "$TRADE" = 6 ] && META="$META~tee-env-AGT_WORK_EVERY_SEC=$EVERY"
 [ -n "$PEERS" ] && META="$META~tee-env-AGT_PEER_BOXES=$PEERS"
 [ -n "$ESCROW" ] && META="$META~tee-env-AGT_ESCROW_URL=$ESCROW"
 gcloud compute instances create "$VM" --project "$PROJECT" --zone "$ZONE" --machine-type=n2d-standard-2 \
