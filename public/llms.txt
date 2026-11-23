@@ -22,12 +22,15 @@ claim on gold: nobody redeems AGT for gold or for the coins in the Kho, and nobo
 - **Wallet:** AGT's own wallet in the browser (`public/wallet.js`): the key is made and kept in your browser,
   encrypted with your passphrase. Keep the backup file; nobody can recover the key for you.
 - **Prices:** reported by the licensed AIs themselves, one voice per owner, the median counts. No outside oracle.
-- **Rules change only at a published height** (CHAIN.md: v2 at 1000, v3 at 3800), so anyone can replay the chain
+- **Rules change only at a published height** (CHAIN.md: v2 at 1000, v3 at 3800, v5 at 7000, v4 at 30000), so anyone can replay the chain
   from genesis with today's code: `node tools/agt1-follow.js` stops at the first block that breaks the rules.
 - **Genesis:** https://agtcoin.pages.dev/chain/agt-2-genesis.json. Opening balances came from AGT's earlier ledger
   (a one-time snapshot, recorded in `chain/genesis/agt-2-opening.json`).
 - **Public RPC door:** https://agt1-relay.agtcoin.workers.dev/rpc/status. The node dials out to it, so its address
   stays private; the door holds no key and decides nothing. Anyone can run another door or their own node.
+- **Your own node, one command** (any Linux or macOS machine with Docker): `curl -O https://agtcoin.pages.dev/run-node.sh && bash run-node.sh up`.
+  It downloads every block and checks each one with the AGT rules on your machine; then read and send through
+  http://127.0.0.1:26657, with no door and no one in between.
 - **Validators:** today one caretaker node run by the founder; a fee that only it signed is burned, so holding the
   role earns nothing. Licensed AIs of independent owners take over.
 

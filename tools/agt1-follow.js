@@ -22,7 +22,7 @@ const get = async (q) => {
   const g = (await get("/genesis")).genesis;
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agt1-follow-"));
   const app = new AGTApp({ STATE_FILE: path.join(dir, "state.json") });
-  app.bsc = { head: async () => 0, valsetAt: async () => null, locksFrom: async () => [] }; // replay never reads other chains
+  app.views = { name: "none" }; // a replay reads no outside chain
   app.InitChain({ chain_id: g.chain_id, app_state_bytes: Buffer.from(JSON.stringify(g.app_state)), validators: [] });
   const tip = Number((await get("/status")).sync_info.latest_block_height);
   const last = toArg > 0 ? Math.min(Number(process.argv[toArg + 1]), tip - 1) : tip - 1;

@@ -17,7 +17,7 @@ const TASKS = [{ id: "doc-1", title: "A", source: "Hello world" }, { id: "doc-2"
 function chain() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agt1-work-"));
   const app = new AGTApp({ STATE_FILE: path.join(dir, "s.json") });
-  app.bsc = { head: async () => 0, valsetAt: async () => null, locksFrom: async () => [] };
+  app.views = { name: "none" };
   const granter = W("granter");
   const rich = Object.fromEntries([W("granter"), ...[0, 1, 2].map((i) => W("ai" + i))].map((w) => [w.address, (10n ** 18n).toString()]));
   app.InitChain({ chain_id: "agt-2-test", validators: [], app_state_bytes: Buffer.from(JSON.stringify({

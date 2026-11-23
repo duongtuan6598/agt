@@ -224,3 +224,15 @@ From **height 30000** (first published as 6000 at height ~4600, moved to 30000 a
 borrowed from Ethereum wallets, is refused from then on. AGT's form is accepted at every height, so clients switched
 first; before 6000 both count, so every older block replays unchanged. With addresses `agt1…` and the wallet in the
 page, nothing a user touches comes from another chain.
+
+## Rules v5 at agt-2 height 7000 (23 Nov 2026): no other chain in AGT
+
+From **height 7000** (published at height ~5000), the state of agt-2 holds nothing of the chain AGT began on. In
+that block the fields of that time (its chain id and bridge address, the bridge's counters and outbox, the opening
+snapshot reference) are deleted, and from then on only the Bitcoin Kho counts: a Kho credit for any other chain is
+refused. Deposits already credited stay recorded in `khoCredited`, as AGT's own history.
+
+The code that replays agt-2's own first blocks exactly (the genesis as it was opened) lives in
+`chain/abci/history.js`; everything else in the chain, its clients and the boxes names no other chain, and
+`tools/check-own.js` (part of `npm test`) keeps it so. The earlier chain's code is kept as a record in
+`archive/earlier-chain/`.

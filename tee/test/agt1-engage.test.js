@@ -17,7 +17,7 @@ const W = (s) => new ethers.Wallet(ethers.id("agt1-engage-" + s));
 function chain() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "agt1-eng-"));
   const app = new AGTApp({ STATE_FILE: path.join(dir, "s.json") });
-  app.bsc = { head: async () => 0, valsetAt: async () => null, locksFrom: async () => [] };
+  app.views = { name: "none" };
   const granter = W("granter"), client = W("client"), ai = W("ai"), owner = W("owner"), rev = W("rev"), revOwner = W("rev-owner");
   app.InitChain({ chain_id: "agt-1-test", validators: [], app_state_bytes: Buffer.from(JSON.stringify({
     provisional: true, caretaker: { pubKey: crypto.randomBytes(32).toString("base64"), label: "founder" }, bsc: { chainId: 97, bridge: ethers.ZeroAddress }, holders: 0, validators: [],

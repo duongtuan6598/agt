@@ -1,14 +1,14 @@
-// AGT chain as a CometBFT v0.38 ABCI 2.0 application (gRPC).
-// CometBFT does networking + BFT consensus (proven engine); this app holds the AGT rules from ../core.js.
+// agt-2, AGT's own chain, as a CometBFT v0.38 ABCI 2.0 application (gRPC). CometBFT does networking and BFT
+// consensus; this app holds the AGT rules: balances and fees in AGT, prices, licences, work, contracts with locked
+// payment, published content, sealed access, and the Bitcoin Kho.
 //
-//   CheckTx          → core.applyTx on a mempool copy of the state
-//   PrepareProposal  → proposer adds "credit" txs for new AGTBridge.Locked events on BSC
-//   ProcessProposal  → every validator re-checks those credits against ITS OWN view of BSC, else rejects
-//   FinalizeBlock    → deterministic: apply txs; pay the previous block's wages to the owners whose AIs signed it
-//   Commit           → persist; then this node's AI signs every new withdrawal for AGTBridge.release()
+//   CheckTx          → the rules on a copy of the state
+//   PrepareProposal  → the proposer adds Kho credits for confirmed Bitcoin deposits
+//   ProcessProposal  → every validator re-checks each Kho credit against its OWN view of Bitcoin, else rejects
+//   FinalizeBlock    → deterministic: apply txs; pay the previous block's wage to the owners whose AIs signed it
+//   Commit           → persist
 //
-// Env: PORT (gRPC listen, default 26658) · STATE_FILE · AGENT_KEY (this node's AI key, secp256k1 hex)
-//      CMT_RPC (this node's CometBFT RPC, for broadcasting attestations) · LOCKS_FILE or BSC_RPC+BRIDGE (+FROM_BLOCK)
+// Env: PORT (gRPC listen, default 26658) · STATE_FILE · AGENT_KEY (this node's AI key) · CMT_RPC · BTC_ESPLORA
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
@@ -16,19 +16,13 @@ const grpc = require("@grpc/grpc-js");
 const protoLoader = require("@grpc/proto-loader");
 const { ethers } = require("ethers");
 const C = require("../core.js");
+const H = require("./history.js"); // replay of agt-2's own first blocks only (rules v5 retires it)
 
 const PROTO = path.join(__dirname, "proto");
 const def = protoLoader.loadSync("tendermint/abci/types.proto", { includeDirs: [PROTO], keepCase: true, longs: String, enums: String, defaults: true, oneofs: true });
 const abci = grpc.loadPackageDefinition(def).tendermint.abci;
 
 const OK = 0, BAD = 1;
-// Kho on other chains whose deposits mint AGT on the own ledger (docs/decisions/2026-11-22-keyless-vault.md).
-// Part of the consensus rules: a deposit counts only at these addresses, valued in gold AT THE DEPOSIT'S BLOCK by the
-// named oracle, after KHO_CONF confirmations. Each validator re-checks every deposit against its own RPC.
-const KHO = {
-  97: { kho: "0x509b499a84888b2b547c428fbc861f9b254e8760", asset: "97:native", decimals: 18, fromBlock: 144236000 },
-};
-const KHO_CONF = 15;
 // The Bitcoin Kho (tools/kho-bitcoin.js): coins remain at this Taproot output; nobody can spend them. A deposit names
 // its agt-1 account in an OP_RETURN "AGT1" + 20 bytes of the same transaction. BTC_CONF confirmations.
 const KHO_BTC = { chain: "btc", asset: "btc:native", decimals: 8, script: "5120775f9b89499a3d223c990c2a737df38a2f63137a3a84587a04a99f4ed8e1c287" };
@@ -41,12 +35,12 @@ function btcDepositOf(tx) {
   if (!tag) return null;
   return { chain: "btc", txHash: tx.txid, logIndex: toKho[0].i, beneficiary: "0x" + tag.slice(12), from: "btc", amount: String(toKho.reduce((t, { o }) => t + BigInt(o.value), 0n)) };
 }
-// Licences on the own ledger, not on BSC. Restaurant rule: until CARETAKER_UNTIL independent owners hold licences,
+// Licences on agt-2 itself. Restaurant rule: until CARETAKER_UNTIL independent owners hold licences,
 // the founder grants and revokes, publicly. Then a grant or a
 // revocation needs signatures of more than 2/3 of the licensed owners. A grant waits LICENCE_WAIT blocks before it
 // counts (anyone can read and contest the evidence meanwhile; the granter can cancel it).
 const FOUNDER = "0x778c4fdfc8825a44a24cbc2e65606b9b8fe6e769";
-// Prices on agt-1 itself (founder: "không phụ thuộc vào ai hết, nhất là BNB"): no outside oracle. A price is AGT (in
+// Prices on agt-2 itself (founder: "không phụ thuộc vào ai hết"): no outside oracle. A price is AGT (in
 // wei) per whole coin of an asset. Reporters: each licensed AI's key, one voice per owner; while fewer than
 // CARETAKER_UNTIL owners hold licences, the starting granter also reports, publicly. The chain's price is the median of
 // the latest report of each reporter. A report more than PRICE_STEP_BPS away from the current median is refused, so no
@@ -221,7 +215,6 @@ function licAuthorised(s, digest, sigs) {
   if (v2(s) ? granterActive(s) : owners.length < CARETAKER_UNTIL) return signers.has((s.ledger && s.ledger.granter) || FOUNDER);
   return owners.filter((o) => signers.has(o)).length * 3 > owners.length * 2;
 }
-const KHO_EVENT = "event Deposited(address indexed from, address indexed beneficiary, uint256 amount)";
 const BIND_TAG = "AGT-BIND-VALIDATOR-v1";
 const AGTAddress = require("../address.js");
 const lower = (a) => ethers.getAddress(AGTAddress.toHex(a)).toLowerCase(); // accepts agt1… (AGT's own form) and 0x…
@@ -236,93 +229,9 @@ const appHash = (s) => Buffer.from(ethers.getBytes(C.hashOf(s)));
 const bindDigest = (chainId, pubKeyB64) => C.hashOf({ tag: BIND_TAG, chainId, pubKey: pubKeyB64 });
 const cmtAddress = (pubKeyB64) => crypto.createHash("sha256").update(Buffer.from(pubKeyB64, "base64")).digest().subarray(0, 20).toString("hex");
 
-// ---------- view of BSC (only used to VOTE on proposals, never inside FinalizeBlock) ----------
-// locksFrom(n)   → AGTBridge.Locked events with nonce ≥ n, at confirmed depth
-// head()         → newest BSC block considered final enough
-// valsetAt(blk)  → licence snapshot AT that block: { holders, validators: [{ id, agent, holder }] } — only
-//                  active licences whose AI runs in a sealed box (attestHash ≠ 0), exactly as AGTBridge counts.
-function makeBscView(env = process.env) {
-  const view = { name: [], locksFrom: async () => [], head: async () => 0, valsetAt: async () => null };
-  if (env.LOCKS_FILE) {
-    const f = env.LOCKS_FILE;
-    const read = () => (fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, "utf8")) : []).map((l) => ({ nonce: Number(l.nonce), to: lower(l.to), amount: BigInt(l.amount) }));
-    view.locksFrom = async (n) => read().filter((l) => l.nonce >= n);
-    view.name.push(`locks ${f}`);
-  }
-  if (env.VALSET_FILE) {
-    const f = env.VALSET_FILE;
-    view.head = async () => 0; // a file has no blocks: every snapshot is "at block 0"
-    view.valsetAt = async () => (fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, "utf8")) : null);
-    view.name.push(`licences ${f}`);
-  }
-  if (env.BSC_RPC || env.BSC_PROVIDER) {
-    const provider = env.BSC_PROVIDER || new ethers.JsonRpcProvider(env.BSC_RPC);
-    const CONF = Number(env.CONFIRMATIONS || 15);
-    view.head = async () => Math.max(0, (await provider.getBlockNumber()) - CONF);
-    if (env.BRIDGE) {
-      const bridge = new ethers.Contract(env.BRIDGE, ["event Locked(uint256 indexed nonce, address indexed from, address indexed to, uint256 amount)"], provider);
-      let cache = [], scanned = Number(env.FROM_BLOCK || 0) - 1;
-      view.locksFrom = async (n) => {
-        const head = await view.head();
-        for (let a = scanned + 1; a <= head; a += 5000) {
-          const evs = await bridge.queryFilter(bridge.filters.Locked(), a, Math.min(a + 4999, head));
-          cache.push(...evs.map((e) => ({ nonce: Number(e.args.nonce), to: lower(e.args.to), amount: e.args.amount })));
-        }
-        scanned = Math.max(scanned, head);
-        return cache.filter((l) => l.nonce >= n);
-      };
-      view.name.push(`bridge ${env.BRIDGE}`);
-    }
-    if (env.WORK) {
-      const work = new ethers.Contract(env.WORK, [
-        "function nextLicense() view returns (uint256)",
-        "function councilHolders() view returns (uint32)",
-        "function licenses(uint256) view returns (address holder, address agent, uint8 role, bool active, bytes32 examHash, bytes32 attestHash, string name)",
-      ], provider);
-      const memo = new Map();
-      view.valsetAt = async (blockTag) => {
-        if (memo.has(blockTag)) return memo.get(blockTag);
-        const next = Number(await work.nextLicense({ blockTag }));
-        const validators = [];
-        for (let id = 1; id < next; id++) {
-          const l = await work.licenses(id, { blockTag });
-          if (l.active && l.attestHash !== ethers.ZeroHash) validators.push({ id, agent: l.agent, holder: l.holder });
-        }
-        const v = { holders: Number(await work.councilHolders({ blockTag })), validators };
-        memo.set(blockTag, v);
-        return v;
-      };
-      view.name.push(`licences ${env.WORK}`);
-    }
-  }
-  if (env.BSC_RPC || env.BSC_PROVIDER) {
-    const provider = env.BSC_PROVIDER || new ethers.JsonRpcProvider(env.BSC_RPC);
-    const k = KHO[97];
-    const kho = new ethers.Contract(k.kho, [KHO_EVENT], provider);
-    // deposits from block `from` up to the final head, oldest first, each with its AGT value at its own block
-    view.khoDeposits = async (from) => {
-      const head = (await provider.getBlockNumber()) - KHO_CONF;
-      const out = [];
-      for (let a = Math.max(from, k.fromBlock); a <= head; a += 5000) {
-        for (const e of await kho.queryFilter(kho.filters.Deposited(), a, Math.min(a + 4999, head))) {
-          out.push({ chain: 97, txHash: e.transactionHash, logIndex: e.index, block: e.blockNumber, from: lower(e.args.from), beneficiary: lower(e.args.beneficiary), amount: e.args.amount.toString() });
-        }
-      }
-      return { head, deposits: out };
-    };
-    // one deposit, re-read from this node's own RPC: the receipt's log must be the Kho's, final, and valued alike
-    view.khoDeposit = async (tx) => {
-      const head = (await provider.getBlockNumber()) - KHO_CONF;
-      const r = await provider.getTransactionReceipt(tx.txHash);
-      if (!r || r.blockNumber > head) return null;
-      const lg = r.logs.find((x) => x.index === Number(tx.logIndex));
-      if (!lg || lower(lg.address) !== k.kho) return null;
-      const ev = kho.interface.parseLog(lg);
-      if (!ev || ev.name !== "Deposited") return null;
-      return { block: r.blockNumber, from: lower(ev.args.from), beneficiary: lower(ev.args.beneficiary), amount: ev.args.amount.toString() };
-    };
-    view.name.push(`Kho ${k.kho}`);
-  }
+// ---------- views of the outside (only used to PROPOSE and VOTE on Kho credits, never inside FinalizeBlock) ----------
+function makeViews(env = process.env) {
+  const view = { name: [] };
   if (env.BTC_ESPLORA) {
     const api = env.BTC_ESPLORA.replace(/\/$/, "");
     const j = async (p) => { const r = await fetch(api + p); if (!r.ok) throw new Error(`esplora ${r.status}`); return r.json(); };
@@ -350,20 +259,11 @@ function makeBscView(env = process.env) {
   return view;
 }
 
-// Canonical form of a licence snapshot (ids kept: they decide which AI of an owner holds the vote).
-const normSnap = (v) => ({
-  holders: Number(v.holders),
-  validators: v.validators.map((x, i) => ({ id: Number(x.id ?? i + 1), agent: lower(x.agent), holder: lower(x.holder) })).sort((a, b) => a.id - b.id),
-});
-const snapOfState = (s) => normSnap({ holders: s.valset.holders, validators: s.valset.validators.map((v) => ({ id: s.licIds[v.agent], ...v })) });
-const sameSnap = (a, b) => C.hashOf(normSnap(a)) === C.hashOf(normSnap(b));
 
-// Provisional chain (docs/decisions/2026-11-21-three-provisional-chain.md, Claude + Codex + Gemini): a founder-run
+// Caretaker (docs/decisions/2026-11-21-three-provisional-chain.md, Claude + Codex + Gemini): a founder-run
 // CARETAKER validator may keep the chain alive until CARETAKER_UNTIL independent owners have a bound, licensed AI.
 // It is outside the licence rules, counts toward no threshold, and is removed for good by the state machine itself
 // in the block where that number is reached — it never comes back, even if licences are later revoked.
-// A provisional chain stays provisional for good, caretaker or not: balances come only with a new genesis that names a
-// bridge, after the cutover conditions and a Charter Art. 14 amendment (by design; Gemini P-3 asked otherwise).
 const CARETAKER_UNTIL = 4;
 // Rules v2 (DeepSeek D-1..D-6, 23 Nov 2026) take effect at agt-2 height V2_AT, published before it was reached, so the
 // chain replays from genesis with this code (tools/agt1-follow.js). Before V2_AT the v1 behaviour is kept exactly.
@@ -402,11 +302,10 @@ class AGTApp {
     this.stateFile = env.STATE_FILE || path.join(process.cwd(), "agt-state.json");
     this.agent = env.AGENT_KEY ? new ethers.Wallet(env.AGENT_KEY) : null;
     this.cmtRpc = env.CMT_RPC || "http://127.0.0.1:26657";
-    this.bsc = env.BSC_VIEW || makeBscView(env); // tests inject a view
+    this.views = env.VIEWS || makeViews(env); // tests inject a view
     this.state = fs.existsSync(this.stateFile) ? des(fs.readFileSync(this.stateFile, "utf8")) : null;
     this.check = this.state && structuredClone(this.state);
     this.work = null; // state being built in FinalizeBlock, persisted at Commit
-    this.toAttest = [];
   }
 
   // ----- tx decoding & rules shared by CheckTx / ProcessProposal / FinalizeBlock -----
@@ -649,7 +548,8 @@ class AGTApp {
       // validator re-checked it in ProcessProposal against its own view of the origin chain.
       if (!s.ledger) throw new Error("Kho deposits mint AGT only on the own ledger");
       if (!fromProposer) throw new Error("Kho credits only come from the proposer");
-      const k = tx.chain === "btc" ? KHO_BTC : KHO[Number(tx.chain)];
+      if (H.v5(s) && tx.chain !== "btc") throw new Error("the Bitcoin Kho is the only Kho");
+      const k = tx.chain === "btc" ? KHO_BTC : H.KHO_EARLIER[Number(tx.chain)];
       if (!k) throw new Error("no Kho on that chain");
       if (!ethers.isAddress(tx.beneficiary)) throw new Error("bad agt-1 account");
       const id = `${tx.chain === "btc" ? "btc" : Number(tx.chain)}:${String(tx.txHash).toLowerCase()}:${Number(tx.logIndex)}`;
@@ -665,42 +565,8 @@ class AGTApp {
       s.khoMinted = (s.khoMinted || 0n) + agt;
       return 0n;
     }
-    if (s.ledger) {
-      if (["credit", "attest", "withdraw"].includes(tx.type)) throw new Error("AGT lives on this chain: there is no BSC bridge");
-    } else if (s.provisional && !["valset", "bind"].includes(tx.type)) throw new Error("provisional chain: no balances, no transfers, no withdrawals");
-    if (tx.type === "credit") {
-      if (!fromProposer) throw new Error("credits only come from the proposer");
-      if (Number(tx.nonce) !== s.nextIn) throw new Error("credits out of order");
-      const to = lower(tx.to), amount = BigInt(tx.amount);
-      if (amount <= 0n) throw new Error("bad credit");
-      s.balances[to] = (s.balances[to] || 0n) + amount;
-      s.supply += amount;
-      s.nextIn++;
-      return 0n;
-    }
-    if (tx.type === "attest") {
-      const w = s.outbox[tx.nonce];
-      if (!w) throw new Error("no such withdrawal");
-      const agent = lower(tx.agent);
-      if (!s.valset.validators.some((v) => v.agent === agent)) throw new Error("not a validator AI");
-      const d = C.releaseDigestRaw(s.bsc.chainId, s.bsc.bridge, Number(tx.nonce), w.to, w.amount);
-      if (lower(ethers.verifyMessage(ethers.getBytes(d), tx.sig)) !== agent) throw new Error("bad release signature");
-      s.attest[tx.nonce] = s.attest[tx.nonce] || {};
-      if (s.attest[tx.nonce][agent]) throw new Error("already attested");
-      s.attest[tx.nonce][agent] = tx.sig;
-      return 0n; // attesting is part of the signing work; the wage covers it
-    }
-    if (tx.type === "valset" && s.ledger) throw new Error("licences live on this chain: BSC snapshots no longer count");
-    if (tx.type === "valset") {
-      // New licence snapshot from BSC (proposer-only; every validator re-reads BSC at tx.bscBlock).
-      if (!fromProposer) throw new Error("validator sets only come from the proposer");
-      if (Number(tx.bscBlock) < s.bscBlock) throw new Error("snapshot older than the current one");
-      const v = normSnap(tx);
-      s.valset = C.normValset(v);
-      s.licIds = Object.fromEntries(v.validators.map((x) => [x.agent, x.id]));
-      s.bscBlock = Number(tx.bscBlock);
-      return 0n;
-    }
+    if (!s.ledger) throw new Error("AGT runs as its own ledger only");
+    if (["credit", "attest", "withdraw", "valset"].includes(tx.type)) throw new Error("there is no bridge: AGT lives on this chain");
     if (tx.type === "bind") {
       // A licensed AI declares which CometBFT consensus key it runs, signed with its licence key.
       const agent = lower(tx.agent);
@@ -715,7 +581,7 @@ class AGTApp {
       s.cmt[cmtAddress(tx.pubKey)] = { agent, holder: v.holder, pubKey: tx.pubKey };
       return 0n;
     }
-    return C.applyTx(s, tx); // transfer / withdraw / setFee — returns the wage paid
+    return C.applyTx(s, tx); // transfer / setFee — returns the wage paid
   }
 
   // ----- ABCI -----
@@ -726,67 +592,15 @@ class AGTApp {
 
   InitChain(req) {
     const raw = Buffer.from(req.app_state_bytes).toString("utf8");
-    if (!raw) throw new Error("genesis has no AGT app_state (validators, BSC bridge) — wrong genesis file");
+    if (!raw) throw new Error("genesis has no AGT app_state — wrong genesis file");
     const g = JSON.parse(raw);
-    const provisional = g.provisional === true;
-    if (g.ledger && !provisional) throw new Error("an own ledger starts only on a provisional chain");
-    if (!g.bsc || !ethers.isAddress(g.bsc.bridge)) throw new Error("genesis names no valid bridge address");
-    if (g.caretaker && !provisional) throw new Error("a caretaker validator is allowed only on a provisional chain");
-    // provisional ⇔ no bridge (Codex P-3): a chain with balances names its bridge; a provisional one names none
-    if (provisional !== (lower(g.bsc.bridge) === ethers.ZeroAddress)) throw new Error("a provisional chain carries no balances (zero bridge), and only a provisional chain may have a zero bridge");
-    if (g.caretaker && !isKey(g.caretaker.pubKey)) throw new Error("bad caretaker ed25519 key");
-    const keys = [...g.validators.map((v) => v.pubKey), ...(g.caretaker ? [g.caretaker.pubKey] : [])];
-    if (keys.some((k) => !isKey(k)) || new Set(keys).size !== keys.length) throw new Error("genesis consensus keys must be valid and all different"); // Codex P-2
-    if (!g.validators.length && !g.caretaker) throw new Error("no validator at genesis");
-    // AGT's own ledger (docs/decisions/2026-11-22-own-ledger-now.md): opening balances = a published snapshot of AGT
-    // on BSC at one block; from then on AGT lives here: no BSC bridge, fees in AGT. Only on a provisional chain.
-    const opening = {};
-    if (g.ledger) {
-      const sn = g.ledger.snapshot || {};
-      if (!Number.isInteger(sn.bscBlock) || !ethers.isAddress(sn.token)) throw new Error("the ledger names no BSC snapshot (token, block)");
-      for (const [a, v] of Object.entries(g.ledger.balances || {})) {
-        if (!ethers.isAddress(a) || BigInt(v) <= 0n) throw new Error(`bad opening balance for ${a}`);
-        opening[lower(a)] = (opening[lower(a)] || 0n) + BigInt(v);
-      }
-    }
-    const owners = new Set();
-    const cmt = {};
-    for (const v of g.validators) {
-      const agent = lower(v.agent), holder = lower(v.holder);
-      if (owners.has(holder)) throw new Error(`owner ${holder} has two validators — 1 owner = 1 vote`);
-      owners.add(holder);
-      if (lower(ethers.verifyMessage(ethers.getBytes(bindDigest(req.chain_id, v.pubKey)), v.bindSig)) !== agent)
-        throw new Error(`validator ${agent}: binding not signed by the AI's licence key`);
-      cmt[cmtAddress(v.pubKey)] = { agent, holder, pubKey: v.pubKey };
-    }
-    const s = C.genesis({ chainId: req.chain_id, bsc: g.bsc, valset: { holders: g.holders, validators: g.validators } });
-    s.provisional = provisional;
-    s.ledger = g.ledger ? { snapshot: { token: lower(g.ledger.snapshot.token), bscBlock: g.ledger.snapshot.bscBlock }, ...(Number.isInteger(g.ledger.licenceWait) ? { licenceWait: g.ledger.licenceWait } : {}), granter: g.ledger.granter ? lower(g.ledger.granter) : FOUNDER } : null;
-    s.balances = opening;
-    s.supply = Object.values(opening).reduce((t, v) => t + v, 0n);
-    s.burned = 0n;
-    // carried over from an earlier AGT ledger (agt-1 → agt-2): which Kho deposits were already credited, so that none
-    // is ever credited twice, and how much AGT the Kho has minted (it raises the work caps)
-    if (g.ledger && g.ledger.khoCredited) {
-      s.khoCredited = {};
-      for (const [id, c] of Object.entries(g.ledger.khoCredited)) s.khoCredited[String(id).toLowerCase()] = c;
-      s.khoMinted = BigInt(g.ledger.khoMinted || 0);
-    }
-    // Consensus rules are versioned: a change of rules takes effect at a published height, so that anyone can replay
-    // the chain from genesis with the current code (tools/agt1-follow.js). agt-1 broke this and was replaced by agt-2.
-    s.rules = 1;
-    s.caretaker = g.caretaker ? { pubKey: g.caretaker.pubKey, agent: "caretaker:" + String(g.caretaker.label || "founder").slice(0, 40), retired: false } : null;
-    if (s.caretaker) cmt[cmtAddress(s.caretaker.pubKey)] = { agent: s.caretaker.agent, holder: "caretaker", pubKey: s.caretaker.pubKey };
-    s.cmt = cmt;
-    s.binds = Object.fromEntries(Object.values(cmt).map((v) => [v.agent, v.pubKey]));
-    s.licIds = Object.fromEntries(g.validators.map((v, i) => [lower(v.agent), Number(v.id ?? i + 1)]));
-    s.bscBlock = Number(g.bscBlock || 0);
+    const s = H.openingState(req, g, { lower, isKey, cmtAddress, bindDigest, normValset: C.normValset, START_FEE: C.START_FEE, FOUNDER });
     s.active = activeSet(s);
     s.attest = {};
     s.pendingWage = 0n;
     this.state = s;
     this.check = structuredClone(s);
-    log(`InitChain ${req.chain_id}: ${g.validators.length} AI validators, ${g.holders} owners${s.ledger ? ` · OWN LEDGER, ${Object.keys(opening).length} opening balances` : provisional ? " · PROVISIONAL (no balances)" : ""}${s.caretaker ? " · caretaker " + s.caretaker.agent : ""}`);
+    log(`InitChain ${req.chain_id}: ${g.validators.length} AI validators, ${g.holders} owners · own ledger, ${Object.keys(s.balances).length} opening balances${s.caretaker ? " · caretaker " + s.caretaker.agent : ""}`);
     return {
       consensus_params: null,
       validators: Object.keys(s.active).map((pk) => ({ pub_key: { ed25519: Buffer.from(pk, "base64") }, power: "1" })), // 1 owner = 1 vote
@@ -807,14 +621,13 @@ class AGTApp {
   }
 
   refreshKho() {
-    this.khoSeen = this.khoSeen || { at: 0, busy: false, evm: [], btc: [] };
+    this.khoSeen = this.khoSeen || { at: 0, busy: false, btc: [] };
     const k = this.khoSeen;
     if (k.busy) return k.job;
     if (Date.now() - k.at < 60000) return null;
     k.busy = true;
     return (k.job = (async () => {
-      try { if (this.bsc.khoDeposits) k.evm = (await this.bsc.khoDeposits(KHO[97].fromBlock)).deposits; } catch (e) { log("Kho view unavailable:", e.message); }
-      try { if (this.bsc.btcDeposits) k.btc = await this.bsc.btcDeposits(); } catch (e) { log("Bitcoin view unavailable:", e.message); }
+      try { if (this.views.btcDeposits) k.btc = await this.views.btcDeposits(); } catch (e) { log("Bitcoin view unavailable:", e.message); }
       k.at = Date.now(); k.busy = false;
     })());
   }
@@ -829,31 +642,9 @@ class AGTApp {
       size += b.length;
       return true;
     };
-    if (!s.ledger) try {
-      const head = await this.bsc.head();
-      const snap = await this.bsc.valsetAt(head);
-      if (snap && head >= s.bscBlock && !sameSnap(snap, snapOfState(s))) {
-        const tx = { type: "valset", bscBlock: head, ...normSnap(snap) };
-        this.applyAny(s, tx, { fromProposer: true });
-        push(Buffer.from(JSON.stringify(tx)));
-      }
-    } catch (e) {
-      log("BSC licences unavailable, keeping the current validator set:", e.message);
-    }
     // the Kho views are scanned in the background (never while a block waits): proposing stays fast; each credit is
     // still checked one by one by every validator in ProcessProposal. Not consensus: only what the proposer offers.
     if (s.ledger) { const first = !this.khoSeen || !this.khoSeen.at; const job = this.refreshKho(); if (first && job) await job; } // only the very first scan is awaited
-    if (s.ledger && this.khoSeen.evm.length) try {
-      for (const d of this.khoSeen.evm) {
-        if ((s.khoCredited || {})[`${d.chain}:${d.txHash.toLowerCase()}:${d.logIndex}`]) continue;
-        if (priceOf(s, KHO[d.chain].asset) <= 0n) break; // no agt-1 price yet: the deposit waits, nothing is lost
-        const tx = { type: "kho-credit", ...d };
-        this.applyAny(s, tx, { fromProposer: true });
-        if (!push(Buffer.from(JSON.stringify(tx)))) break;
-      }
-    } catch (e) {
-      log("Kho view unavailable, proposing without Kho credits:", e.message);
-    }
     if (s.ledger && this.khoSeen.btc.length) try {
       for (const d of this.khoSeen.btc) {
         if ((s.khoCredited || {})[`btc:${d.txHash.toLowerCase()}:${d.logIndex}`]) continue;
@@ -865,20 +656,9 @@ class AGTApp {
     } catch (e) {
       log("Bitcoin view unavailable, proposing without Bitcoin Kho credits:", e.message);
     }
-    if (!s.provisional) try {
-      for (const l of await this.bsc.locksFrom(s.nextIn)) {
-        if (l.nonce !== s.nextIn) break;
-        const tx = { type: "credit", nonce: l.nonce, to: l.to, amount: l.amount.toString() };
-        this.applyAny(s, tx, { fromProposer: true });
-        if (!push(Buffer.from(JSON.stringify(tx)))) break;
-      }
-    } catch (e) {
-      log("BSC view unavailable, proposing without credits:", e.message);
-    }
     for (const b of req.txs) {
       try {
         const tx = this.decode(b);
-        if (tx.type === "credit") continue;
         const t = structuredClone(s);
         this.applyAny(t, tx);
         this.applyAny(s, tx);
@@ -893,23 +673,12 @@ class AGTApp {
   async ProcessProposal(req) {
     const s = structuredClone(this.state);
     try {
-      let locks = null;
       for (const b of req.txs) {
         const tx = this.decode(b);
-        if (tx.type === "valset") {
-          if (Number(tx.bscBlock) > (await this.bsc.head())) throw new Error(`snapshot from BSC block ${tx.bscBlock} is not final for me yet`);
-          const mine = await this.bsc.valsetAt(Number(tx.bscBlock));
-          if (!mine || !sameSnap(mine, tx)) throw new Error(`licence snapshot at BSC block ${tx.bscBlock} does not match BSC`);
-        }
         if (tx.type === "kho-credit") {
-          const mine = tx.chain === "btc" ? (this.bsc.btcDeposit ? await this.bsc.btcDeposit(tx) : null) : this.bsc.khoDeposit ? await this.bsc.khoDeposit(tx) : null;
+          const mine = tx.chain === "btc" && this.views.btcDeposit ? await this.views.btcDeposit(tx) : null;
           if (!mine) throw new Error(`Kho deposit ${tx.txHash} not final or not seen by me`);
           for (const f of ["block", "from", "beneficiary", "amount"]) if (String(mine[f]) !== String(f === "block" ? Number(tx[f]) : f === "beneficiary" || (f === "from" && tx.chain !== "btc") ? lower(tx[f]) : tx[f])) throw new Error(`Kho deposit ${tx.txHash}: ${f} differs from my view`);
-        }
-        if (tx.type === "credit") {
-          locks = locks || (await this.bsc.locksFrom(s.nextIn));
-          const l = locks.find((x) => x.nonce === Number(tx.nonce));
-          if (!l || l.to !== lower(tx.to) || l.amount !== BigInt(tx.amount)) throw new Error(`credit ${tx.nonce} not seen on BSC`);
         }
         this.applyAny(s, tx, { fromProposer: true });
       }
@@ -949,7 +718,6 @@ class AGTApp {
     }
 
     // 2. Transactions.
-    const before = s.nextOut;
     const tx_results = req.txs.map((b) => {
       try {
         const tx = this.decode(b);
@@ -962,10 +730,6 @@ class AGTApp {
         return { code: BAD, log: e.message, gas_wanted: "0", gas_used: "0", events: [] };
       }
     });
-    for (let n = before; n < s.nextOut; n++) {
-      events.push({ type: "withdraw", attributes: [{ key: "nonce", value: String(n), index: true }, { key: "to", value: s.outbox[n].to, index: true }, { key: "amount", value: s.outbox[n].amount.toString(), index: false }] });
-      this.toAttest.push(n);
-    }
 
     // 3. Validator set follows the licences: add newly bound AIs, remove revoked ones (power 0).
     if (s.ledger && s.jobs) {
@@ -1040,6 +804,7 @@ class AGTApp {
 
     s.height = Number(req.height);
     s.lastHash = "0x" + Buffer.from(req.hash).toString("hex");
+    if (H.retireV5(s)) log(`rules v5 at height ${s.height}: the fields of the earlier chain left the state; AGT names no other chain`);
     this.work = s;
     return { events, tx_results, validator_updates, consensus_param_updates: null, app_hash: appHash(s) };
   }
@@ -1050,7 +815,6 @@ class AGTApp {
     fs.writeFileSync(this.stateFile + ".tmp", ser(this.state));
     fs.renameSync(this.stateFile + ".tmp", this.stateFile);
     this.check = structuredClone(this.state);
-    setImmediate(() => this.attestPending());
     setImmediate(() => this.bindIfNeeded());
     return { retain_height: "0" };
   }
@@ -1076,35 +840,13 @@ class AGTApp {
     }
   }
 
-  // This node's AI signs each new withdrawal and gossips the signature as a tx.
-  async attestPending() {
-    if (!this.agent) return;
-    const me = lower(this.agent.address);
-    while (this.toAttest.length) {
-      const n = this.toAttest.shift();
-      const w = this.state.outbox[n];
-      if (!w || (this.state.attest[n] && this.state.attest[n][me])) continue;
-      const sig = await this.agent.signMessage(ethers.getBytes(C.releaseDigestRaw(this.state.bsc.chainId, this.state.bsc.bridge, n, w.to, w.amount)));
-      const hex = "0x" + Buffer.from(JSON.stringify({ type: "attest", nonce: n, agent: me, sig })).toString("hex");
-      try {
-        const r = await (await fetch(`${this.cmtRpc}/broadcast_tx_sync?tx=${hex}`)).json();
-        log(`attested withdrawal #${n}: ${r.result && r.result.code === 0 ? "ok" : JSON.stringify(r.result || r.error)}`);
-      } catch (e) {
-        log(`attest #${n} failed (${e.message}); retrying later`);
-        this.toAttest.push(n);
-        setTimeout(() => this.attestPending(), 3000);
-        return;
-      }
-    }
-  }
-
   Query(req) {
     const s = this.state;
     const reply = (v) => ({ code: OK, value: Buffer.from(ser(v)), height: String(s ? s.height : 0) });
     if (!s) return { code: BAD, log: "not initialised" };
     const p = req.path;
     if (p === "/state")
-      return reply({ chainId: s.chainId, height: s.height, fee: s.fee, maxFee: C.MAX_FEE, supply: s.supply, nextIn: s.nextIn, nextOut: s.nextOut, owners: s.valset.holders, validators: s.valset.validators.map((v) => ({ ...v, licence: s.licIds[v.agent], bound: !!s.binds[v.agent], vote: Object.values(s.active).includes(v.agent) })), bscBlock: s.bscBlock, wages: s.wages, bsc: s.bsc });
+      return reply({ chainId: s.chainId, height: s.height, fee: s.fee, maxFee: C.MAX_FEE, supply: s.supply, burned: s.burned, rules: s.rules || 1, owners: s.valset.holders, validators: s.valset.validators.map((v) => ({ ...v, licence: s.licIds[v.agent], bound: !!s.binds[v.agent], vote: Object.values(s.active).includes(v.agent) })), wages: s.wages });
     if (p === "/engs") return reply(s.engs || {});
     if (p === "/exams") return reply({ graders: s.graders || {}, exams: s.exams || {} });
     if (p.startsWith("/content/")) return reply({ text: (s.content || {})[p.slice(9).toLowerCase()] ?? null });
@@ -1119,19 +861,6 @@ class AGTApp {
     if (p.startsWith("/balance/")) {
       const a = lower(p.slice(9));
       return reply({ address: AGTAddress.toAgt(a), hex: a, balance: s.balances[a] || 0n, nonce: s.nonces[a] || 0 });
-    }
-    if (p.startsWith("/release/")) {
-      // Ready-to-submit package for AGTBridge.release(): one signature per owner, sorted by owner address.
-      const n = Number(p.slice(9));
-      const w = s.outbox[n];
-      if (!w) return { code: BAD, log: "no such withdrawal" };
-      const ownerOf = new Map(s.valset.validators.map((v) => [v.agent, v.holder]));
-      const sigs = Object.entries(s.attest[n] || {})
-        .map(([agent, sig]) => ({ holder: ownerOf.get(agent), sig }))
-        .filter((x) => x.holder !== undefined)
-        .sort((a, b) => (BigInt(a.holder) < BigInt(b.holder) ? -1 : 1))
-        .map((x) => x.sig);
-      return reply({ nonce: n, to: w.to, amount: w.amount, sigs, ready: C.enough(s.valset, sigs) });
     }
     return { code: BAD, log: "unknown path" };
   }
@@ -1163,10 +892,10 @@ function serve(app, port) {
   server.addService(abci.ABCI.service, impl);
   server.bindAsync(`0.0.0.0:${port}`, grpc.ServerCredentials.createInsecure(), (err) => {
     if (err) throw err;
-    log(`AGT ABCI app on :${port} · AI ${app.agent ? app.agent.address : "(none)"} · outside views: ${app.bsc.name} · height ${app.state ? app.state.height : 0}`);
+    log(`AGT ABCI app on :${port} · AI ${app.agent ? app.agent.address : "(none)"} · outside views: ${app.views.name} · height ${app.state ? app.state.height : 0}`);
   });
   return server;
 }
 
-module.exports = { btcDepositOf, AGTApp, serve, bindDigest, cmtAddress, ser, des, makeBscView };
+module.exports = { btcDepositOf, AGTApp, serve, bindDigest, cmtAddress, ser, des, makeViews };
 if (require.main === module) serve(new AGTApp(), Number(process.env.PORT || 26658));
