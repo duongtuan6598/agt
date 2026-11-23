@@ -997,6 +997,7 @@ class AGTApp {
       let changed = false;
       for (const l of Object.values(s.licences)) if (l.pending && s.height >= l.activeAt) { l.pending = false; l.active = true; changed = true; }
       if (changed) ownValset(s);
+      if (changed && v2(s) && !s.handedOver && licOwners(s).length >= CARETAKER_UNTIL) s.handedOver = true; // latch in the same block the 4th owner activates (Codex review of v2)
     }
     const next = activeSet(s);
     if (s.caretaker && !s.caretaker.retired && !(s.caretaker.pubKey in next)) s.caretaker.retired = true; // one way

@@ -15,3 +15,11 @@ Where: app.js:676-688, 405-447, 884-898 · Problem: `bind` writes `s.cmt[cmtAddr
 
 ### D-6 [Medium] `/release` crashes on stale attestations from revoked validators
 Where: app.js:1063-1067 · Problem: `/release` maps every stored attestation agent through the *current* `s.valset.validators`. If an agent attested while licensed and was later revoked, `ownerOf.get(agent)` is `undefined`; `.sort((a,b)=>BigInt(a.holder)<BigInt(b.holder)?-1:1)` then throws on `BigInt(undefined)`. · Scenario: withdrawal #n has an attestation from validator V; V is later revoked; querying `/release/n` throws instead of returning a valid package. · Fix: filter attestations to current validators or store the holder at attestation time; handle `undefined` before sorting.
+
+## Codex review of rules v2 (23 Nov 2026)
+
+Codex (gpt-6-luna) reviewed the v2 patch. Three findings, each checked against the code:
+
+1. *New fields written before V2_AT* — already fixed before deploy (`a.at`, `openedAt`, `since` are created only from V2_AT); the replay of 3380 blocks from genesis matches.
+2. *Wages to a stale holder* — not a bug: on agt-2 the validator list is rebuilt from the chain's own licences whenever they change, and a missing entry is filtered out (a revoked AI earns nothing).
+3. *Handover could slip for one block* — **real**: `handedOver` was latched at the start of the next block, so for one block the owner count could fall back under 4 and the starting granter's role would return. Fixed: the flag is also latched in the same FinalizeBlock where the 4th owner's licence activates. agt-2 has never had 4 owners, so no past block changes (replay still matches).
