@@ -21,7 +21,7 @@ const AGTAddress = require("./address.js");
 const AGTSig = require("./sig.js");
 // Rules v4 at height V4_AT (published before it): every agt-2 signature uses AGT's own form (chain/sig.js); the older
 // Ethereum message prefix is refused from then on. Before it both are accepted, so old blocks replay unchanged.
-const V4_AT = 6000;
+const V4_AT = 30000;
 const v4 = (s) => Number((s && s.height) || 0) >= V4_AT;
 const recoverSig = (s, digest, sig) => AGTSig.recover(digest, sig, !v4(s));
 const lower = (a) => ethers.getAddress(AGTAddress.toHex(a)).toLowerCase(); // accepts agt1… (AGT's own form) and 0x…

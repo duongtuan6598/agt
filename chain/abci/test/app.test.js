@@ -518,14 +518,14 @@ test("rules v2: one price report per hour (D-3), a pending milestone can be recl
   assert.match(String(app.CheckTx({ tx: B({ type: "licence-revoke", nonce: gn, id: 1, sigs: auth("licence-revoke", b2) }) }).log), /not signed by those who may sign/);
 });
 
-test("rules v4 (height 6000): signatures in AGT's own form are accepted at any height; the Ethereum-prefixed form is refused from v4", () => {
+test("rules v4 (height 30000): signatures in AGT's own form are accepted at any height; the Ethereum-prefixed form is refused from v4", () => {
   const S = require("../../sig.js");
   const w = ethers.Wallet.createRandom();
   const d = C.hashOf({ tag: "AGT-WORK-v1", chainId: CHAIN, body: { a: 1 }, nonce: 0 });
   const old = w.signMessageSync(ethers.getBytes(d)), own = S.sign(w, d);
-  assert.equal(C.recoverSig({ height: 5999 }, d, old), w.address.toLowerCase(), "before v4 the older form still counts (old blocks replay)");
+  assert.equal(C.recoverSig({ height: 29999 }, d, old), w.address.toLowerCase(), "before v4 the older form still counts (old blocks replay)");
   assert.equal(C.recoverSig({ height: 10 }, d, own), w.address.toLowerCase());
-  assert.equal(C.recoverSig({ height: 6000 }, d, own), w.address.toLowerCase());
-  assert.throws(() => C.recoverSig({ height: 6000 }, d, old), /AGT's own form/);
+  assert.equal(C.recoverSig({ height: 30000 }, d, own), w.address.toLowerCase());
+  assert.throws(() => C.recoverSig({ height: 30000 }, d, old), /AGT's own form/);
   assert.notEqual(S.recover(d, "agt:" + old.slice(2).padStart(130, "0").replace(/^/, "0x"), false), w.address.toLowerCase(), "an Ethereum-prefixed signature is no AGT signature");
 });
