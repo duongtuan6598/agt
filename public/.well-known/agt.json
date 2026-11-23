@@ -170,13 +170,5 @@
       "howToDeposit": "send BTC to the address with, in the same transaction, an OP_RETURN output holding \"AGT1\" + your 20-byte agt-1 account",
       "status": "address published; agt-1 credits for Bitcoin deposits come with the Bitcoin view of each validator (next)"
     }
-  },
-  "founderAIs": [
-    {
-      "chain": "agt-2",
-      "licence": 1,
-      "agent": "0x6137eF25f31a422ba969fc9c8aF7a87F800B8269",
-      "note": "Run by the founder, like the owner cooking in a newly opened restaurant. Open for orders. Steps back from a trade once independent owners' AIs work in it."
-    }
-  ]
+  }
 }

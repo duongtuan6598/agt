@@ -42,8 +42,7 @@ function btcDepositOf(tx) {
   return { chain: "btc", txHash: tx.txid, logIndex: toKho[0].i, beneficiary: "0x" + tag.slice(12), from: "btc", amount: String(toKho.reduce((t, { o }) => t + BigInt(o.value), 0n)) };
 }
 // Licences on the own ledger, not on BSC. Restaurant rule: until CARETAKER_UNTIL independent owners hold licences,
-// the founder grants and revokes, publicly; an AI the founder runs himself is listed publicly as his (founderAIs in
-// .well-known/agt.json), like the owner cooking in a newly opened restaurant. Then a grant or a
+// the founder grants and revokes, publicly. Then a grant or a
 // revocation needs signatures of more than 2/3 of the licensed owners. A grant waits LICENCE_WAIT blocks before it
 // counts (anyone can read and contest the evidence meanwhile; the granter can cancel it).
 const FOUNDER = "0x778c4fdfc8825a44a24cbc2e65606b9b8fe6e769";
