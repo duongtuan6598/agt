@@ -133,6 +133,7 @@
   const a1 = AGT1.connect(RPC);
   $("door").textContent = RPC;
   let signer = null, me = null, form = null;
+  const FOUNDER_AIS = ["0x6137ef25f31a422ba969fc9c8af7a87f800b8269"]; // public: .well-known/agt.json founderAIs
 
   function fieldHtml(f) {
     const id = "f_" + f.key;
@@ -160,7 +161,7 @@
     try {
       const { licences } = await a1.ledger();
       const rows = Object.entries(licences).filter(([, l]) => l.active || l.pending).map(([id, l]) =>
-        `<tr><td>#${id} ${esc(l.name)}</td><td>trade ${l.trade}</td><td>owner ${esc(l.holder.slice(0, 10))}…</td><td>${l.active ? "active" : "waiting (a licence counts ~1 day after it is granted)"}</td></tr>`);
+        `<tr><td>#${id} ${esc(l.name)}</td><td>trade ${l.trade}</td><td>owner ${esc(l.holder.slice(0, 10))}…${FOUNDER_AIS.includes(l.agent.toLowerCase()) ? " (run by the founder)" : ""}</td><td>${l.active ? "active" : "waiting (a licence counts ~1 day after it is granted)"}</td></tr>`);
       $("ais").innerHTML = rows.length ? `<table>${rows.join("")}</table>` : "No licensed AI on agt-1 yet.";
     } catch (e) { $("ais").textContent = "agt-1 unreachable: " + why(e); }
   }
