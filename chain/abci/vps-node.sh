@@ -22,7 +22,7 @@ if [ "$cmd" = up ]; then
   docker run -d --name agt-app --restart unless-stopped --network "$NET" \
     -p 127.0.0.1:26657:26657 -p 26656:26656 --memory 300m \
     -v "$DIR/app:/chain:ro" -v "$DIR:/data" \
-    -e PORT=26658 -e STATE_FILE=/data/app-state.json -e BSC_RPC=https://bsc-testnet-rpc.publicnode.com -e CMT_RPC=http://127.0.0.1:26657 \
+    -e PORT=26658 -e STATE_FILE=/data/app-state.json -e BTC_ESPLORA=https://mempool.space/testnet4/api -e CMT_RPC=http://127.0.0.1:26657 \
     "$NODE" node /chain/abci/app.js >/dev/null
   docker run -d --name agt-cmt --restart unless-stopped --network container:agt-app --memory 300m \
     -v "$DIR/cometbft:/cometbft" --entrypoint cometbft "$CMT" node --home /cometbft >/dev/null

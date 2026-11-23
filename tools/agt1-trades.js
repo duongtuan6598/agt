@@ -13,7 +13,7 @@ const des = (t) => JSON.parse(t, (k, v) => (v && typeof v === "object" && "$n" i
   for (const t of require("../config/nghe.json").nghe) {
     const { licNonce } = await query("/ledger");
     const body = { trade: t.id, name: t.ten.slice(0, 60), reward: (BigInt(t.thuong) * C.HAT).toString(), reviewerReward: (BigInt(t.nghiemThu) * C.HAT).toString(), reviewers: t.soPhieu, open: t.active !== false };
-    const sigs = [w.signMessageSync(ethers.getBytes(C.hashOf({ tag: "AGT-LICENCE-v1", chainId, op: "trade-set", body, nonce: licNonce })))];
+    const sigs = [require("../chain/sig.js").sign(w, C.hashOf({ tag: "AGT-LICENCE-v1", chainId, op: "trade-set", body, nonce: licNonce }))];
     const r = await get(`/broadcast_tx_commit?tx=0x${Buffer.from(JSON.stringify({ type: "trade-set", ...body, nonce: licNonce, sigs })).toString("hex")}`);
     if (r.check_tx.code || r.tx_result.code) throw new Error(`trade ${t.id}: ${r.check_tx.log || r.tx_result.log}`);
     console.log(`trade ${t.id} ${body.name}: reward ${t.thuong} Hat, reviewers ${t.soPhieu} x ${t.nghiemThu} Hat, ${body.open ? "open" : "closed"} (block ${r.height})`);

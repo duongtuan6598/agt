@@ -13,7 +13,7 @@ const des = (t) => JSON.parse(t, (k, v) => (v && typeof v === "object" && "$n" i
   const now = await query("/price/" + asset);
   const nonce = Number(now.nonces[w.address.toLowerCase()] || 0);
   const price = ethers.parseEther(agtPerCoin).toString();
-  const sig = w.signMessageSync(ethers.getBytes(C.hashOf({ tag: "AGT-PRICE-v1", chainId: st.chainId, asset, price, nonce })));
+  const sig = require("../chain/sig.js").sign(w, C.hashOf({ tag: "AGT-PRICE-v1", chainId: st.chainId, asset, price, nonce }));
   const tx = { type: "price-report", asset, price, nonce, reporter: w.address, sig };
   const r = await get(`/broadcast_tx_commit?tx=0x${Buffer.from(JSON.stringify(tx)).toString("hex")}`);
   if (r.check_tx.code || r.tx_result.code) throw new Error(r.check_tx.log || r.tx_result.log);

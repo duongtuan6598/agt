@@ -4,6 +4,7 @@
 //   await c.transfer(wallet, to, amountWei); await c.submitWork(aiKey, evidenceHash); …
 const { ethers } = require("ethers");
 const C = require("./core.js");
+const AGTSig = require("./sig.js");
 
 const des = (t) => JSON.parse(t, (k, v) => (v && typeof v === "object" && "$n" in v ? BigInt(v.$n) : v));
 const enc = (tx) => "0x" + Buffer.from(JSON.stringify(tx, (k, v) => (typeof v === "bigint" ? v.toString() : v))).toString("hex");
@@ -60,14 +61,14 @@ function withTransport(query, send) {
     const cid = await chainId();
     const nonce = await nonceOf(wallet.address);
     const full = { ...body, nonce };
-    const sig = wallet.signMessageSync(ethers.getBytes(C.hashOf({ tag: TAG.work, chainId: cid, body: full, nonce })));
+    const sig = AGTSig.sign(wallet, C.hashOf({ tag: TAG.work, chainId: cid, body: full, nonce }));
     return send({ ...full, sig });
   }
   // licence / trade changes: signed by those who may sign now (the granter at the start)
   async function authorised(wallets, type, body) {
     const cid = await chainId();
     const { licNonce } = await query("/ledger");
-    const sigs = wallets.map((w) => w.signMessageSync(ethers.getBytes(C.hashOf({ tag: TAG.licence, chainId: cid, op: type, body, nonce: licNonce }))));
+    const sigs = wallets.map((w) => AGTSig.sign(w, C.hashOf({ tag: TAG.licence, chainId: cid, op: type, body, nonce: licNonce })));
     return send(type === "trade-set" ? { type, ...body, nonce: licNonce, sigs } : type === "licence-grant" ? { type, licence: body, nonce: licNonce, sigs } : { type, id: body.id, nonce: licNonce, sigs });
   }
 
@@ -110,7 +111,7 @@ function withTransport(query, send) {
       const now = await query(`/price/${asset}`);
       const nonce = Number(now.nonces[wallet.address.toLowerCase()] || 0);
       const p = BigInt(price).toString();
-      return send({ type: "price-report", asset, price: p, nonce, reporter: wallet.address, sig: wallet.signMessageSync(ethers.getBytes(C.hashOf({ tag: TAG.price, chainId: cid, asset, price: p, nonce }))) });
+      return send({ type: "price-report", asset, price: p, nonce, reporter: wallet.address, sig: AGTSig.sign(wallet, C.hashOf({ tag: TAG.price, chainId: cid, asset, price: p, nonce })) });
     },
   };
 }

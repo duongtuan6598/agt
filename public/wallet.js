@@ -14,7 +14,7 @@
       address: AGTAddress.toAgt(w.address),
       hex: w.address.toLowerCase(),
       getAddress: async () => w.address,
-      signMessage: async (m) => w.signMessage(m),
+      signAgt: async (digest) => AGTSig.sign(w, digest), // AGT's own signature form (chain/sig.js)
     };
   }
   async function create(pass) {

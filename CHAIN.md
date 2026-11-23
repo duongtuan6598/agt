@@ -216,3 +216,11 @@ While the founder grants alone (fewer than 4 independent owners), nobody else co
 wait only stopped work. From **height 3800** (published at height ~3475): a grant in that period counts at once, and a
 grant still waiting counts at height 3800. From 4 owners on, the wait returns, because then other owners read and
 contest the evidence.
+
+## Rules v4 at agt-2 height 6000 (23 Nov 2026): AGT's own signatures
+
+From **height 6000** (published at height ~4600), every agt-2 signature must be in AGT's own form
+(`chain/sig.js`): made on `keccak256("\x19AGT Signed Message:\n32" ‖ digest)` and written `agt:0x…`. The older form,
+borrowed from Ethereum wallets, is refused from then on. AGT's form is accepted at every height, so clients switched
+first; before 6000 both count, so every older block replays unchanged. With addresses `agt1…` and the wallet in the
+page, nothing a user touches comes from another chain.

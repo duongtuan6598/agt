@@ -100,7 +100,7 @@ const owe = (s, to, amount) => { if (amount > 0n) { (s.workQueue = s.workQueue |
 // a signed work transaction: the AI's licence key signs; the fee is waived within the daily free quota
 function workSigned(s, tx) {
   const { sig, ...body } = tx;
-  const who = lower(ethers.verifyMessage(ethers.getBytes(workDigest(s.chainId, body, Number(tx.nonce))), sig));
+  const who = lower(C.recoverSig(s, workDigest(s.chainId, body, Number(tx.nonce)), sig));
   s.nonces = s.nonces || {};
   if (Number(tx.nonce) !== (s.nonces[who] || 0)) throw new Error("bad nonce");
   s.nonces[who] = Number(tx.nonce) + 1;
@@ -136,7 +136,7 @@ const REVIEW_BLOCKS = 14400 * 7;
 function signedBy(s, tx, { free = false } = {}) {
   if (free) return workSigned(s, tx);
   const { sig, ...body } = tx;
-  const who = lower(ethers.verifyMessage(ethers.getBytes(workDigest(s.chainId, body, Number(tx.nonce))), sig));
+  const who = lower(C.recoverSig(s, workDigest(s.chainId, body, Number(tx.nonce)), sig));
   s.nonces = s.nonces || {};
   if (Number(tx.nonce) !== (s.nonces[who] || 0)) throw new Error("bad nonce");
   s.nonces[who] = Number(tx.nonce) + 1;
@@ -152,7 +152,7 @@ function payMilestone(s, e, m, toWorker) {
   s.balances[to] = (s.balances[to] || 0n) + amt;
   e.escrow = (BigInt(e.escrow) - amt).toString();
 }
-function who0(s, tx) { try { const { sig, ...body } = tx; return lower(ethers.verifyMessage(ethers.getBytes(workDigest(s.chainId, body, Number(tx.nonce))), sig)); } catch { return null; } }
+function who0(s, tx) { try { const { sig, ...body } = tx; return lower(C.recoverSig(s, workDigest(s.chainId, body, Number(tx.nonce)), sig)); } catch { return null; } }
 const licOf = (s, agent) => Object.entries(s.licences || {}).find(([, l]) => l.active && l.agent === agent);
 const PRICE_STEP_BPS = 1000n; // ±10% per report
 const priceDigest = (chainId, asset, price, nonce) => C.hashOf({ tag: PRICE_TAG, chainId, asset, price, nonce });
@@ -216,7 +216,7 @@ function ownValset(s) {
 // the starting granter's role ends for good the first time 4 independent owners hold licences (D-4)
 const granterActive = (s) => !(v2(s) && s.handedOver) && licOwners(s).length < CARETAKER_UNTIL;
 function licAuthorised(s, digest, sigs) {
-  const signers = new Set((sigs || []).map((g) => { try { return lower(ethers.verifyMessage(ethers.getBytes(digest), g)); } catch { return null; } }).filter(Boolean));
+  const signers = new Set((sigs || []).map((g) => { try { return lower(C.recoverSig(s, digest, g)); } catch { return null; } }).filter(Boolean));
   const owners = licOwners(s);
   if (v2(s) ? granterActive(s) : owners.length < CARETAKER_UNTIL) return signers.has((s.ledger && s.ledger.granter) || FOUNDER);
   return owners.filter((o) => signers.has(o)).length * 3 > owners.length * 2;
@@ -492,7 +492,7 @@ class AGTApp {
       let who, fee = 0n;
       if (tx.asGranter) {
         const { sig, ...body } = tx;
-        who = lower(ethers.verifyMessage(ethers.getBytes(workDigest(s.chainId, body, Number(tx.nonce))), sig));
+        who = lower(C.recoverSig(s, workDigest(s.chainId, body, Number(tx.nonce)), sig));
         if (who !== granter) throw new Error("not the granter");
         s.nonces = s.nonces || {};
         if (Number(tx.nonce) !== (s.nonces[who] || 0)) throw new Error("bad nonce");
@@ -518,7 +518,7 @@ class AGTApp {
       if (!s.ledger) throw new Error("exams live on the own ledger only");
       const e = { agent: lower(tx.agent), trade: Number(tx.trade), examHash: String(tx.examHash).toLowerCase(), passed: !!tx.passed };
       if (!/^0x[0-9a-f]{64}$/.test(e.examHash)) throw new Error("bad exam hash");
-      const g = lower(ethers.verifyMessage(ethers.getBytes(examDigest(s.chainId, e)), tx.sig));
+      const g = lower(C.recoverSig(s, examDigest(s.chainId, e), tx.sig));
       if (!(s.graders || {})[g] || !s.graders[g].on) throw new Error("not a registered grader");
       const x = ((s.exams = s.exams || {})[e.examHash] = s.exams[e.examHash] || { agent: e.agent, trade: e.trade, pass: [], fail: [] });
       if (x.agent !== e.agent || x.trade !== e.trade) throw new Error("that exam belongs to another AI or trade");
@@ -636,7 +636,7 @@ class AGTApp {
         a.at = a.at || {}; // v1 state has no "at": created only from V2_AT, so older blocks replay unchanged
         if (a.at[who] !== undefined && Number(s.height || 0) < a.at[who] + PRICE_INTERVAL) throw new Error(`one price report per reporter every ${PRICE_INTERVAL} blocks`);
       }
-      if (lower(ethers.verifyMessage(ethers.getBytes(priceDigest(s.chainId, asset, price.toString(), nonce)), tx.sig)) !== who) throw new Error("price report not signed by its reporter");
+      if (lower(C.recoverSig(s, priceDigest(s.chainId, asset, price.toString(), nonce), tx.sig)) !== who) throw new Error("price report not signed by its reporter");
       const now = priceOf(s, asset);
       if (now > 0n && (price * 10000n > now * (10000n + PRICE_STEP_BPS) || price * 10000n < now * (10000n - PRICE_STEP_BPS))) throw new Error("price report too far from the current median (±10%)");
       a.reports[who] = price.toString();
@@ -708,7 +708,7 @@ class AGTApp {
       if (!v) throw new Error("not a licensed AI in a sealed box");
       if (!isKey(tx.pubKey)) throw new Error("bad ed25519 key");
       if (s.caretaker && tx.pubKey === s.caretaker.pubKey) throw new Error("that is the caretaker's key"); // Codex P-2
-      if (lower(ethers.verifyMessage(ethers.getBytes(bindDigest(s.chainId, tx.pubKey)), tx.sig)) !== agent) throw new Error("binding not signed by the AI's licence key");
+      if (lower(C.recoverSig(s, bindDigest(s.chainId, tx.pubKey), tx.sig)) !== agent) throw new Error("binding not signed by the AI's licence key");
       if (s.binds[agent] === tx.pubKey) throw new Error("already bound");
       if (Object.entries(s.binds).some(([a, pk]) => pk === tx.pubKey && a !== agent)) throw new Error("key bound by another AI");
       s.binds[agent] = tx.pubKey;
@@ -1065,7 +1065,7 @@ class AGTApp {
       const st = await (await fetch(`${this.cmtRpc}/status`)).json();
       const pk = st.result.validator_info.pub_key.value;
       if (this.state.binds[me] === pk) return;
-      const sig = await this.agent.signMessage(ethers.getBytes(bindDigest(this.state.chainId, pk)));
+      const sig = require("../sig.js").sign(this.agent, bindDigest(this.state.chainId, pk));
       const hex = "0x" + Buffer.from(JSON.stringify({ type: "bind", agent: me, pubKey: pk, sig })).toString("hex");
       const r = await (await fetch(`${this.cmtRpc}/broadcast_tx_sync?tx=${hex}`)).json();
       log(`bind consensus key ${pk.slice(0, 10)}…: ${r.result && r.result.code === 0 ? "sent" : JSON.stringify(r.result || r.error)}`);
@@ -1163,7 +1163,7 @@ function serve(app, port) {
   server.addService(abci.ABCI.service, impl);
   server.bindAsync(`0.0.0.0:${port}`, grpc.ServerCredentials.createInsecure(), (err) => {
     if (err) throw err;
-    log(`AGT ABCI app on :${port} · AI ${app.agent ? app.agent.address : "(none)"} · BSC view: ${app.bsc.name} · height ${app.state ? app.state.height : 0}`);
+    log(`AGT ABCI app on :${port} · AI ${app.agent ? app.agent.address : "(none)"} · outside views: ${app.bsc.name} · height ${app.state ? app.state.height : 0}`);
   });
   return server;
 }

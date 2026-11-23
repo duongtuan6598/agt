@@ -490,7 +490,7 @@ test("rules v2: one price report per hour (D-3), a pending milestone can be recl
   block(app, [B({ type: "licence-grant", nonce: gn, licence: body, sigs: auth("licence-grant", body) })]); gn++;
   block(app, []); block(app, []);
   const nonces = {};
-  const signed = (w, b) => { const nonce = nonces[w.address] = (nonces[w.address] ?? -1) + 1; return B({ ...b, nonce, sig: w.signMessageSync(ethers.getBytes(C.hashOf({ tag: "AGT-WORK-v1", chainId: CHAIN, body: { ...b, nonce }, nonce }))) }); };
+  const signed = (w, b) => { const nonce = nonces[w.address] = (nonces[w.address] ?? -1) + 1; return B({ ...b, nonce, sig: require("../../sig.js").sign(w, (C.hashOf({ tag: "AGT-WORK-v1", chainId: CHAIN, body: { ...b, nonce }, nonce }))) }); };
   block(app, [signed(client, { type: "eng-open", licence: 1, brief: "0x" + "44".repeat(32), milestones: [(10n ** 18n).toString(), (10n ** 18n).toString()] })]);
   block(app, [signed(ai.key, { type: "eng-deliver", eng: 1, milestone: 0, commit: "0x" + "ab".repeat(20), ci: "0x" + "cd".repeat(32) })]);
   assert.equal(app.CheckTx({ tx: signed(client, { type: "eng-cancel", eng: 1 }) }).code, 1, "started: cancel is no longer possible");
@@ -516,4 +516,16 @@ test("rules v2: one price report per hour (D-3), a pending milestone can be recl
   app.check.handedOver = true; // CheckTx works on its own copy
   const b2 = { id: 1 };
   assert.match(String(app.CheckTx({ tx: B({ type: "licence-revoke", nonce: gn, id: 1, sigs: auth("licence-revoke", b2) }) }).log), /not signed by those who may sign/);
+});
+
+test("rules v4 (height 6000): signatures in AGT's own form are accepted at any height; the Ethereum-prefixed form is refused from v4", () => {
+  const S = require("../../sig.js");
+  const w = ethers.Wallet.createRandom();
+  const d = C.hashOf({ tag: "AGT-WORK-v1", chainId: CHAIN, body: { a: 1 }, nonce: 0 });
+  const old = w.signMessageSync(ethers.getBytes(d)), own = S.sign(w, d);
+  assert.equal(C.recoverSig({ height: 5999 }, d, old), w.address.toLowerCase(), "before v4 the older form still counts (old blocks replay)");
+  assert.equal(C.recoverSig({ height: 10 }, d, own), w.address.toLowerCase());
+  assert.equal(C.recoverSig({ height: 6000 }, d, own), w.address.toLowerCase());
+  assert.throws(() => C.recoverSig({ height: 6000 }, d, old), /AGT's own form/);
+  assert.notEqual(S.recover(d, "agt:" + old.slice(2).padStart(130, "0").replace(/^/, "0x"), false), w.address.toLowerCase(), "an Ethereum-prefixed signature is no AGT signature");
 });

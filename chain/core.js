@@ -18,6 +18,12 @@ const FEE_TAG = "AGT-SET-FEE-v1";
 const RELEASE_TAG = ethers.id("AGT-CHAIN-RELEASE-v1");
 
 const AGTAddress = require("./address.js");
+const AGTSig = require("./sig.js");
+// Rules v4 at height V4_AT (published before it): every agt-2 signature uses AGT's own form (chain/sig.js); the older
+// Ethereum message prefix is refused from then on. Before it both are accepted, so old blocks replay unchanged.
+const V4_AT = 6000;
+const v4 = (s) => Number((s && s.height) || 0) >= V4_AT;
+const recoverSig = (s, digest, sig) => AGTSig.recover(digest, sig, !v4(s));
 const lower = (a) => ethers.getAddress(AGTAddress.toHex(a)).toLowerCase(); // accepts agt1… (AGT's own form) and 0x…
 
 // Canonical JSON with bigints written as decimal strings, keys sorted.
@@ -38,7 +44,7 @@ function txBody(tx) {
 const txHash = (tx) => hashOf(txBody(tx));
 async function signTx(wallet, tx) {
   const t = { ...tx, from: lower(wallet.address) };
-  return { ...t, sig: await wallet.signMessage(ethers.getBytes(txHash(t))) };
+  return { ...t, sig: AGTSig.sign(wallet, txHash(t)) };
 }
 
 // ---------- validator set ----------
@@ -52,13 +58,13 @@ function normValset(v) {
 const valsetHash = (v) => hashOf(normValset(v));
 
 // Count distinct owners behind valid signatures over `digest`; returns sorted owners.
-function signersOf(valset, digest, sigs) {
+function signersOf(valset, digest, sigs, st = null) {
   const byAgent = new Map(valset.validators.map((x) => [x.agent, x.holder]));
   const owners = new Set();
   for (const s of sigs) {
     let agent;
     try {
-      agent = lower(ethers.verifyMessage(ethers.getBytes(digest), s.sig));
+      agent = lower(recoverSig(st, digest, s.sig));
     } catch {
       throw new Error("bad signature");
     }
@@ -111,13 +117,13 @@ function applyTx(s, tx) {
     const fee = BigInt(tx.fee);
     if (fee < 0n || fee > MAX_FEE) throw new Error("fee above hard ceiling");
     if (tx.feeNonce !== s.feeNonce) throw new Error("bad feeNonce");
-    const owners = signersOf(s.valset, feeDigest(s.chainId, fee, tx.feeNonce), tx.sigs || []);
+    const owners = signersOf(s.valset, feeDigest(s.chainId, fee, tx.feeNonce), tx.sigs || [], s);
     if (!enough(s.valset, owners)) throw new Error("fee change needs > 2/3 of owners");
     s.fee = fee;
     s.feeNonce++;
     return 0n;
   }
-  const from = lower(ethers.verifyMessage(ethers.getBytes(txHash(tx)), tx.sig));
+  const from = lower(recoverSig(s, txHash(tx), tx.sig));
   if (from !== lower(tx.from)) throw new Error("bad sender signature");
   if (tx.chainId !== s.chainId) throw new Error("wrong chain");
   if (tx.nonce !== (s.nonces[from] || 0)) throw new Error("bad nonce");
@@ -257,6 +263,7 @@ function releasePackage(s, block, w, index) {
 }
 
 module.exports = {
+  V4_AT, v4, recoverSig,
   HAT, MAX_FEE, START_FEE, canon, hashOf, txHash, signTx, normValset, valsetHash,
   genesis, applyTx, buildBlock, signBlock, applyBlock, blockHash, withdrawalsOf,
   feeDigest, releaseDigestRaw, releasePackage, signersOf, enough,

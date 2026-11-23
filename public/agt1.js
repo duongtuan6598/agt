@@ -39,7 +39,7 @@
       const cid = await chainId();
       const nonce = Number((await query(`/balance/${me}`)).nonce || 0);
       const full = { ...body, nonce };
-      const sig = await signer.signMessage(ethers.getBytes(hashOf({ tag: "AGT-WORK-v1", chainId: cid, body: full, nonce })));
+      const sig = await signer.signAgt(hashOf({ tag: "AGT-WORK-v1", chainId: cid, body: full, nonce }));
       return send({ ...full, sig });
     }
     return {
@@ -64,7 +64,7 @@
         const nonce = Number((await query(`/balance/${me}`)).nonce || 0);
         const tx = { type: "transfer", chainId: st.chainId, to, amount: BigInt(amount), fee: st.fee, nonce, from: me.toLowerCase() };
         const { sig, ...body } = tx;
-        tx.sig = await signer.signMessage(ethers.getBytes(hashOf(body)));
+        tx.sig = await signer.signAgt(hashOf(body));
         return send(tx);
       },
     };
