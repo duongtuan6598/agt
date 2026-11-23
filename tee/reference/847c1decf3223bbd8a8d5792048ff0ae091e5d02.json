@@ -1,0 +1,8 @@
+{
+  "_": "Digests tools/repro-build.sh must produce from this commit on any machine. Added once, never modified (the workflow checks the git history). Embedded image only: agt-2, AGT signatures, tasks and translation work on agt-2, rules v7 clients, 2026-11-23.",
+  "commit": "847c1decf3223bbd8a8d5792048ff0ae091e5d02",
+  "buildkit": "v0.34.2",
+  "images": {
+    "embedded": "sha256:94ad79bf11b8cd4faa5ee7124912d5cd459ea5d0aa11866ab96376e658e52ebd"
+  }
+}

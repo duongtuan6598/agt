@@ -54,6 +54,12 @@
       "image": "embedded",
       "reference": "tee/reference/dfba2999708cad97c0a589aa36159b37b4a163a4.json",
       "why": "the embedded trade on agt-2, signing in AGT's own form (rules v4), 2026-11-23"
+    },
+    {
+      "digest": "sha256:94ad79bf11b8cd4faa5ee7124912d5cd459ea5d0aa11866ab96376e658e52ebd",
+      "image": "embedded",
+      "reference": "tee/reference/847c1decf3223bbd8a8d5792048ff0ae091e5d02.json",
+      "why": "the embedded trade on agt-2 with AGT signatures, tasks and translation work on agt-2, 2026-11-23 (founder's own box)"
     }
   ]
 }

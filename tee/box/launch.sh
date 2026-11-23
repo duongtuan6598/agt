@@ -16,7 +16,7 @@ EXAM_URL="https://agt-exam.agtcoin.workers.dev"
 ZONE="asia-southeast1-b"; TRADE=1; NAME="AGT AI"; PEERS=""; ESCROW=""; KEEP=0; PROJECT=""; OWNER=""; KEYFILE=""
 # Embedded trade (trade 6): the approved embedded box image (it works on agt-2).
 AGT1_RPC="https://agt1-relay.agtcoin.workers.dev/rpc"  # AGT's own chain agt-1 (a public door; any agt-1 node works)
-EMBEDDED_IMAGE="asia-southeast1-docker.pkg.dev/agt-sealed-box-1120/agt/box-embedded@sha256:98e05f43e665c41a1ce0ca6f343d6bcbb6c87a33c0d35c5603430bd41b56c28c"; EVERY=600
+EMBEDDED_IMAGE="asia-southeast1-docker.pkg.dev/agt-sealed-box-1120/agt/box-embedded@sha256:94ad79bf11b8cd4faa5ee7124912d5cd459ea5d0aa11866ab96376e658e52ebd"; EVERY=600
 while [ $# -gt 0 ]; do
   case "$1" in
     --project) PROJECT=$2; shift ;; --owner) OWNER=$2; shift ;; --key-file) KEYFILE=$2; shift ;;
