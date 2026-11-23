@@ -78,3 +78,27 @@ test("v7: the founder's node is paid for the blocks it signs, like any validator
   const after = (await a1.balance(granter.address)).balance;
   assert.equal(after, before - 1n, "paid 1 + fee, got the fee back as the signer's wage");
 });
+
+test("v8: the founder moves his role and his licence to a key born in AGT's wallet; contracts and price voice follow", async () => {
+  const { app, a1, granter, jump } = chain();
+  const fresh = ethers.Wallet.createRandom(), ai = W("v8-ai"), stranger = W("v8-stranger");
+  jump(9000);
+  await a1.grant([granter], lic(ai, granter));
+  await a1.reportPrice(granter, "usdt", 3n * 10n ** 14n);
+  const client = W("v8-client");
+  await a1.transfer(granter, client.address, 10n ** 17n);
+  await a1.openContract(client, 1, await a1.content(client).put("brief"), [10n ** 16n]);
+  await assert.rejects(a1.moveGranter(granter, fresh.address), /starts with rules v8/);
+  jump(14000);
+  await assert.rejects(a1.moveGranter(stranger, fresh.address), /only the granter/);
+  await a1.moveGranter(granter, fresh.address);
+  assert.equal((await a1.ledger()).granter, fresh.address.toLowerCase(), "the role moved");
+  assert.equal(app.state.prices.usdt.reports[fresh.address.toLowerCase()], (3n * 10n ** 14n).toString(), "his price voice moved with him");
+  assert.ok(!(granter.address.toLowerCase() in app.state.prices.usdt.reports));
+  await assert.rejects(a1.grant([granter], lic(W("x"), W("y"))), /not signed by those who may sign/, "the old key grants nothing any more");
+  await assert.rejects(a1.transferLicence(stranger, 1, fresh.address), /only the owner/);
+  await a1.transferLicence(granter, 1, fresh.address);
+  assert.equal((await a1.ledger()).licences[1].holder, fresh.address.toLowerCase());
+  assert.equal((await a1.query("/engs"))[1].holder, fresh.address.toLowerCase(), "the open contract pays the new owner");
+  await a1.grant([fresh], lic(W("x2"), W("y2")));
+});

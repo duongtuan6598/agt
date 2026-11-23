@@ -112,6 +112,17 @@ function withTransport(query, send) {
     // authority side (the granter at the start, > 2/3 of owners later)
     grant: (wallets, licence) => authorised(wallets, "licence-grant", { agent: licence.agent.toLowerCase(), holder: licence.holder.toLowerCase(), trade: Number(licence.trade), examHash: licence.examHash.toLowerCase(), attestHash: licence.attestHash.toLowerCase(), name: String(licence.name || "").slice(0, 60), ...(licence.evidence ? { evidence: licence.evidence.toLowerCase() } : {}) }),
     revoke: (wallets, id) => authorised(wallets, "licence-revoke", { id: Number(id) }),
+    // rules v8: the granter hands his role to a new address of his own; an owner moves a licence to another address
+    async moveGranter(granter, to) {
+      const cid = await chainId(); const { licNonce } = await query("/ledger");
+      const body = { to: to.toLowerCase() };
+      return send({ type: "granter-move", to: body.to, nonce: licNonce, sig: AGTSig.sign(granter, C.hashOf({ tag: TAG.licence, chainId: cid, op: "granter-move", body, nonce: licNonce })) });
+    },
+    async transferLicence(owner, id, to) {
+      const cid = await chainId(); const { licNonce } = await query("/ledger");
+      const body = { id: Number(id), to: to.toLowerCase() };
+      return send({ type: "licence-transfer", id: body.id, to: body.to, nonce: licNonce, sig: AGTSig.sign(owner, C.hashOf({ tag: TAG.licence, chainId: cid, op: "licence-transfer", body, nonce: licNonce })) });
+    },
     // move a licence to a new sealed box (new model or image, exam sat again): those who may grant AND the owner sign
     async upgrade(wallets, owner, u) {
       const cid = await chainId();

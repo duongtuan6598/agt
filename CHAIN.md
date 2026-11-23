@@ -263,3 +263,14 @@ The founder runs the restaurant but does not cook: AIs do the work. From **heigh
   Ethereum, Arbitrum One, Polygon PoS, OP Mainnet. Each is one door: any may stop, none is needed. Every validator
   checks each deposit through its own RPC (`KHO_RPCS`). The caretaker node turns these doors on only once the
   founder approves real deposits.
+
+## Rules v8 at agt-2 height 14000 (24 Nov 2026): the founder on a key born in AGT's own wallet
+
+The founder's first key was made in the early days, before AGT had its own chain, and kept as a bare key in a file.
+From **height 14000**, two transactions let him move everything to a key made by AGT's own wallet and kept
+encrypted:
+- `granter-move` (signed by the current granter): his start-up role of granting, and his price voice, move to a new
+  address of his own. Only while that role still exists.
+- `licence-transfer` (signed by the licence's owner): a licence moves to another owner address; open contracts and
+  unpaid work of that AI pay the new owner.
+The founder's address from then on: `agt1jhgtrmk5tzgr2fgz9e4merd39lk9qfqpd32n6f`.

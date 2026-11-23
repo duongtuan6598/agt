@@ -374,6 +374,11 @@ const v6 = (s) => Number(s.height || 0) >= V6_AT;
 // chains (KHO_TOKENS): any of them may stop; none is needed.
 const V7_AT = 9000;
 const v7 = (s) => Number(s.height || 0) >= V7_AT;
+// Rules v8 (founder: "độc lập, tự chủ"), from height V8_AT: the founder moves to a key born in AGT's own
+// wallet. granter-move: the current granter hands his start-up role (granting, price voice) to a new address of his
+// own. licence-transfer: an owner moves a licence he holds to another address; open contracts and unpaid work follow.
+const V8_AT = 14000;
+const v8 = (s) => Number(s.height || 0) >= V8_AT;
 const v3 = (s) => Number(s.height || 0) >= V3_AT;        // one price report per reporter per ~hour (D-3)
 // A consensus key is exactly 32 bytes in CANONICAL base64: one key, one spelling (Codex P-4).
 const isKey = (k) => typeof k === "string" && Buffer.from(k, "base64").length === 32 && Buffer.from(k, "base64").toString("base64") === k;
@@ -414,6 +419,38 @@ class AGTApp {
   }
 
   applyAny(s, tx, { fromProposer = false } = {}) {
+    if (tx.type === "granter-move" || tx.type === "licence-transfer") {
+      if (!v8(s)) throw new Error(`${tx.type} starts with rules v8`);
+      s.licNonce = s.licNonce || 0;
+      if (Number(tx.nonce) !== s.licNonce) throw new Error("bad licence nonce");
+      if (!ethers.isAddress(tx.to)) throw new Error("bad address");
+      const to = lower(tx.to);
+      const body = tx.type === "granter-move" ? { to } : { id: Number(tx.id), to };
+      let who = null;
+      try { who = lower(C.recoverSig(s, licDigest(s.chainId, tx.type, body, s.licNonce), tx.sig)); } catch {}
+      if (tx.type === "granter-move") {
+        const old = (s.ledger && s.ledger.granter) || FOUNDER;
+        if (!granterActive(s)) throw new Error("the start-up role has ended: there is nothing to move");
+        if (who !== old) throw new Error("only the granter moves his own role");
+        if (to === old) throw new Error("that is the same address");
+        s.licNonce++;
+        s.ledger.granter = to;
+        for (const a of Object.values(s.prices || {})) // the same person: his price voice moves with him
+          for (const k of ["reports", "at"]) if (a[k] && a[k][old] !== undefined) { a[k][to] = a[k][old]; delete a[k][old]; }
+        return 0n;
+      }
+      const l = (s.licences || {})[body.id];
+      if (!l || !(l.active || l.pending)) throw new Error("no such licence");
+      if (who !== l.holder) throw new Error("only the owner moves his licence");
+      if (to === l.holder) throw new Error("that is the same owner");
+      s.licNonce++;
+      const old = l.holder;
+      l.holder = to;
+      for (const e of Object.values(s.engs || {})) if (e.worker === l.agent && e.holder === old) e.holder = to;
+      for (const j of Object.values(s.jobs || {})) if (j.worker === l.agent && j.holder === old) j.holder = to;
+      ownValset(s);
+      return 0n;
+    }
     if (tx.type === "licence-upgrade") {
       if (!v6(s)) throw new Error("licence-upgrade starts with rules v6");
       s.licNonce = s.licNonce || 0;

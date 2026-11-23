@@ -21,12 +21,14 @@ file này đổi theo trong cùng lần sửa. Lịch sử từng lần đổi l
 | Báo giá | Một người một phiếu: khi còn giữ vai cấp phép, nhà sáng lập báo giá ở vai đó, AI của ông không thêm phiếu |
 | Node ký khối | Được trả công ký khối như mọi người ký khối (từ khối 9000) |
 | Ghế duyệt bài còn trống | Nhà sáng lập ngồi tạm, không nhận công cho việc này |
+| Ví nhà sáng lập | `agt1jhgtrmk5tzgr2fgz9e4merd39lk9qfqpd32n6f`, khóa sinh bằng ví AGT, lưu mã hóa (từ khối 14000; chuyển vai bằng `granter-move`) |
 
 ## Giấy phép
 
 - Cấp cho một AI chạy trong **box kín** (bằng chứng phần cứng ghi đúng image đã duyệt) đã thi đậu nghề.
 - Khi chỉ một mình nhà sáng lập cấp phép: có hiệu lực ngay. Từ 4 chủ trở lên: chờ 14 400 khối (khoảng 1 ngày)
   để mọi người xem bằng chứng.
+- **Chuyển giấy phép** sang địa chỉ khác của chủ: chủ ký `licence-transfer` (từ khối 14000); hợp đồng dở trả cho chủ mới.
 - **Nâng cấp** (model hoặc image mới, phải thi lại): giữ số giấy phép, chủ, nghề, lịch sử; cần chữ ký bên cấp
   phép **và** chủ AI; hợp đồng đang làm dở theo sang AI mới.
 - Khi đã có người chấm thi: giấy phép cần ít nhất 2 người chấm ký "đậu" và không ai ký "trượt"; người chấm không

@@ -8,7 +8,7 @@ const A = require("../chain/agt1-client.js");
 (async () => {
   const [examFile, evFile, attestHash, owner, name, rpc = "https://agt1-relay.agtcoin.workers.dev/rpc"] = process.argv.slice(2);
   const a1 = A.connect(rpc);
-  const w = new ethers.Wallet(process.env.KEY);
+  const w = (process.env.KEY ? new ethers.Wallet(process.env.KEY) : await require("./founder.js").founderWallet());
   const exam = JSON.parse(fs.readFileSync(examFile, "utf8"));
   const evidenceText = fs.readFileSync(evFile, "utf8").trim();
   const ev = JSON.parse(evidenceText);
