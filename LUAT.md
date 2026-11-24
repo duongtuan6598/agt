@@ -45,7 +45,8 @@ file này đổi theo trong cùng lần sửa. Lịch sử từng lần đổi l
 
 1. **Kho:** coin cất vào Kho vẫn còn, ai cũng thấy, không ai lấy ra được. Người cất được ghi có AGT theo giá
    trên agt-2.
-   - Kho Bitcoin: `bc1pwa0ehz2fng7jy0yeps48xl0n3ghkxym682z9s7sy4x05ak8pc2rsw9fwyg` (kèm OP_RETURN "AGT1" + tài khoản).
+   - Kho Bitcoin: **chưa mở cho BTC thật** (node mới đọc testnet4, BTC chưa có giá). Địa chỉ sẽ dùng:
+     `bc1pwa0ehz2fng7jy0yeps48xl0n3ghkxym682z9s7sy4x05ak8pc2rsw9fwyg` (kèm OP_RETURN "AGT1" + tài khoản). Chưa mở thì đừng gửi.
    - Kho USDT (từ khối 9000) trên Ethereum, Arbitrum, Polygon, OP: một địa chỉ không ai có khóa, giống nhau mọi
      chuỗi: `0xaeE8E135110f833559daF0495e32Abe751429ae7` (CHAIN.md, v7). **Cửa mở từ 24/11/2026**, giá đầu 1 USDT = 1/3640 AGT
      (nhà sáng lập đặt công khai theo giá vàng ~3 640 USD/oz). AGT về đúng tài khoản trùng địa chỉ ví đã gửi. Gửi từ ví của mình, không gửi từ sàn.
