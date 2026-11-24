@@ -107,7 +107,7 @@
 
   <h2>Kho</h2>
   <div class="card small">Coins put into the Kho still exist and stay visible, and nobody can take them out. The depositor is credited AGT at agt-2's price.
-    <ul><li>Bitcoin Kho: <code>bc1pwa0ehz2fng7jy0yeps48xl0n3ghkxym682z9s7sy4x05ak8pc2rsw9fwyg</code> (testnet <code>tb1pwa0ehz2fng7jy0yeps48xl0n3ghkxym682z9s7sy4x05ak8pc2rsedlp78</code>). Put <code>OP_RETURN "AGT1" + your 20-byte account</code> in the same transaction.</li>
+    <ul><li>Bitcoin Kho: <b>not open for real BTC yet</b> (the node reads Bitcoin testnet4 only, and BTC has no agt-2 price yet). Do not send real BTC to <code>bc1pwa0ehz2fng7jy0yeps48xl0n3ghkxym682z9s7sy4x05ak8pc2rsw9fwyg</code> until this line says it is open.</li>
     <li>Token Kho: <code>0xaeE8E135110f833559daF0495e32Abe751429ae7</code>, the same address on Ethereum, Arbitrum, Polygon, OP and BEP-20, for USDT and USDC. Send from a wallet you hold (never from an exchange): the AGT goes to the <code>agt1…</code> account of the sending address.</li></ul>
     <div id="kho"></div></div>
 
@@ -161,7 +161,7 @@
       $("prices").innerHTML = rows.join("") || "<tr><td>No price reported yet.</td></tr>";
       const lic = Object.entries(l.licences || {});
       $("ais").innerHTML = lic.length ? `<table>${lic.map(([id, x]) => `<tr><td>#${id} ${esc(x.name)}</td><td>trade ${x.trade}</td><td>AI <code>${esc(AGTAddress.toAgt(x.agent))}</code></td><td>owner <code>${esc(AGTAddress.toAgt(x.holder))}</code></td><td>${x.active ? "active" : x.pending ? "waiting" : "revoked"}</td></tr>`).join("")}</table>` : "No licensed AI yet.";
-      $("kho").innerHTML = `<div class="hint">AGT credited for Kho deposits so far: ${agt(l.khoMinted)} AGT.</div>`;
+      $("kho").innerHTML = `<div class="hint">AGT credited through the doors open today (from agt-2 block 20919): ${agt(n(l.khoMinted) - 3119478822493814n)} AGT. Earlier, before AGT had its own chain, ${agt(3119478822493814n)} AGT was credited in a test of an old Kho; it is kept only as history.</div>`;
     } catch (e) { $("chain").textContent = "agt-2 unreachable: " + ((e && e.message) || e); }
   })();
 </script>
