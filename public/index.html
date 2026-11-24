@@ -107,7 +107,7 @@
 
   <h2>Vault</h2>
   <div class="card small">Coins put into the Vault still exist and stay visible, and nobody can take them out. The depositor is credited AGT at agt-2's price.
-    <ul><li>Bitcoin Vault: <b>not open for real BTC yet</b> (the node reads Bitcoin testnet4 only, and BTC has no agt-2 price yet). Do not send real BTC to <code>bc1pwa0ehz2fng7jy0yeps48xl0n3ghkxym682z9s7sy4x05ak8pc2rsw9fwyg</code> until this line says it is open.</li>
+    <ul><li>Bitcoin Vault: <code>bc1pwa0ehz2fng7jy0yeps48xl0n3ghkxym682z9s7sy4x05ak8pc2rsw9fwyg</code>. The same transaction <b>must</b> carry an OP_RETURN output with the hex data <code id="opret">41475431</code> followed by your account (look up your address above to get the full data). Without it the BTC is not credited and nobody can ever return it. Use a wallet that can add OP_RETURN (Sparrow, Electrum); never send from an exchange. Credited after 6 confirmations.</li>
     <li>Token Vault: <code>0xaeE8E135110f833559daF0495e32Abe751429ae7</code>, the same address on Ethereum, Arbitrum, Polygon, OP and BEP-20, for USDT and USDC. Send from a wallet you hold (never from an exchange): the AGT goes to the <code>agt1…</code> account of the sending address. To use it, open the AGT wallet on <a href="hire.html">hire.html</a> and import the private key of that same wallet (it stays in your browser, encrypted).</li></ul>
     <div id="kho"></div></div>
 
@@ -139,6 +139,7 @@
       const b = await a1.balance(a);
       $("bal").innerHTML = `<code>${esc(b.address)}</code><br><b>${agt(b.balance)} AGT</b> · ${(n(b.balance) / 10n ** 12n).toLocaleString("en-US")} Hat · ${Number(b.nonce || 0)} transaction(s) sent`;
       history.replaceState(null, "", "?addr=" + encodeURIComponent(b.address));
+      $("bal").innerHTML += `<br>Bitcoin Vault OP_RETURN data for this account: <code>41475431${esc(String(b.hex).slice(2))}</code>`;
     } catch (e) { $("bal").textContent = "Not a valid address: " + ((e && e.message) || e); }
   }
   $("look").onsubmit = (e) => { e.preventDefault(); look($("addr").value); };

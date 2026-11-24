@@ -45,10 +45,12 @@ file này đổi theo trong cùng lần sửa. Lịch sử từng lần đổi l
 
 1. **Kho:** coin cất vào Kho vẫn còn, ai cũng thấy, không ai lấy ra được. Người cất được ghi có AGT theo giá
    trên agt-2.
-   - Kho Bitcoin: **chưa mở cho BTC thật** (máy chủ chuỗi mới đọc mạng thử testnet4, BTC chưa có giá). Địa chỉ sẽ dùng:
-     `bc1pwa0ehz2fng7jy0yeps48xl0n3ghkxym682z9s7sy4x05ak8pc2rsw9fwyg` (kèm OP_RETURN "AGT1" + tài khoản). Chưa mở thì đừng gửi.
+   - Kho Bitcoin (**mở từ 25/11/2026**): `bc1pwa0ehz2fng7jy0yeps48xl0n3ghkxym682z9s7sy4x05ak8pc2rsw9fwyg`. Trong cùng giao
+     dịch phải có một đầu ra OP_RETURN chứa `41475431` ("AGT1") + 40 chữ số hex của tài khoản. Thiếu đầu ra đó thì
+     không được ghi AGT và không ai trả lại được. Dùng ví thêm được OP_RETURN (Sparrow, Electrum), không gửi từ sàn.
+     Ghi có sau 6 xác nhận. Giá đầu: 1 BTC = 16,867 AGT (nhà sáng lập đặt công khai 25/11/2026).
    - Kho USDT (từ khối 9000) trên Ethereum, Arbitrum, Polygon, OP: một địa chỉ không ai có khóa, giống nhau mọi
-     chuỗi: `0xaeE8E135110f833559daF0495e32Abe751429ae7` (CHAIN.md, v7). **Cửa mở từ 24/11/2026**, giá đầu 1 USDT = 1/3640 AGT
+     chuỗi: `0xaeE8E135110f833559daF0495e32Abe751429ae7` (CHAIN.md, v7). **Cửa mở từ 24/11/2026**, giá đầu 1 USDT = 1/3640 AGT, ngày 25/11 cập nhật 1/3553 AGT theo giá vàng
      (nhà sáng lập đặt công khai theo giá vàng ~3 640 USD/oz). AGT về đúng tài khoản trùng địa chỉ ví đã gửi. Gửi từ ví của mình, không gửi từ sàn.
    - Từ khối 22500 (luật v9) Kho này nhận cả **USDC**, và có thêm cửa **BEP20** (USDT, USDC). Cửa chỉ là đường vào:
      nhận coin của một chuỗi không có nghĩa là AGT phụ thuộc chuỗi đó.

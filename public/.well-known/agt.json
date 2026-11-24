@@ -174,8 +174,9 @@
       "testnet": "tb1pwa0ehz2fng7jy0yeps48xl0n3ghkxym682z9s7sy4x05ak8pc2rsedlp78",
       "derivation": "tools/kho-bitcoin.js: NUMS internal key lift_x(sha256(\"AGT-KHO-v1:bitcoin\"||counter)), BIP-341 key-path tweak, no script tree",
       "outputKeyX": "775f9b89499a3d223c990c2a737df38a2f63137a3a84587a04a99f4ed8e1c287",
-      "howToDeposit": "Do not send real BTC yet. When open: send BTC to the mainnet address with, in the same transaction, an OP_RETURN output holding \"AGT1\" + your 20-byte agt-2 account.",
-      "status": "NOT open for real BTC yet: the node reads Bitcoin testnet4 only, and BTC has no agt-2 price."
+      "howToDeposit": "send BTC to the mainnet address with, in the same transaction, an OP_RETURN output whose data is hex 41475431 (\"AGT1\") + the 20 bytes of your agt-2 account. Without it the BTC is not credited and cannot be returned. Use a wallet that can add OP_RETURN; never send from an exchange. Credited after 6 confirmations.",
+      "status": "open for real BTC since 25 Nov 2026",
+      "firstPrice": "1 BTC = 16.867 AGT, set in public by the founder on 25 Nov 2026 (BTC about 59,930 USD, gold about 3,553 USD/oz)"
     },
     "tokens": {
       "address": "0xaeE8E135110f833559daF0495e32Abe751429ae7",
@@ -196,7 +197,7 @@
       ],
       "usdcFrom": "agt-2 height 22500 (rules v9)",
       "howToDeposit": "send from a wallet you hold, never from an exchange; the AGT goes to the agt-2 account of the sending address (agt1… form). Import that wallet's private key into the AGT wallet to use it.",
-      "firstPrice": "1 USDT = 1 USDC = 1/3640 AGT, set in public by the founder (gold about 3,640 USD/oz on 24 Nov 2026)"
+      "firstPrice": "1 USDT = 1 USDC = 1/3640 AGT on 24 Nov 2026; 1/3553 AGT from 25 Nov 2026 (gold price), set in public by the founder; the current price is on the ledger page"
     }
   }
 }

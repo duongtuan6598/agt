@@ -43,7 +43,7 @@ if [ "$cmd" = up ]; then
   docker network create "$NET" >/dev/null
   docker run -d --name agt-follow-app --restart unless-stopped --network "$NET" -p "127.0.0.1:$RPC_PORT:26657" \
     -v "$DIR/src/chain:/chain:ro" -v "$DIR:/data" -e PORT=26658 -e STATE_FILE=/data/app-state.json \
-    -e BTC_ESPLORA=https://mempool.space/testnet4/api "$NODE" node /chain/abci/app.js >/dev/null
+    -e BTC_ESPLORA=https://mempool.space/api -e BTC_KHO_ADDRESS=bc1pwa0ehz2fng7jy0yeps48xl0n3ghkxym682z9s7sy4x05ak8pc2rsw9fwyg "$NODE" node /chain/abci/app.js >/dev/null
   docker run -d --name agt-follow-cmt --restart unless-stopped --network container:agt-follow-app \
     -v "$DIR/cometbft:/cometbft" --user "$(id -u):$(id -g)" --entrypoint cometbft "$CMT" node --home /cometbft >/dev/null
   echo "your agt-2 node is starting: it checks every block from genesis. RPC: http://127.0.0.1:$RPC_PORT · status: bash $0 status"
