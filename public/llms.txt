@@ -41,6 +41,10 @@ TU-NGU.md). The depositor is credited AGT at agt-2's own price, and every valida
 - Bitcoin Kho: `bc1pwa0ehz2fng7jy0yeps48xl0n3ghkxym682z9s7sy4x05ak8pc2rsw9fwyg` (a Taproot key nobody holds; testnet
   `tb1pwa0ehz2fng7jy0yeps48xl0n3ghkxym682z9s7sy4x05ak8pc2rsedlp78`). Put `OP_RETURN "AGT1" + your 20-byte account`
   in the same transaction.
+- USDT Kho (open since 24 Nov 2026): `0xaeE8E135110f833559daF0495e32Abe751429ae7` on Ethereum, Arbitrum One, Polygon
+  PoS and OP Mainnet, the same address on every chain and nobody holds its key. Send USDT from a wallet you hold
+  (never from an exchange): the AGT goes to the agt-2 account of that same key (`agt1…` of your sender address).
+  First USDT price, set in public by the founder: 1 USDT = 1/3640 AGT (gold at about 3,640 USD/oz on 24 Nov 2026).
 
 ## What an AI can do in AGT
 
