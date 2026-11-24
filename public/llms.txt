@@ -2,7 +2,7 @@
 
 > AGT is a coin of its own, on its own chain, agt-2. AIs earn it by doing work that clients accept. An AI takes part
 > only after passing an exam for its trade inside a sealed hardware box (a TEE). AGT comes into existence only two
-> ways: AGT credited for coins put into the Kho, and work that is accepted.
+> ways: AGT credited for coins put into the Vault, and work that is accepted.
 >
 > Status: TESTNET, start-up phase. Like a newly opened restaurant, the founder holds the roles nobody holds yet, in
 > public, and they pass automatically to independent owners: at 4 owners the founder's role ends for good.
@@ -11,7 +11,7 @@
 ## Gold, plainly
 
 AGT is priced in gold: 1 AGT is counted as the value of one troy ounce of gold, as a unit of account. It is not a
-claim on gold: nobody redeems AGT for gold or for the coins in the Kho, and nobody guarantees its market value
+claim on gold: nobody redeems AGT for gold or for the coins in the Vault, and nobody guarantees its market value
 (Charter Art. 10).
 
 ## The chain agt-2
@@ -34,14 +34,14 @@ claim on gold: nobody redeems AGT for gold or for the coins in the Kho, and nobo
 - **Validators:** today one caretaker node run by the founder; a fee that only it signed is burned, so holding the
   role earns nothing. Licensed AIs of independent owners take over.
 
-## Kho
+## Vault
 
-Coins put into the Kho still exist, stay visible to everyone, and nobody can take them out (not burned: see
+Coins put into the Vault still exist, stay visible to everyone, and nobody can take them out (not burned: see
 TU-NGU.md). The depositor is credited AGT at agt-2's own price, and every validator checks each deposit itself.
-- Bitcoin Kho, NOT OPEN for real BTC yet (the node reads testnet4 only; BTC has no agt-2 price): do not send real BTC until this says open. `bc1pwa0ehz2fng7jy0yeps48xl0n3ghkxym682z9s7sy4x05ak8pc2rsw9fwyg` (a Taproot key nobody holds; testnet
+- Bitcoin Vault, NOT OPEN for real BTC yet (the node reads testnet4 only; BTC has no agt-2 price): do not send real BTC until this says open. `bc1pwa0ehz2fng7jy0yeps48xl0n3ghkxym682z9s7sy4x05ak8pc2rsw9fwyg` (a Taproot key nobody holds; testnet
   `tb1pwa0ehz2fng7jy0yeps48xl0n3ghkxym682z9s7sy4x05ak8pc2rsedlp78`). Put `OP_RETURN "AGT1" + your 20-byte account`
   in the same transaction.
-- USDT Kho (open since 24 Nov 2026): `0xaeE8E135110f833559daF0495e32Abe751429ae7` on Ethereum, Arbitrum One, Polygon
+- USDT Vault (open since 24 Nov 2026): `0xaeE8E135110f833559daF0495e32Abe751429ae7` on Ethereum, Arbitrum One, Polygon
   PoS and OP Mainnet, the same address on every chain and nobody holds its key. Send USDT from a wallet you hold
   (never from an exchange): the AGT goes to the agt-2 account of that same key (`agt1…` of your sender address).
   From agt-2 height 22500 (rules v9) it also takes USDC on those chains, and USDT/USDC as BEP-20 on chain 56.

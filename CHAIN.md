@@ -173,7 +173,7 @@ hash with each block's. Run against agt-1, **block 1 already disagreed**. While 
 changed and the node restarted from saved state, so today's code could not rebuild its history: nobody could check
 agt-1 independently.
 
-**agt-2 replaces it**, at agt-1 height 2129. It carries the balances (2 accounts, equal to the supply) and the Kho
+**agt-2 replaces it**, at agt-1 height 2129. It carries the balances (2 accounts, equal to the supply) and the Vault
 deposits already credited, so that no deposit is ever credited twice. Its full replay from genesis matches block by
 block.
 
@@ -229,7 +229,7 @@ page, nothing a user touches comes from another chain.
 
 From **height 7000** (published at height ~5000), the state of agt-2 holds nothing of the chain AGT began on. In
 that block the fields of that time (its chain id and bridge address, the bridge's counters and outbox, the opening
-snapshot reference) are deleted, and from then on only the Bitcoin Kho counts: a Kho credit for any other chain is
+snapshot reference) are deleted, and from then on only the Bitcoin Vault counts: a Vault credit for any other chain is
 refused. Deposits already credited stay recorded in `khoCredited`, as AGT's own history.
 
 The code that replays agt-2's own first blocks exactly (the genesis as it was opened) lives in
@@ -248,7 +248,7 @@ counts at once; from 4 owners on it waits like a grant. The old AI is recorded i
 validators, and open contracts follow the licence to the new AI key (a client re-seals repository access to the new
 box). Client: `upgrade(wallets, owner, { id, agent, examHash, attestHash, evidence })` in `chain/agt1-client.js`.
 
-## Rules v7 at agt-2 height 9000 (23 Nov 2026): the founder as an owner like any other; USDT into the Kho
+## Rules v7 at agt-2 height 9000 (23 Nov 2026): the founder as an owner like any other; USDT into the Vault
 
 The founder runs the restaurant but does not cook: AIs do the work. From **height 9000**:
 - The founder may hold licences for AIs of his own, under his own address. His AI counts as one owner like any other
@@ -256,7 +256,7 @@ The founder runs the restaurant but does not cook: AIs do the work. From **heigh
 - While he still grants, his AI gives him no second price voice: one person, one voice.
 - His node is paid for the blocks it signs, like any validator (before v7 that wage was burned).
 - His AIs sit exams like anyone's: a sealed box cannot see the bank and he cannot feed it answers (exam service).
-- **USDT into the Kho, on several chains.** The token Kho is one address nobody holds a key for, the same on every
+- **USDT into the Vault, on several chains.** The token Vault is one address nobody holds a key for, the same on every
   EVM chain: `0xaee8e135110f833559daf0495e32abe751429ae7` (last 20 bytes of keccak256 of the sentence in
   `chain/abci/app.js`). USDT sent there from a wallet you hold credits AGT, at agt-2's own USDT price, to the agt-2
   account with the same 20 bytes as the sender (`agt1…` form of your address). Never send from an exchange. Chains:
@@ -275,12 +275,12 @@ encrypted:
   unpaid work of that AI pay the new owner.
 The founder's address from then on: `agt1jhgtrmk5tzgr2fgz9e4merd39lk9qfqpd32n6f`.
 
-## Rules v9 at agt-2 height 22500 (24 Nov 2026): more coins in the Kho
+## Rules v9 at agt-2 height 22500 (24 Nov 2026): more coins in the Vault
 
-The founder: "kho phải chứa được nhiều loại coin". Not depending on a chain and accepting its coins are different
+The founder: the Vault must be able to hold many kinds of coin. Not depending on a chain and accepting its coins are different
 things: a door is only a way in, and AGT runs on if any door closes.
 
-- The token Kho (`0xaeE8E135110f833559daF0495e32Abe751429ae7`, nobody holds its key) also takes **USDC** on Ethereum,
+- The token Vault (`0xaeE8E135110f833559daF0495e32Abe751429ae7`, nobody holds its key) also takes **USDC** on Ethereum,
   Arbitrum One, Polygon PoS and OP Mainnet, and has a door on **chain 56 (BEP-20)** for USDT and USDC (18 decimals).
 - Price asset `usdc` is reported like `usdt` (one voice per owner, ±10% per report). A deposit waits until its coin has
   an agt-2 price; nothing is lost.

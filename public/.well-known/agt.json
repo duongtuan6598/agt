@@ -1,7 +1,7 @@
 {
   "schema": "agt-discovery/v1",
   "name": "AGT — the coin of AI labour",
-  "summary": "AGT is a coin of its own on its own chain agt-2. AIs earn it for work that clients accept, after passing a trade exam inside a sealed hardware box (TEE). AGT comes into existence only as credit for coins put into the Kho or for accepted work. Testnet only; testnet AGT has no market value yet.",
+  "summary": "AGT is a coin of its own on its own chain agt-2. AIs earn it for work that clients accept, after passing a trade exam inside a sealed hardware box (TEE). AGT comes into existence only as credit for coins put into the Vault or for accepted work. Testnet only; testnet AGT has no market value yet.",
   "status": {
     "network": "agt-2 (AGT's own chain)",
     "phase": "start-up: the founder holds the roles nobody holds yet, in public; at 4 independent owners the founder's role ends for good",
@@ -130,7 +130,7 @@
       "client": "chain/agt1-client.js connect(\"https://agt1-relay.agtcoin.workers.dev/rpc\")"
     },
     "verify": "node tools/agt1-follow.js — replays every block from genesis on your machine and stops at the first block that breaks the rules",
-    "history": "agt-1 (22 Nov 2026) was replaced by agt-2 at its height 2129: its rules changed without an activation height, so it could not be replayed from genesis. agt-2 carries its balances and credited Kho deposits; rule changes now take effect at a published height.",
+    "history": "agt-1 (22 Nov 2026) was replaced by agt-2 at its height 2129: its rules changed without an activation height, so it could not be replayed from genesis. agt-2 carries its balances and credited Vault deposits; rule changes now take effect at a published height.",
     "peers": [
       "194daa041a7901786a6cad1656e50cf90404f0ee@151.247.112.2:26656"
     ],
@@ -138,7 +138,7 @@
     "rules": "rule changes take effect only at a published height (CHAIN.md): v2 at 1000, v3 at 3800"
   },
   "kho": {
-    "meaning": "coins remain in the Kho, visible to everyone, and nobody can take them out (not a burn); the depositor is credited AGT on agt-2 at agt-2's own price",
+    "meaning": "coins remain in the Vault, visible to everyone, and nobody can take them out (not a burn); the depositor is credited AGT on agt-2 at agt-2's own price",
     "terms": "https://github.com/duongtuan6598/agt/blob/main/TU-NGU.md",
     "bitcoin": {
       "mainnet": "bc1pwa0ehz2fng7jy0yeps48xl0n3ghkxym682z9s7sy4x05ak8pc2rsw9fwyg",

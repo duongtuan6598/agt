@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AGT Ledger</title>
-<meta name="description" content="AGT, the coin of AI labour, on its own chain agt-2: live supply, prices, licensed AIs and the Kho, read straight from the chain.">
+<meta name="description" content="AGT, the coin of AI labour, on its own chain agt-2: live supply, prices, licensed AIs and the Vault, read straight from the chain.">
 <style>
   :root {
     --bg: #fbfaf6; --panel: #ffffff; --ink: #1c1a14; --muted: #6b6656; --line: #e7e2d3;
@@ -105,10 +105,10 @@
   <h2>Licensed AIs</h2>
   <div class="card small" id="ais"></div>
 
-  <h2>Kho</h2>
-  <div class="card small">Coins put into the Kho still exist and stay visible, and nobody can take them out. The depositor is credited AGT at agt-2's price.
-    <ul><li>Bitcoin Kho: <b>not open for real BTC yet</b> (the node reads Bitcoin testnet4 only, and BTC has no agt-2 price yet). Do not send real BTC to <code>bc1pwa0ehz2fng7jy0yeps48xl0n3ghkxym682z9s7sy4x05ak8pc2rsw9fwyg</code> until this line says it is open.</li>
-    <li>Token Kho: <code>0xaeE8E135110f833559daF0495e32Abe751429ae7</code>, the same address on Ethereum, Arbitrum, Polygon, OP and BEP-20, for USDT and USDC. Send from a wallet you hold (never from an exchange): the AGT goes to the <code>agt1…</code> account of the sending address.</li></ul>
+  <h2>Vault</h2>
+  <div class="card small">Coins put into the Vault still exist and stay visible, and nobody can take them out. The depositor is credited AGT at agt-2's price.
+    <ul><li>Bitcoin Vault: <b>not open for real BTC yet</b> (the node reads Bitcoin testnet4 only, and BTC has no agt-2 price yet). Do not send real BTC to <code>bc1pwa0ehz2fng7jy0yeps48xl0n3ghkxym682z9s7sy4x05ak8pc2rsw9fwyg</code> until this line says it is open.</li>
+    <li>Token Vault: <code>0xaeE8E135110f833559daF0495e32Abe751429ae7</code>, the same address on Ethereum, Arbitrum, Polygon, OP and BEP-20, for USDT and USDC. Send from a wallet you hold (never from an exchange): the AGT goes to the <code>agt1…</code> account of the sending address.</li></ul>
     <div id="kho"></div></div>
 
   <h2>Take part</h2>
@@ -151,7 +151,7 @@
       $("money").innerHTML = [
         ["AGT in existence", agt(s.supply) + " AGT"],
         ["Minted for accepted AI work", agt(l.workMinted) + " AGT"],
-        ["Credited for coins put into the Kho", agt(l.khoMinted) + " AGT"],
+        ["Credited for coins put into the Vault", agt(l.khoMinted) + " AGT"],
         ["Fee per transaction", agt(s.fee) + " AGT, paid to the owners of the AIs that sign blocks"],
       ].map(([k, v]) => `<tr><td>${k}</td><td><b>${v}</b></td></tr>`).join("");
       const rows = [];
@@ -161,7 +161,7 @@
       $("prices").innerHTML = rows.join("") || "<tr><td>No price reported yet.</td></tr>";
       const lic = Object.entries(l.licences || {});
       $("ais").innerHTML = lic.length ? `<table>${lic.map(([id, x]) => `<tr><td>#${id} ${esc(x.name)}</td><td>trade ${x.trade}</td><td>AI <code>${esc(AGTAddress.toAgt(x.agent))}</code></td><td>owner <code>${esc(AGTAddress.toAgt(x.holder))}</code></td><td>${x.active ? "active" : x.pending ? "waiting" : "revoked"}</td></tr>`).join("")}</table>` : "No licensed AI yet.";
-      $("kho").innerHTML = `<div class="hint">AGT credited through the doors open today (from agt-2 block 20919): ${agt(n(l.khoMinted) - 3119478822493814n)} AGT. Earlier, before AGT had its own chain, ${agt(3119478822493814n)} AGT was credited in a test of an old Kho; it is kept only as history.</div>`;
+      $("kho").innerHTML = `<div class="hint">AGT credited through the doors open today (from agt-2 block 20919): ${agt(n(l.khoMinted) - 3119478822493814n)} AGT. Earlier, before AGT had its own chain, ${agt(3119478822493814n)} AGT was credited in a test of an old Vault; it is kept only as history.</div>`;
     } catch (e) { $("chain").textContent = "agt-2 unreachable: " + ((e && e.message) || e); }
   })();
 </script>
