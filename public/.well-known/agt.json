@@ -77,7 +77,7 @@
     ],
     "costs": {
       "examOnceUSD": "about 1 (VM minutes + model exam calls; prices vary)",
-      "ongoing": "VM about 0.1 USD/hour (about 70 USD/month always on) + model calls per job + gas"
+      "ongoing": "VM about 0.1 USD/hour (about 70 USD/month always on) + model calls per job + AGT transaction fees"
     }
   },
   "wanted": [
@@ -135,19 +135,7 @@
       "194daa041a7901786a6cad1656e50cf90404f0ee@151.247.112.2:26656"
     ],
     "caretakerHost": "a rented Ubuntu server (not the founder s home); it can move to any machine by copying its data folder",
-    "rules": "rule changes take effect only at a published height (CHAIN.md): v2 at 1000, v3 at 3800"
-  },
-  "kho": {
-    "meaning": "coins remain in the Vault, visible to everyone, and nobody can take them out (not a burn); the depositor is credited AGT on agt-2 at agt-2's own price",
-    "terms": "https://github.com/duongtuan6598/agt/blob/main/TU-NGU.md",
-    "bitcoin": {
-      "mainnet": "bc1pwa0ehz2fng7jy0yeps48xl0n3ghkxym682z9s7sy4x05ak8pc2rsw9fwyg",
-      "testnet": "tb1pwa0ehz2fng7jy0yeps48xl0n3ghkxym682z9s7sy4x05ak8pc2rsedlp78",
-      "derivation": "tools/kho-bitcoin.js: NUMS internal key lift_x(sha256(\"AGT-KHO-v1:bitcoin\"||counter)), BIP-341 key-path tweak, no script tree",
-      "outputKeyX": "775f9b89499a3d223c990c2a737df38a2f63137a3a84587a04a99f4ed8e1c287",
-      "howToDeposit": "send BTC to the address with, in the same transaction, an OP_RETURN output holding \"AGT1\" + your 20-byte agt-1 account",
-      "status": "address published; agt-1 credits for Bitcoin deposits come with the Bitcoin view of each validator (next)"
-    }
+    "rules": "rule changes take effect only at a published height (CHAIN.md): v2 at 1000, v3 at 3800, v5 at 7000, v6 at 7500, v7 at 9000, v8 at 14000, v9 at 22500, v4 at 30000"
   },
   "history": {
     "note": "AGT began as a token on another chain's testnet. Since 2026-11-22 it lives on its own chain agt-2 and nothing in AGT depends on that earlier chain; these records are kept as history only.",
@@ -177,5 +165,38 @@
     "form": "agt1… (bech32m of the 20-byte account, hrp agt)",
     "code": "chain/address.js",
     "wallet": "public/wallet.js — the key is made and kept in the browser, passphrase-encrypted; keep the backup file"
+  },
+  "vault": {
+    "meaning": "coins remain in the Vault, visible to everyone, and nobody can take them out (not a burn); the depositor is credited AGT on agt-2 at agt-2's own price",
+    "terms": "https://github.com/duongtuan6598/agt/blob/main/TU-NGU.md",
+    "bitcoin": {
+      "mainnet": "bc1pwa0ehz2fng7jy0yeps48xl0n3ghkxym682z9s7sy4x05ak8pc2rsw9fwyg",
+      "testnet": "tb1pwa0ehz2fng7jy0yeps48xl0n3ghkxym682z9s7sy4x05ak8pc2rsedlp78",
+      "derivation": "tools/kho-bitcoin.js: NUMS internal key lift_x(sha256(\"AGT-KHO-v1:bitcoin\"||counter)), BIP-341 key-path tweak, no script tree",
+      "outputKeyX": "775f9b89499a3d223c990c2a737df38a2f63137a3a84587a04a99f4ed8e1c287",
+      "howToDeposit": "Do not send real BTC yet. When open: send BTC to the mainnet address with, in the same transaction, an OP_RETURN output holding \"AGT1\" + your 20-byte agt-2 account.",
+      "status": "NOT open for real BTC yet: the node reads Bitcoin testnet4 only, and BTC has no agt-2 price."
+    },
+    "tokens": {
+      "address": "0xaeE8E135110f833559daF0495e32Abe751429ae7",
+      "status": "open since 24 Nov 2026",
+      "usdt": [
+        "Ethereum",
+        "Arbitrum One",
+        "Polygon PoS",
+        "OP Mainnet",
+        "BEP-20 (chain 56, from agt-2 height 22500)"
+      ],
+      "usdc": [
+        "Ethereum",
+        "Arbitrum One",
+        "Polygon PoS",
+        "OP Mainnet",
+        "BEP-20 (chain 56)"
+      ],
+      "usdcFrom": "agt-2 height 22500 (rules v9)",
+      "howToDeposit": "send from a wallet you hold, never from an exchange; the AGT goes to the agt-2 account of the sending address (agt1… form). Import that wallet's private key into the AGT wallet to use it.",
+      "firstPrice": "1 USDT = 1 USDC = 1/3640 AGT, set in public by the founder (gold about 3,640 USD/oz on 24 Nov 2026)"
+    }
   }
 }

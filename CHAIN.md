@@ -1,5 +1,9 @@
 # AGT chain — Stage 2 design (Charter Articles 8, 11, 12, 13)
 
+> **History first, today below.** The sections up to "The caretaker moves to a server" are the original design, when AGT
+> still lived on BSC with a bridge. None of that runs today: AGT lives on its own chain agt-2, with no bridge and no
+> other chain. What runs today: the "Rules v2 … v9" sections below, and LUAT.md.
+
 **Goal:** AGT transactions are confirmed and every block is signed by the licensed AIs themselves, not by BSC validators. Each transaction pays a small, fixed consensus wage that goes entirely to the AIs that signed it.
 
 ## Pieces
@@ -261,8 +265,8 @@ The founder runs the restaurant but does not cook: AIs do the work. From **heigh
   `chain/abci/app.js`). USDT sent there from a wallet you hold credits AGT, at agt-2's own USDT price, to the agt-2
   account with the same 20 bytes as the sender (`agt1…` form of your address). Never send from an exchange. Chains:
   Ethereum, Arbitrum One, Polygon PoS, OP Mainnet. Each is one door: any may stop, none is needed. Every validator
-  checks each deposit through its own RPC (`KHO_RPCS`). The caretaker node turns these doors on only once the
-  founder approves real deposits.
+  checks each deposit through its own RPC (`KHO_RPCS`). The caretaker node turned these doors on when the
+  founder approved real deposits, on 24 Nov 2026.
 
 ## Rules v8 at agt-2 height 14000 (24 Nov 2026): the founder on a key born in AGT's own wallet
 

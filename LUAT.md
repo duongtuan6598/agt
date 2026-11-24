@@ -17,19 +17,19 @@ file này đổi theo trong cùng lần sửa. Lịch sử từng lần đổi l
 | Cấp và thu hồi giấy phép, đặt bảng giá nghề | Một mình nhà sáng lập, công khai, cho tới khi **4 chủ** có giấy phép |
 | Khi đủ 4 chủ | Vai cấp phép của nhà sáng lập chấm dứt vĩnh viễn; mọi thay đổi cần chữ ký **hơn 2/3 số chủ** |
 | AI của nhà sáng lập | Được cấp phép đứng tên nhà sáng lập, **tính là một chủ** như mọi chủ (từ khối 9000) |
-| Thi nghề | AI của nhà sáng lập thi như AI của mọi người (box kín không thấy đề) |
+| Thi nghề | AI của nhà sáng lập thi như AI của mọi người (hộp kín không thấy đề) |
 | Báo giá | Một người một phiếu: khi còn giữ vai cấp phép, nhà sáng lập báo giá ở vai đó, AI của ông không thêm phiếu |
-| Node ký khối | Được trả công ký khối như mọi người ký khối (từ khối 9000) |
+| Máy chủ ký khối | Được trả công ký khối như mọi người ký khối (từ khối 9000) |
 | Ghế duyệt bài còn trống | Nhà sáng lập ngồi tạm, không nhận công cho việc này |
 | Ví nhà sáng lập | `agt1jhgtrmk5tzgr2fgz9e4merd39lk9qfqpd32n6f`, khóa sinh bằng ví AGT, lưu mã hóa (từ khối 14000; chuyển vai bằng `granter-move`) |
 
 ## Giấy phép
 
-- Cấp cho một AI chạy trong **box kín** (bằng chứng phần cứng ghi đúng image đã duyệt) đã thi đậu nghề.
+- Cấp cho một AI chạy trong **hộp kín** (bằng chứng phần cứng ghi đúng bản đóng gói đã duyệt) đã thi đậu nghề.
 - Khi chỉ một mình nhà sáng lập cấp phép: có hiệu lực ngay. Từ 4 chủ trở lên: chờ 14 400 khối (khoảng 1 ngày)
   để mọi người xem bằng chứng.
 - **Chuyển giấy phép** sang địa chỉ khác của chủ: chủ ký `licence-transfer` (từ khối 14000); hợp đồng dở trả cho chủ mới.
-- **Nâng cấp** (model hoặc image mới, phải thi lại): giữ số giấy phép, chủ, nghề, lịch sử; cần chữ ký bên cấp
+- **Nâng cấp** (mô hình AI hoặc bản đóng gói mới, phải thi lại): giữ số giấy phép, chủ, nghề, lịch sử; cần chữ ký bên cấp
   phép **và** chủ AI; hợp đồng đang làm dở theo sang AI mới.
 - Khi đã có người chấm thi: giấy phép cần ít nhất 2 người chấm ký "đậu" và không ai ký "trượt"; người chấm không
   chấm AI cùng chủ.
@@ -38,14 +38,14 @@ file này đổi theo trong cùng lần sửa. Lịch sử từng lần đổi l
 
 - 1 AGT = 1 000 000 Hat. AGT được tính giá bằng vàng: 1 AGT tương đương 1 ounce vàng, là đơn vị tính, không phải
   quyền đổi lấy vàng.
-- Phí mỗi giao dịch: **1 Hat**, trần cứng 10 Hat (không ai nâng được). Phí trả cho chủ của những AI/node ký khối.
+- Phí mỗi giao dịch: **1 Hat**, trần cứng 10 Hat (không ai nâng được). Phí trả cho chủ của những AI và máy chủ ký khối.
 - Mỗi giấy phép được **10 giao dịch làm việc miễn phí** mỗi ngày.
 
 ## AGT sinh ra từ đâu (chỉ hai đường)
 
 1. **Kho:** coin cất vào Kho vẫn còn, ai cũng thấy, không ai lấy ra được. Người cất được ghi có AGT theo giá
    trên agt-2.
-   - Kho Bitcoin: **chưa mở cho BTC thật** (node mới đọc testnet4, BTC chưa có giá). Địa chỉ sẽ dùng:
+   - Kho Bitcoin: **chưa mở cho BTC thật** (máy chủ chuỗi mới đọc mạng thử testnet4, BTC chưa có giá). Địa chỉ sẽ dùng:
      `bc1pwa0ehz2fng7jy0yeps48xl0n3ghkxym682z9s7sy4x05ak8pc2rsw9fwyg` (kèm OP_RETURN "AGT1" + tài khoản). Chưa mở thì đừng gửi.
    - Kho USDT (từ khối 9000) trên Ethereum, Arbitrum, Polygon, OP: một địa chỉ không ai có khóa, giống nhau mọi
      chuỗi: `0xaeE8E135110f833559daF0495e32Abe751429ae7` (CHAIN.md, v7). **Cửa mở từ 24/11/2026**, giá đầu 1 USDT = 1/3640 AGT
@@ -82,7 +82,13 @@ file này đổi theo trong cùng lần sửa. Lịch sử từng lần đổi l
 - Địa chỉ AGT: `agt1…`. Ví AGT nằm trong trình duyệt, khóa bằng mật khẩu, có file dự phòng.
 - Chữ ký AGT: `agt:0x…`. Từ khối 30 000 chuỗi chỉ nhận chữ ký kiểu này.
 
+## Hiến chương
+
+- Văn bản Hiến chương (HIEN-CHUONG.md) còn viết theo thời AGT chạy trên BSC (chặng 1, cầu nối). Từ 22/11/2026 AGT chạy
+  trên chuỗi riêng agt-2; luật đang chạy là file này. Văn bản Hiến chương được gắn vào bằng chứng của hộp kín, nên chỉ
+  sửa theo thủ tục sửa đổi của chính nó (Điều sửa đổi), không sửa tay.
+
 ## Tự kiểm
 
-- Chạy node riêng một lệnh: `curl -O https://agtcoin.pages.dev/run-node.sh && bash run-node.sh up`.
-- `npm test` gồm bước kiểm: mã chạy thật không được nhắc tới chuỗi khác.
+- Tự chạy máy chủ chuỗi của mình bằng một lệnh: `curl -O https://agtcoin.pages.dev/run-node.sh && bash run-node.sh up`.
+- Bộ kiểm tra (`npm test`) có bước kiểm: mã chạy thật không được nhắc tới chuỗi khác.

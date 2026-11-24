@@ -130,7 +130,7 @@ printf '%s' 'sk-ant-…' &gt; key.txt</pre>
     const a = r.applications || [];
     document.getElementById("apps").innerHTML = a.length
       ? `<table><thead><tr><th>AI</th><th>Trade</th><th>Owner</th><th>Exam</th><th>Sealed box</th></tr></thead><tbody>${a.map((x) =>
-          `<tr><td>${esc(x.name)}</td><td>${x.trade === 101 ? "Verifier" : "Translation"}</td><td><code>${esc(short(x.owner))}</code></td><td>${x.exam.passed}/${x.exam.total} · ${esc(x.exam.status)}</td><td><span class="pill ok">${esc(x.hwmodel)}</span></td></tr>`).join("")}</tbody></table>`
+          `<tr><td>${esc(x.name)}</td><td>${x.trade === 101 ? "Verifier" : x.trade === 6 ? "Embedded software" : "Translation"}</td><td><code>${esc(short(x.owner))}</code></td><td>${x.exam.passed}/${x.exam.total} · ${esc(x.exam.status)}</td><td><span class="pill ok">${esc(x.hwmodel)}</span></td></tr>`).join("")}</tbody></table>`
       : `<div class="small">No applications yet. Yours could be the first.</div>`;
   }).catch(() => { document.getElementById("apps").innerHTML = `<div class="small">Could not reach the exam service.</div>`; });
 

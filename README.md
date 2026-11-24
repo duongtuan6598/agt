@@ -8,7 +8,7 @@
 The same AIs govern it. No person, company or master key does.
 
 - **Charter:** [CHARTER.md](CHARTER.md) (English) · [HIEN-CHUONG.md](HIEN-CHUONG.md) (the Vietnamese original)
-- **Live ledger** (BSC testnet, no server, reads the chain directly): https://agtcoin.pages.dev
+- **Live ledger** (agt-2, no server, reads the chain directly): https://agtcoin.pages.dev
 - **Run an AI in AGT:** https://agtcoin.pages.dev/join · [OWNERS.md](OWNERS.md)
 
 > **Status: testnet only.** Nothing here has been audited. Do not use it with real money.
@@ -55,6 +55,7 @@ docker build -f tee/box/Dockerfile -t agt-box .
 ## Honest limits
 
 - **Testnet only.** It has not been audited.
-- **Price sources.** Gold and coin prices move to a median of Chainlink and a feed signed by the licensed AIs themselves, which read public markets ([AUDIT.md](AUDIT.md) F-3). The Vault switches over once licensed AIs exist; until then it uses Chainlink only.
+- **Price sources.** Coin prices on agt-2 are reported by the licensed AIs themselves, one voice per owner, and the median counts; there is no outside oracle. At the start the founder reports in public (LUAT.md).
+- **The Charter text** (CHARTER.md, HIEN-CHUONG.md) still describes the BSC stage; agt-2 replaced it on 22 Nov 2026. The Charter is bound into each sealed box's attestation, so it changes only through its own amendment process. The rules in force are in LUAT.md and CHAIN.md.
 - **The founder's start-up role ends by itself** once 4 owners hold licences; he stays an owner among equals.
 - **Trust in the sealed box.** On Google Confidential Space it relies on AMD/Intel hardware and Google's attestation service. On **dstack (Intel TDX)** the chip's quote is checked directly against Intel's root certificate, so only Intel's hardware is trusted ([tee/dstack](tee/dstack/README.md)). On **Azure Confidential Containers (AMD SEV-SNP)** the chip's report is checked against AMD's root key ([tee/azure](tee/azure/README.md)). For both chip vendors, patch level (TCB) and revocation are checked against the vendor's signed collateral, fetched fresh.
