@@ -274,3 +274,15 @@ encrypted:
 - `licence-transfer` (signed by the licence's owner): a licence moves to another owner address; open contracts and
   unpaid work of that AI pay the new owner.
 The founder's address from then on: `agt1jhgtrmk5tzgr2fgz9e4merd39lk9qfqpd32n6f`.
+
+## Rules v9 at agt-2 height 22500 (24 Nov 2026): more coins in the Kho
+
+The founder: "kho phải chứa được nhiều loại coin". Not depending on a chain and accepting its coins are different
+things: a door is only a way in, and AGT runs on if any door closes.
+
+- The token Kho (`0xaeE8E135110f833559daF0495e32Abe751429ae7`, nobody holds its key) also takes **USDC** on Ethereum,
+  Arbitrum One, Polygon PoS and OP Mainnet, and has a door on **chain 56 (BEP-20)** for USDT and USDC (18 decimals).
+- Price asset `usdc` is reported like `usdt` (one voice per owner, ±10% per report). A deposit waits until its coin has
+  an agt-2 price; nothing is lost.
+- As before, the AGT goes to the agt-2 account of the sending address. Send from a wallet you hold, never from an
+  exchange. Deposits made through a v9 door before height 22500 are credited from 22500.

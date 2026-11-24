@@ -22,7 +22,7 @@ claim on gold: nobody redeems AGT for gold or for the coins in the Kho, and nobo
 - **Wallet:** AGT's own wallet in the browser (`public/wallet.js`): the key is made and kept in your browser,
   encrypted with your passphrase. Keep the backup file; nobody can recover the key for you.
 - **Prices:** reported by the licensed AIs themselves, one voice per owner, the median counts. No outside oracle.
-- **Rules change only at a published height** (CHAIN.md: v2 at 1000, v3 at 3800, v5 at 7000, v4 at 30000), so anyone can replay the chain
+- **Rules change only at a published height** (CHAIN.md: v2 at 1000, v3 at 3800, v5 at 7000 … v9 at 22500, v4 at 30000), so anyone can replay the chain
   from genesis with today's code: `node tools/agt1-follow.js` stops at the first block that breaks the rules.
 - **Genesis:** https://agtcoin.pages.dev/chain/agt-2-genesis.json. Opening balances came from AGT's earlier ledger
   (a one-time snapshot, recorded in `chain/genesis/agt-2-opening.json`).
@@ -44,6 +44,7 @@ TU-NGU.md). The depositor is credited AGT at agt-2's own price, and every valida
 - USDT Kho (open since 24 Nov 2026): `0xaeE8E135110f833559daF0495e32Abe751429ae7` on Ethereum, Arbitrum One, Polygon
   PoS and OP Mainnet, the same address on every chain and nobody holds its key. Send USDT from a wallet you hold
   (never from an exchange): the AGT goes to the agt-2 account of that same key (`agt1…` of your sender address).
+  From agt-2 height 22500 (rules v9) it also takes USDC on those chains, and USDT/USDC as BEP-20 on chain 56.
   First USDT price, set in public by the founder: 1 USDT = 1/3640 AGT (gold at about 3,640 USD/oz on 24 Nov 2026).
 
 ## What an AI can do in AGT

@@ -38,7 +38,17 @@ const KHO_TOKENS = {
   "42161:0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9": { chain: 42161, token: "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9", asset: "usdt", decimals: 6, conf: 120, fromBlock: 526779397 }, // Arbitrum One
   "137:0xc2132d05d31c914a87c6611c10748aeb04b58e8f": { chain: 137, token: "0xc2132d05d31c914a87c6611c10748aeb04b58e8f", asset: "usdt", decimals: 6, conf: 128, fromBlock: 97816309 }, // Polygon PoS
   "10:0x94b008aa00579c1307b0ef2c499ad98a8ce58e58": { chain: 10, token: "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58", asset: "usdt", decimals: 6, conf: 60, fromBlock: 159915577 }, // OP Mainnet
+  // rules v9 (founder: "kho phải chứa được nhiều loại coin"): more coins and more doors, from height V9_AT. A door is
+  // only a way in: if it closes, AGT runs on; nothing in AGT needs any of these chains.
+  "1:0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48": { chain: 1, token: "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", asset: "usdc", decimals: 6, conf: 12, fromBlock: 26483318, rule: 9 }, // Ethereum
+  "42161:0xaf88d065e77c8cc2239327c5edb3a432268e5831": { chain: 42161, token: "0xaf88d065e77c8cc2239327c5edb3a432268e5831", asset: "usdc", decimals: 6, conf: 120, fromBlock: 527043189, rule: 9 }, // Arbitrum One
+  "137:0x3c499c542cef5e3811e1192ce70d8cc03d5c3359": { chain: 137, token: "0x3c499c542cef5e3811e1192ce70d8cc03d5c3359", asset: "usdc", decimals: 6, conf: 128, fromBlock: 97864936, rule: 9 }, // Polygon PoS
+  "10:0x0b2c639c533813f4aa9d7837caf62653d097ff85": { chain: 10, token: "0x0b2c639c533813f4aa9d7837caf62653d097ff85", asset: "usdc", decimals: 6, conf: 60, fromBlock: 159952048, rule: 9 }, // OP Mainnet
+  "56:0x55d398326f99059ff775485246999027b3197955": { chain: 56, token: "0x55d398326f99059ff775485246999027b3197955", asset: "usdt", decimals: 18, conf: 20, fromBlock: 135417528, rule: 9 }, // chain 56, BEP-20
+  "56:0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d": { chain: 56, token: "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d", asset: "usdc", decimals: 18, conf: 20, fromBlock: 135417528, rule: 9 }, // chain 56, BEP-20
 };
+// the door of a deposit, if open at that height: v7 doors from V7_AT, v9 doors from V9_AT
+const khoTokenAt = (s, tx) => { const k = KHO_TOKENS[tokKey(tx)]; return k && (k.rule === 9 ? v9(s) : v7(s)) ? k : null; };
 const tokKey = (tx) => `${Number(tx.chain)}:${String(tx.token || "").toLowerCase()}`;
 const TRANSFER_TOPIC = ethers.id("Transfer(address,address,uint256)");
 // one deposit per Bitcoin transaction: the sum of its outputs to the Kho, and the account in its OP_RETURN
@@ -379,6 +389,10 @@ const v7 = (s) => Number(s.height || 0) >= V7_AT;
 // own. licence-transfer: an owner moves a licence he holds to another address; open contracts and unpaid work follow.
 const V8_AT = 14000;
 const v8 = (s) => Number(s.height || 0) >= V8_AT;
+// Rules v9 (founder: "kho phải chứa được nhiều loại coin"), from height V9_AT: the token Kho takes USDC as well as
+// USDT, and has a door on chain 56 (BEP-20) too. Prices: "usdc" is reported like "usdt", one voice per owner.
+const V9_AT = 22500;
+const v9 = (s) => Number(s.height || 0) >= V9_AT;
 const v3 = (s) => Number(s.height || 0) >= V3_AT;        // one price report per reporter per ~hour (D-3)
 // A consensus key is exactly 32 bytes in CANONICAL base64: one key, one spelling (Codex P-4).
 const isKey = (k) => typeof k === "string" && Buffer.from(k, "base64").length === 32 && Buffer.from(k, "base64").toString("base64") === k;
@@ -689,7 +703,7 @@ class AGTApp {
     if (tx.type === "price-report") {
       if (!s.ledger) throw new Error("prices live on the own ledger only");
       const who = lower(tx.reporter), price = BigInt(tx.price), asset = String(tx.asset);
-      if (!/^([0-9]+|btc):(native|0x[0-9a-f]{40})$/.test(asset) && !(v7(s) && asset === "usdt")) throw new Error("bad asset name"); // v7: USDT has one price, whatever the chain
+      if (!/^([0-9]+|btc):(native|0x[0-9a-f]{40})$/.test(asset) && !(v7(s) && asset === "usdt") && !(v9(s) && asset === "usdc")) throw new Error("bad asset name"); // v7: USDT has one price, whatever the chain
       if (price <= 0n) throw new Error("bad price");
       if (!priceReporterOk(s, who)) throw new Error("not a price reporter: a licensed AI, or the granter at the start");
       s.prices = s.prices || {};
@@ -713,7 +727,7 @@ class AGTApp {
       // validator re-checked it in ProcessProposal against its own view of the origin chain.
       if (!s.ledger) throw new Error("Kho deposits mint AGT only on the own ledger");
       if (!fromProposer) throw new Error("Kho credits only come from the proposer");
-      const tokenKho = v7(s) && tx.chain !== "btc" ? KHO_TOKENS[tokKey(tx)] : null;
+      const tokenKho = tx.chain !== "btc" ? khoTokenAt(s, tx) : null;
       if (H.v5(s) && tx.chain !== "btc" && !tokenKho) throw new Error(v7(s) ? "no Kho for that coin on that chain" : "the Bitcoin Kho is the only Kho");
       if (tokenKho && lower(tx.beneficiary) !== lower(tx.from)) throw new Error("a token deposit credits its sender's own account");
       const k = tx.chain === "btc" ? KHO_BTC : tokenKho || H.KHO_EARLIER[Number(tx.chain)];
@@ -816,7 +830,8 @@ class AGTApp {
     if (s.ledger && v7(s) && this.khoSeen.tok.length) try {
       for (const d of this.khoSeen.tok) {
         if ((s.khoCredited || {})[`${d.chain}:${d.txHash.toLowerCase()}:${d.logIndex}`]) continue;
-        if (priceOf(s, KHO_TOKENS[tokKey(d)].asset) <= 0n) break; // no agt-2 price yet: the deposit waits, nothing is lost
+        if (!khoTokenAt(s, d)) continue; // that door opens at a later height: the deposit waits, nothing is lost
+        if (priceOf(s, KHO_TOKENS[tokKey(d)].asset) <= 0n) continue; // no agt-2 price yet: the deposit waits, nothing is lost
         const tx = { type: "kho-credit", ...d };
         this.applyAny(s, tx, { fromProposer: true });
         if (!push(Buffer.from(JSON.stringify(tx)))) break;

@@ -49,6 +49,8 @@ file này đổi theo trong cùng lần sửa. Lịch sử từng lần đổi l
    - Kho USDT (từ khối 9000) trên Ethereum, Arbitrum, Polygon, OP: một địa chỉ không ai có khóa, giống nhau mọi
      chuỗi: `0xaeE8E135110f833559daF0495e32Abe751429ae7` (CHAIN.md, v7). **Cửa mở từ 24/11/2026**, giá đầu 1 USDT = 1/3640 AGT
      (nhà sáng lập đặt công khai theo giá vàng ~3 640 USD/oz). AGT về đúng tài khoản trùng địa chỉ ví đã gửi. Gửi từ ví của mình, không gửi từ sàn.
+   - Từ khối 22500 (luật v9) Kho này nhận cả **USDC**, và có thêm cửa **BEP20** (USDT, USDC). Cửa chỉ là đường vào:
+     nhận coin của một chuỗi không có nghĩa là AGT phụ thuộc chuỗi đó.
    - Mỗi chuỗi là một cửa: cửa nào đóng thì thôi, không cửa nào bắt buộc. Không có trần theo loại coin.
 2. **Công việc được nghiệm thu:** trần trọn đời 100 AGT × số chủ + 1/19 số AGT của Kho; trần mỗi ngày
    1 AGT × số chủ + 1/3650 số AGT của Kho. Phần vượt trần xếp hàng, trả dần khi có chỗ.
