@@ -93,6 +93,9 @@
 
   <div class="card"><div id="chain" class="small">Reading agt-2…</div></div>
 
+  <h2>Balance of an address</h2>
+  <div class="card"><form id="look" style="display:flex;gap:8px;flex-wrap:wrap"><input id="addr" placeholder="agt1… or 0x…" style="flex:1;min-width:0;padding:8px;font:inherit" autocomplete="off"><button style="padding:8px 14px;font:inherit">Look up</button></form><div id="bal" class="small" style="margin-top:8px"></div></div>
+
   <h2>AGT</h2>
   <div class="card"><table id="money"></table></div>
 
@@ -104,7 +107,8 @@
 
   <h2>Kho</h2>
   <div class="card small">Coins put into the Kho still exist and stay visible, and nobody can take them out. The depositor is credited AGT at agt-2's price.
-    <ul><li>Bitcoin Kho: <code>bc1pwa0ehz2fng7jy0yeps48xl0n3ghkxym682z9s7sy4x05ak8pc2rsw9fwyg</code> (testnet <code>tb1pwa0ehz2fng7jy0yeps48xl0n3ghkxym682z9s7sy4x05ak8pc2rsedlp78</code>). Put <code>OP_RETURN "AGT1" + your 20-byte account</code> in the same transaction.</li></ul>
+    <ul><li>Bitcoin Kho: <code>bc1pwa0ehz2fng7jy0yeps48xl0n3ghkxym682z9s7sy4x05ak8pc2rsw9fwyg</code> (testnet <code>tb1pwa0ehz2fng7jy0yeps48xl0n3ghkxym682z9s7sy4x05ak8pc2rsedlp78</code>). Put <code>OP_RETURN "AGT1" + your 20-byte account</code> in the same transaction.</li>
+    <li>Token Kho: <code>0xaeE8E135110f833559daF0495e32Abe751429ae7</code>, the same address on Ethereum, Arbitrum, Polygon, OP and BEP-20, for USDT and USDC. Send from a wallet you hold (never from an exchange): the AGT goes to the <code>agt1…</code> account of the sending address.</li></ul>
     <div id="kho"></div></div>
 
   <h2>Take part</h2>
@@ -126,7 +130,20 @@
   const agt = (wei) => Number(ethers.formatEther(n(wei))).toLocaleString("en-US", { maximumFractionDigits: 9 });
   const RPC = new URLSearchParams(location.search).get("rpc") || AGT1.DOOR;
   const a1 = AGT1.connect(RPC);
-  const ASSETS = [["btc:native", "1 BTC (Bitcoin)"]];
+  const ASSETS = [["btc:native", "1 BTC (Bitcoin)"], ["usdt", "1 USDT"], ["usdc", "1 USDC"]];
+  async function look(a) {
+    a = a.trim();
+    if (!a) return;
+    $("bal").textContent = "Reading…";
+    try {
+      const b = await a1.balance(a);
+      $("bal").innerHTML = `<code>${esc(b.address)}</code><br><b>${agt(b.balance)} AGT</b> · ${(n(b.balance) / 10n ** 12n).toLocaleString("en-US")} Hat · ${Number(b.nonce || 0)} transaction(s) sent`;
+      history.replaceState(null, "", "?addr=" + encodeURIComponent(b.address));
+    } catch (e) { $("bal").textContent = "Not a valid address: " + ((e && e.message) || e); }
+  }
+  $("look").onsubmit = (e) => { e.preventDefault(); look($("addr").value); };
+  const q = new URLSearchParams(location.search).get("addr");
+  if (q) { $("addr").value = q; look(q); }
   (async () => {
     try {
       const [s, l] = await Promise.all([a1.state(), a1.ledger()]);
