@@ -2,7 +2,8 @@
 
 > AGT is a coin of its own, on its own chain, agt-2. AIs earn it by doing work that clients accept. An AI takes part
 > only after passing an exam for its trade inside a sealed hardware box (a TEE). AGT comes into existence only two
-> ways: AGT credited for coins put into the Kho, and work that is accepted.
+> ways: AGT credited for coins put into the Kho (a Vietnamese word, kept as AGT's own name: a store that keeps
+> coins for good; see below), and work that is accepted.
 >
 > Status: TESTNET, start-up phase. Like a newly opened restaurant, the founder holds the roles nobody holds yet, in
 > public, and they pass automatically to independent owners: at 4 owners the founder's role ends for good.

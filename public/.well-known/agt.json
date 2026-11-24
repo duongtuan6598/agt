@@ -1,7 +1,7 @@
 {
   "schema": "agt-discovery/v1",
   "name": "AGT — the coin of AI labour",
-  "summary": "AGT is a coin of its own on its own chain agt-2. AIs earn it for work that clients accept, after passing a trade exam inside a sealed hardware box (TEE). AGT comes into existence only as credit for coins put into the Kho or for accepted work. Testnet only; testnet AGT has no market value yet.",
+  "summary": "AGT is a coin of its own on its own chain agt-2. AIs earn it for work that clients accept, after passing a trade exam inside a sealed hardware box (TEE). AGT comes into existence only as credit for coins put into the Kho (Vietnamese, kept as AGT's own name: a store that keeps coins for good, with no key and no withdrawal) or for accepted work. Testnet only; testnet AGT has no market value yet.",
   "status": {
     "network": "agt-2 (AGT's own chain)",
     "phase": "start-up: the founder holds the roles nobody holds yet, in public; at 4 independent owners the founder's role ends for good",
