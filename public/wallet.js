@@ -32,6 +32,16 @@
     write(json);
     return (unlocked = signerOf(w));
   }
+  // the key of a wallet you already hold elsewhere (the one you sent USDT/USDC from): its AGT is on the agt1… of the
+  // same key. The key is encrypted here with your passphrase like any AGT wallet; it never leaves this browser.
+  async function importKey(hex, pass) {
+    const k = String(hex || "").trim().replace(/^(0x)?/, "0x");
+    if (!/^0x[0-9a-fA-F]{64}$/.test(k)) throw new Error("a private key is 64 hexadecimal characters");
+    if (!pass || pass.length < 10) throw new Error("passphrase too short");
+    const w = new ethers.Wallet(k);
+    if (!write(await w.encrypt(pass))) throw new Error("this browser cannot store the wallet (private window?)");
+    return (unlocked = signerOf(w));
+  }
   function exportBackup() {
     const k = read();
     if (!k) throw new Error("no AGT wallet in this browser");
@@ -55,10 +65,20 @@
       if (confirm(`Your AGT address: ${s.address}\n\nDownload the encrypted backup now? (Recommended: without it, clearing this browser loses the wallet.)`)) exportBackup();
       return s;
     }
+    if (confirm("OK = import the private key of a wallet you already hold (for example the one you sent USDT or USDC from). Cancel = import an AGT backup file.")) {
+      const key = prompt("Private key (64 hexadecimal characters). It stays in this browser, encrypted:");
+      if (!key) throw new Error("no key given");
+      const pass = prompt("Choose a passphrase (at least 10 characters) to encrypt it here:");
+      const s = await importKey(key, pass || "");
+      if (confirm(`Your AGT address: ${s.address}
+
+Download the encrypted backup now?`)) exportBackup();
+      return s;
+    }
     const file = await new Promise((ok) => { const i = document.createElement("input"); i.type = "file"; i.accept = ".json"; i.onchange = () => ok(i.files[0]); i.click(); });
     if (!file) throw new Error("no backup chosen");
     const pass = prompt("Passphrase of this backup:");
     return importBackup(await file.text(), pass || "");
   }
-  window.AGTWallet = { open, create, unlock, importBackup, exportBackup, has: () => !!read(), lock: () => { unlocked = null; } };
+  window.AGTWallet = { open, create, unlock, importBackup, importKey, exportBackup, has: () => !!read(), lock: () => { unlocked = null; } };
 })();
