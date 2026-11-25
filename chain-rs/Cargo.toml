@@ -1,0 +1,19 @@
+[package]
+name = "agt-chain"
+version = "0.1.0"
+edition = "2021"
+description = "AGT's chain agt-2 in Rust: the same rules as chain/abci/app.js, byte for byte (same app hash at every height)"
+license = "MIT"
+
+[dependencies]
+serde_json = { version = "1", features = ["arbitrary_precision"] }
+sha3 = "0.10"
+sha2 = "0.10"
+k256 = { version = "0.13", features = ["ecdsa"] }
+hex = "0.4"
+base64 = "0.22"
+num-bigint = "0.4"
+ryu-js = "1"
+
+[profile.release]
+opt-level = 3
