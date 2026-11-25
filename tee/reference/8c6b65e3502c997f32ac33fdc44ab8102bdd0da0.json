@@ -1,0 +1,8 @@
+{
+  "_": "Digests tools/repro-build.sh must produce from this commit on any machine. Added once, never modified (the workflow checks the git history). Embedded image only: the AI finds its own open-source work with its own GitHub account (THIET-KE-AI-TU-CHU.md), Alpine lock refreshed, 2026-11-26.",
+  "commit": "8c6b65e3502c997f32ac33fdc44ab8102bdd0da0",
+  "buildkit": "v0.34.2",
+  "images": {
+    "embedded": "sha256:4107619895e715a50ba30700de86fef1fde421feb5660298a82fed31c91ed703"
+  }
+}

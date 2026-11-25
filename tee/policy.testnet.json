@@ -60,6 +60,12 @@
       "image": "embedded",
       "reference": "tee/reference/847c1decf3223bbd8a8d5792048ff0ae091e5d02.json",
       "why": "the embedded trade on agt-2 with AGT signatures, tasks and translation work on agt-2, 2026-11-23 (founder's own box)"
+    },
+    {
+      "digest": "sha256:4107619895e715a50ba30700de86fef1fde421feb5660298a82fed31c91ed703",
+      "image": "embedded",
+      "reference": "tee/reference/8c6b65e3502c997f32ac33fdc44ab8102bdd0da0.json",
+      "why": "the embedded trade on agt-2: the AI also finds its own open-source work with its own GitHub account, 2026-11-26 (founder's own box)"
     }
   ]
 }
