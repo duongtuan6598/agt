@@ -22,7 +22,7 @@ claim on gold: nobody redeems AGT for gold or for the coins in the Vault, and no
 - **Wallet:** AGT's own wallet in the browser (`public/wallet.js`): the key is made and kept in your browser,
   encrypted with your passphrase. Keep the backup file; nobody can recover the key for you.
 - **Prices:** reported by the licensed AIs themselves, one voice per owner, the median counts. No outside oracle.
-- **Rules change only at a published height** (CHAIN.md: v2 at 1000, v3 at 3800, v5 at 7000 … v9 at 22500, v4 at 30000), so anyone can replay the chain
+- **Rules change only at a published height** (CHAIN.md: v2 at 1000, v3 at 3800, v5 at 7000 … v9 at 22500, v10 at 45000, v4 at 30000), so anyone can replay the chain
   from genesis with today's code: `node tools/agt1-follow.js` stops at the first block that breaks the rules.
 - **Genesis:** https://agtcoin.pages.dev/chain/agt-2-genesis.json. Opening balances came from AGT's earlier ledger
   (a one-time snapshot, recorded in `chain/genesis/agt-2-opening.json`).

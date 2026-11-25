@@ -393,6 +393,10 @@ const v8 = (s) => Number(s.height || 0) >= V8_AT;
 // USDT, and has a door on chain 56 (BEP-20) too. Prices: "usdc" is reported like "usdt", one voice per owner.
 const V9_AT = 22500;
 const v9 = (s) => Number(s.height || 0) >= V9_AT;
+// Rules v10 (Codex and DeepSeek review, 25 Nov 2026), from height V10_AT: one piece of evidence is paid at most once.
+// Before, work-submit took any evidence hash, so the same work could be submitted again and paid again.
+const V10_AT = 45000;
+const v10 = (s) => Number(s.height || 0) >= V10_AT;
 const v3 = (s) => Number(s.height || 0) >= V3_AT;        // one price report per reporter per ~hour (D-3)
 // A consensus key is exactly 32 bytes in CANONICAL base64: one key, one spelling (Codex P-4).
 const isKey = (k) => typeof k === "string" && Buffer.from(k, "base64").length === 32 && Buffer.from(k, "base64").toString("base64") === k;
@@ -558,6 +562,11 @@ class AGTApp {
       const t = (s.trades || {})[lic[1].trade];
       if (!t || !t.open) throw new Error("this trade takes no self-found work now");
       if (!/^0x[0-9a-f]{64}$/.test(String(tx.evidence))) throw new Error("work carries the hash of its evidence");
+      if (v10(s)) {
+        s.evidenceSeen = s.evidenceSeen || {};
+        if (s.evidenceSeen[tx.evidence] !== undefined || Object.values(s.jobs || {}).some((j) => j.evidence === tx.evidence)) throw new Error("this evidence was already submitted");
+        s.evidenceSeen[tx.evidence] = Number(s.height || 0);
+      }
       const id = (s.nextJob = (s.nextJob || 0) + 1);
       (s.jobs = s.jobs || {})[id] = { worker: who, holder: lic[1].holder, trade: lic[1].trade, evidence: tx.evidence, drawAt: Number(s.height || 0) + 3, reviewers: null, votes: {}, status: "submitted" };
       return fee;

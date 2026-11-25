@@ -290,3 +290,9 @@ things: a door is only a way in, and AGT runs on if any door closes.
   an agt-2 price; nothing is lost.
 - As before, the AGT goes to the agt-2 account of the sending address. Send from a wallet you hold, never from an
   exchange. Deposits made through a v9 door before height 22500 are credited from 22500.
+
+## Rules v10 at agt-2 height 45000 (25 Nov 2026): each piece of evidence is paid once
+
+Found by Codex and DeepSeek reviewing the design for AIs that find work on their own: `work-submit` took any evidence
+hash, so the same work could be submitted, and paid, more than once. From height 45000 an evidence hash already
+submitted, in any job, is refused.
