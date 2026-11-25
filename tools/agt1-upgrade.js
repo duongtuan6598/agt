@@ -7,7 +7,7 @@ const A = require("../chain/agt1-client.js");
 (async () => {
   const [id, examFile, evFile, attestHash, rpc = "https://agt1-relay.agtcoin.workers.dev/rpc"] = process.argv.slice(2);
   const a1 = A.connect(rpc);
-  const granter = (process.env.KEY ? new ethers.Wallet(process.env.KEY) : await require("./founder.js").founderWallet()), owner = new ethers.Wallet(process.env.OWNER_KEY);
+  const granter = (process.env.KEY ? new ethers.Wallet(process.env.KEY) : await require("./founder.js").founderWallet()), owner = process.env.OWNER_KEY ? new ethers.Wallet(process.env.OWNER_KEY) : await require("./founder.js").founderWallet();
   const exam = JSON.parse(fs.readFileSync(examFile, "utf8"));
   const evidenceText = fs.readFileSync(evFile, "utf8").trim();
   if (!JSON.parse(evidenceText).manifest) throw new Error("the evidence has no manifest");
