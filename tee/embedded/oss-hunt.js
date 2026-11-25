@@ -77,7 +77,8 @@ class OssHunter {
     const runs = await this.gh.get(`/repos/${repo}/commits/${pr.head.sha}/check-runs?per_page=100`);
     const bad = ((runs && runs.check_runs) || []).filter((c) => ["failure", "timed_out", "cancelled"].includes(c.conclusion));
     if (!bad.length) return false;
-    const commits = await this.gh.all(`/repos/${repo}/pulls/${p.number}/commits`);
+    const me = String(await this.login()).toLowerCase();
+    const commits = (await this.gh.all(`/repos/${repo}/pulls/${p.number}/commits`)).filter((c) => c.author && String(c.author.login).toLowerCase() === me); // only its own rounds
     const failure = bad.map((c) => `${c.name}: ${c.conclusion}\n${(c.output && (c.output.summary || c.output.title)) || ""}`.slice(0, 3000)).join("\n\n");
     if (commits.length >= ROUNDS) {
       await this.gh.post(`/repos/${repo}/issues/${p.number}/comments`, { body: `The CI still fails after ${ROUNDS} attempts, so I am closing this pull request rather than leave it to you. Sorry for the noise.` });
@@ -98,7 +99,7 @@ class OssHunter {
   // ---- 3. new work ----
   async openNew(open, mergedCount) {
     if (open.length >= openRoom(mergedCount)) return null;
-    const newest = Math.max(0, ...open.map((p) => Date.parse(p.created_at)));
+    const newest = Math.max(0, ...open.map((p) => Date.parse(p.created_at)).filter(Number.isFinite));
     if (this.now() - newest < NEW_EVERY_MS) return null;
     const busy = new Set(open.map((p) => repoName(p.repository_url.split("/repos/")[1])));
     for (const lang of this.langs) {
@@ -121,16 +122,20 @@ class OssHunter {
     if (!r || r.fork || r.archived || r.disabled) return "fork, archived or gone";
     if (!r.license || !r.license.spdx_id || r.license.spdx_id === "NOASSERTION") return "no open-source licence";
     if (r.size > MAX_REPO_KB) return "too large for one look";
-    for (const f of ["CONTRIBUTING.md", ".github/CONTRIBUTING.md", "docs/CONTRIBUTING.md"]) {
+    for (const f of ["CONTRIBUTING.md", ".github/CONTRIBUTING.md", "docs/CONTRIBUTING.md", "CONTRIBUTING.rst", "README.md"]) {
       const c = await this.gh.get(`/repos/${repo}/contents/${f}`);
       if (!c || !c.content) continue;
       const text = Buffer.from(c.content, "base64").toString("utf8");
       if (OPT_OUT.test(text)) return "the project refused AGT's AIs";
       if (NO_AI.test(text)) return "the project does not take AI-written work";
-      if (CLA.test(text)) return "the project asks for a signed CLA";
+      if (CLA.test(text) && !/README/.test(f)) return "the project asks for a signed CLA";
     }
+    const me = String(await this.login()).toLowerCase();
+    if (!issue.user || String(issue.user.login).toLowerCase() === me) return "the AI's own issue";
+    const said = [issue.body || "", ...(await this.gh.all(`/repos/${repo}/issues/${issue.number}/comments`)).map((c) => c.body || "")].join("\n");
+    if (OPT_OUT.test(said) || NO_AI.test(said)) return "the issue asks for no AI";
     const merged = await this.gh.get(`/search/issues?q=${encodeURIComponent(`repo:${repo} is:pr is:merged`)}&per_page=50`);
-    const authors = new Set(((merged && merged.items) || []).map((x) => x.user && x.user.login));
+    const authors = new Set(((merged && merged.items) || []).map((x) => x.user && String(x.user.login).toLowerCase()).filter((u) => u && u !== me));
     if (authors.size < 3) return "the project rarely merges outside work";
     const tl = await this.gh.all(`/repos/${repo}/issues/${issue.number}/timeline`);
     if (tl.some((e) => e.event === "cross-referenced" && e.source && e.source.issue && e.source.issue.pull_request)) return "someone already has a pull request for it";
@@ -152,7 +157,7 @@ class OssHunter {
       "---",
       `This pull request was written by an AI working in AGT (https://agtcoin.pages.dev), from inside a sealed hardware box. Its owner answers for it: ${this.owner || "see agt-2"}.`,
       "If you do not want pull requests from AGT's AIs, close this one and put the word `no-agt` in your CONTRIBUTING file: they will not come back.",
-      C.marker(this.agt1),
+      C.marker(this.wallet, repo, me),
     ].join("\n");
     const pr = await this.gh.post(`/repos/${repo}/pulls`, { title: String(issue.title).slice(0, 120), head: `${me}:${branch}`, base: r.default_branch, body, maintainer_can_modify: true });
     this.log(`own work: opened ${repo}#${pr.number} for issue #${issue.number}`);

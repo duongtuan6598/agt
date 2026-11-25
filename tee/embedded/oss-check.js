@@ -5,6 +5,9 @@
 // Evidence of the work, exactly: {"kind":"oss-pr","repo":"owner/repo","pr":123} (one spelling, so rules v10's
 // "one evidence, paid once" also means "one pull request, paid once").
 const { repoName } = require("./github.js");
+const AGTSig = require("../../chain/sig.js");
+const { hashOf } = require("../../chain/core.js");
+const { toAgt, toHex } = require("../../chain/address.js");
 
 const VERSION = "oss-check/1";
 const DAY = 86400000;
@@ -14,8 +17,16 @@ const MIN_CODE_LINES = 5;        // changed lines of code or tests, not counting
 const DOC = /(^|\/)(docs?|documentation)\/|\.(md|rst|txt|adoc|html?)$|(^|\/)(README|CHANGELOG|LICENSE|AUTHORS|CONTRIBUTING)[^/]*$/i;
 const COMMENT = /^\s*(\/\/|#|\/\*|\*|\*\/|--|;)/;
 
-// the line the AI puts in every pull request it opens: it binds the GitHub account to the AI on agt-2
-const marker = (agt1) => `AGT AI: ${agt1}`;
+// The line the AI puts in every pull request it opens: it binds the GitHub account to the AI on agt-2 with a
+// signature of the AI's own key, which lives only in the sealed box. Its owner cannot make one, so a person cannot do
+// the work under his own account and have it counted as the AI's (DeepSeek review).
+const ossDigest = (repo, login) => hashOf({ tag: "agt-oss/1", repo: repoName(repo), login: String(login).toLowerCase() });
+const marker = (wallet, repo, login) => `AGT AI: ${toAgt(wallet.address)} ${AGTSig.sign(wallet, ossDigest(repo, login))}`;
+function markerOk(body, repo, login, agt1) {
+  const m = /^AGT AI: (agt1[0-9a-z]+) (agt:0x[0-9a-fA-F]{130})\s*$/m.exec(String(body || ""));
+  if (!m || m[1] !== agt1) return false;
+  try { return AGTSig.recover(ossDigest(repo, login), m[2]) === toHex(agt1).toLowerCase(); } catch { return false; }
+}
 
 function evidenceOf(repo, pr) {
   return JSON.stringify({ kind: "oss-pr", repo: repoName(repo), pr: Number(pr) });
@@ -55,7 +66,12 @@ async function check({ gh, repo, pr, agt1 }) {
   facts.mergedBy = p.merged_by && p.merged_by.login;
   facts.mergeCommit = p.merge_commit_sha;
   need(p.merged === true && facts.mergeCommit, "the pull request is not merged");
-  need(String(p.body || "").includes(marker(agt1)), "the pull request does not carry the line naming this AI");
+  need(markerOk(p.body, facts.repo, facts.author, agt1), "the pull request does not carry this AI's signed line");
+  // it answers an issue someone else opened before it (the AI does not invent its own work)
+  const fixes = /\bFixes #(\d+)\b/.exec(String(p.body || ""));
+  const issue = fixes ? await gh.get(`/repos/${facts.repo}/issues/${fixes[1]}`) : null;
+  facts.issue = issue ? issue.number : null;
+  need(issue && !issue.pull_request && issue.user && String(issue.user.login).toLowerCase() !== String(facts.author).toLowerCase() && Date.parse(issue.created_at) < Date.parse(p.created_at), "it does not fix an earlier issue opened by someone else");
   need(facts.mergedBy && facts.mergedBy.toLowerCase() !== String(facts.author).toLowerCase(), "merged by its own author");
   // the merge commit is on the default branch
   if (facts.mergeCommit) {
@@ -83,7 +99,7 @@ async function check({ gh, repo, pr, agt1 }) {
   return { version: VERSION, ok: failed.length === 0, failed, facts };
 }
 
-module.exports = { VERSION, check, evidenceOf, parseEvidence, marker, codeLines };
+module.exports = { VERSION, check, evidenceOf, parseEvidence, marker, markerOk, ossDigest, codeLines };
 
 if (require.main === module) {
   const [repo, pr, agt1] = process.argv.slice(2);
