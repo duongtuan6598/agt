@@ -100,6 +100,8 @@ function withTransport(query, send) {
     // AI side
     submitWork: (ai, evidence) => signed(ai, { type: "work-submit", evidence }),
     voteWork: (ai, job, approve) => signed(ai, { type: "work-vote", job, approve }),
+    // the granter in an empty reviewer seat (start-up phase)
+    voteWorkAsGranter: (granter, job, approve) => signed(granter, { type: "work-vote", job, approve, asGranter: true }),
     deliver: (ai, eng, milestone, commit, ci) => signed(ai, { type: "eng-deliver", eng, milestone, commit, ci }),
     voteDispute: (ai, eng, milestone, workerRight) => signed(ai, { type: "eng-vote", eng, milestone, workerRight }),
     // client side

@@ -20,7 +20,7 @@ EMBEDDED_IMAGE="asia-southeast1-docker.pkg.dev/agt-sealed-box-1120/agt/box-embed
 while [ $# -gt 0 ]; do
   case "$1" in
     --project) PROJECT=$2; shift ;; --owner) OWNER=$2; shift ;; --key-file) KEYFILE=$2; shift ;;
-    --trade) TRADE=$2; shift ;; --zone) ZONE=$2; shift ;; --name) NAME=$2; shift ;;
+    --trade) TRADE=$2; shift ;; --github-token-file) GHFILE=$2; shift ;; --zone) ZONE=$2; shift ;; --name) NAME=$2; shift ;;
     --peers) PEERS=$2; shift ;; --escrow) ESCROW=$2; shift ;; --keep) KEEP=1 ;;
     --embedded-image) EMBEDDED_IMAGE=$2; shift ;; --every) EVERY=$2; shift ;;
     *) echo "unknown option $1"; exit 2 ;;
@@ -43,6 +43,15 @@ if ! gcloud secrets describe agt-model-key --project "$PROJECT" >/dev/null 2>&1;
   tr -d '\r\n' < "$KEYFILE" | gcloud secrets create agt-model-key --data-file=- --replication-policy=automatic --project "$PROJECT" >/dev/null
 fi
 gcloud secrets add-iam-policy-binding agt-model-key --member="serviceAccount:$SA" --role=roles/secretmanager.secretAccessor --project "$PROJECT" --quiet >/dev/null
+# optional: the AI's own GitHub account (a classic token with public_repo + workflow only), for work it finds itself
+if [ -n "${GHFILE:-}" ]; then
+  if gcloud secrets describe agt-github-token --project "$PROJECT" >/dev/null 2>&1; then
+    tr -d '\r\n' < "$GHFILE" | gcloud secrets versions add agt-github-token --data-file=- --project "$PROJECT" >/dev/null
+  else
+    tr -d '\r\n' < "$GHFILE" | gcloud secrets create agt-github-token --data-file=- --replication-policy=automatic --project "$PROJECT" >/dev/null
+  fi
+  gcloud secrets add-iam-policy-binding agt-github-token --member="serviceAccount:$SA" --role=roles/secretmanager.secretAccessor --project "$PROJECT" --quiet >/dev/null
+fi
 
 # Trade 6 runs in the embedded box image (its own approval; on testnet a digest from tee/policy.testnet.json).
 if [ "$TRADE" = 6 ]; then
@@ -54,6 +63,7 @@ META="tee-image-reference=$IMAGE~tee-restart-policy=Never~tee-container-log-redi
 META="$META~tee-env-AGT1_RPC=$AGT1_RPC"
 # AI-council price feeds (Art. 11/13) are not deployed for the current contracts yet (testnet v5): no price signing.
 [ "$TRADE" = 6 ] && META="$META~tee-env-AGT_WORK_EVERY_SEC=$EVERY"
+[ -n "${GHFILE:-}" ] && META="$META~tee-env-AGT_GITHUB_TOKEN_SECRET=projects/$PROJECT/secrets/agt-github-token"
 [ -n "$PEERS" ] && META="$META~tee-env-AGT_PEER_BOXES=$PEERS"
 [ -n "$ESCROW" ] && META="$META~tee-env-AGT_ESCROW_URL=$ESCROW"
 gcloud compute instances create "$VM" --project "$PROJECT" --zone "$ZONE" --machine-type=n2d-standard-2 \

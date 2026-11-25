@@ -278,17 +278,25 @@ async function startWork(agentKey, modelProvider = "anthropic", keys = null) {
     engage = await require("./engage-wiring.js").makeEngage({ env, wallet, model: makeModel({ provider: modelProvider, apiKey, systemPrompt }), keys, verifyBuilder, log });
     log("long-term work: contracts on agt-2");
   }
-  // Per-job work (translation of open documents, and reviewing other owners' jobs of the same trade) on agt-2.
-  let jobs = null;
-  if (!engage) {
-    const { Agt1WorkLoop } = require("./agt1-work.js");
-    const a1 = require("../../chain/agt1-client.js").connect(env.AGT1_RPC);
-    // open tasks come from agt-2 itself (anyone publishes one as content agt-task/v1)
-    jobs = new Agt1WorkLoop({ a1, wallet, tasks: () => a1.tasks(1), model: makeModel({ provider: modelProvider, apiKey, systemPrompt }), log });
-    log("per-job work on agt-2");
+  // Own work found by the AI itself (THIET-KE-AI-TU-CHU.md): with the GitHub account its owner gave it, it fixes
+  // open issues of open-source projects; merged work is submitted on agt-2 and checked by reviewers of other owners.
+  const a1 = require("../../chain/agt1-client.js").connect(env.AGT1_RPC);
+  let gh = null, hunter = null;
+  if (env.AGT_GITHUB_TOKEN_SECRET) {
+    const { github } = require("../embedded/github.js");
+    gh = github({ token: await secretFromManager(env.AGT_GITHUB_TOKEN_SECRET, "AGT_GITHUB_TOKEN") });
+    const { OssHunter } = require("../embedded/oss-hunt.js");
+    hunter = new OssHunter({ gh, a1, wallet, model: makeModel({ provider: modelProvider, apiKey, systemPrompt }), Workspace: require("../embedded/workspace.js").Workspace, owner: env.AGT_OWNER, log });
+    log("own work: open-source issues with the AI's own GitHub account");
   }
+  // Per-job work (translation of open documents) and reviewing other owners' jobs of the same trade, on agt-2.
+  const { Agt1WorkLoop } = require("./agt1-work.js");
+  // open tasks come from agt-2 itself (anyone publishes one as content agt-task/v1)
+  const jobs = new Agt1WorkLoop({ a1, wallet, tasks: () => a1.tasks(Number(env.AGT_TRADE || 1)), model: makeModel({ provider: modelProvider, apiKey, systemPrompt }), log, gh });
+  log("per-job work and reviews on agt-2");
   for (;;) {
     if (engage) try { await engage.step(); } catch (e) { log(`long-term work: ${e.shortMessage || e.message}`); }
+    if (hunter) try { await hunter.step(); } catch (e) { log(`own work: ${e.message}`); }
     if (jobs) try { await jobs.step(); } catch (e) { log(`work: ${e.shortMessage || e.message}`); }
     await new Promise((r) => setTimeout(r, Number(env.AGT_WORK_EVERY_SEC || 600) * 1000));
   }

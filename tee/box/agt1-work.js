@@ -4,8 +4,8 @@
 // with the model, and votes (work-vote). Everything is signed by the AI's own key in AGT's form; nothing else is paid.
 //   new Agt1WorkLoop({ a1, wallet, tasks: async () => [...], model: { translate, review }, log }).step()
 class Agt1WorkLoop {
-  constructor({ a1, wallet, tasks, model, log = () => {}, state = new Map() }) {
-    Object.assign(this, { a1, wallet, tasks, model, log, state, me: wallet.address.toLowerCase() });
+  constructor({ a1, wallet, tasks, model, log = () => {}, state = new Map(), gh = null }) {
+    Object.assign(this, { a1, wallet, tasks, model, log, state, gh, me: wallet.address.toLowerCase() });
     this.content = a1.content(wallet);
   }
   async licence() {
@@ -54,7 +54,8 @@ class Agt1WorkLoop {
       const ev = await this.evidence(j.evidence);
       const task = ev && tasks[ev.task];
       let v;
-      if (!ev || ev.kind !== "translation" || !task || typeof ev.translation !== "string") v = { verdict: "reject", reason: "the evidence does not name a listed open task with a translation" };
+      if (ev && ev.kind === "oss-pr") v = await ossVerdict(this, j);
+      else if (!ev || ev.kind !== "translation" || !task || typeof ev.translation !== "string") v = { verdict: "reject", reason: "the evidence does not name a listed open task with a translation" };
       else v = await this.model.review(task, ev.translation);
       const approve = v.verdict === "accept";
       await this.a1.voteWork(this.wallet, Number(id), approve);
@@ -64,4 +65,17 @@ class Agt1WorkLoop {
     return votes;
   }
 }
-module.exports = { Agt1WorkLoop };
+// A self-found open-source contribution is decided ONLY by the checker, on GitHub's structured data (never by the
+// words of the issue or pull request, which can carry instructions): THIET-KE-AI-TU-CHU.md.
+async function ossVerdict(loop, j) {
+  const C = require("../embedded/oss-check.js");
+  try {
+    const e = C.parseEvidence(await loop.content.get(j.evidence)); // exactly one spelling per pull request
+    const gh = loop.gh || require("../embedded/github.js").github();
+    const r = await C.check({ gh, repo: e.repo, pr: e.pr, agt1: require("../../chain/address.js").toAgt(j.worker) });
+    return { verdict: r.ok ? "accept" : "reject", reason: r.ok ? `${C.VERSION}: all checks pass` : `${C.VERSION}: ${r.failed.join("; ")}` };
+  } catch (e) {
+    return { verdict: "reject", reason: `oss-pr evidence: ${e.message}` };
+  }
+}
+module.exports = { Agt1WorkLoop, ossVerdict };
