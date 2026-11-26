@@ -27,9 +27,18 @@ function gradeEmbedded(record, answers) {
   // The bank goes in on stdin only — never mounted — so the candidate's firmware cannot read it through
   // semihosting (Codex G-1). Fresh container per grading, no network; it is removed afterwards.
   const input = JSON.stringify({ bank: BANKS[6], drawn: record.questions, answers });
-  const out = execFileSync("docker", ["run", "--rm", "-i", "--network", "none",
-    "-v", `${path.join(root, "exam")}:/agt/exam:ro`,
-    "--entrypoint", "node", image, "/agt/exam/grade-cli.js"], { input, encoding: "utf8", env: { ...process.env, MSYS_NO_PATHCONV: "1" }, maxBuffer: 64 * 1024 * 1024 });
+  const opts = { input, encoding: "utf8", env: { ...process.env, MSYS_NO_PATHCONV: "1" }, maxBuffer: 64 * 1024 * 1024 };
+  // AGT_GRADE_HOST=<ssh host>: grade on that server instead of this machine (tools/grade-host.sh prepares it). The
+  // grading code there is the public exam/ folder; the bank still goes in on stdin only, through ssh, and is never
+  // written to that server's disk.
+  const host = process.env.AGT_GRADE_HOST;
+  if (host && !/^[\w.@-]+$/.test(host)) throw new Error("bad AGT_GRADE_HOST");
+  if (!/^[\w./:@-]+$/.test(image)) throw new Error("bad image reference");
+  const out = host
+    ? execFileSync("ssh", [host, `docker run --rm -i --network none -v /opt/agt-grade/exam:/agt/exam:ro --entrypoint node ${image} /agt/exam/grade-cli.js`], opts)
+    : execFileSync("docker", ["run", "--rm", "-i", "--network", "none",
+      "-v", `${path.join(root, "exam")}:/agt/exam:ro`,
+      "--entrypoint", "node", image, "/agt/exam/grade-cli.js"], opts);
   return JSON.parse(out.slice(out.indexOf("{")));
 }
 
