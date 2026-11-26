@@ -162,3 +162,16 @@ test("own work: the AI skips a project that asks for a CLA, opens a marked pull 
   assert.equal(await h2.openNew([{ created_at: iso(NOW - 3600000), repository_url: "https://api.github.com/repos/o/r" }], 0), null, "at most one new pull request per 6 hours");
   assert.equal(await h2.openNew([1, 2].map(() => ({ created_at: iso(NOW - 9 * 3600000), repository_url: "https://api.github.com/repos/o/r" })), 0), null, "at most 2 open pull requests at first");
 });
+
+test("edits apply only exactly: one find, once, in a file the AI read; new files only where none exists; all or nothing", () => {
+  const { applyEdits } = require("../embedded/oss-hunt.js");
+  const files = [{ path: "src/a.rs", content: "fn a() {\n    1\n}\nfn b() {}\n" }];
+  assert.deepEqual(applyEdits(files, [{ path: "src/a.rs", find: "    1\n", replace: "    2\n" }, { path: "tests/t.rs", find: "", replace: "#[test] fn t() {}\n" }]),
+    [{ path: "src/a.rs", content: "fn a() {\n    2\n}\nfn b() {}\n" }, { path: "tests/t.rs", content: "#[test] fn t() {}\n" }]);
+  assert.throws(() => applyEdits(files, [{ path: "src/a.rs", find: "nope", replace: "" }]), /not in/);
+  assert.throws(() => applyEdits(files, [{ path: "src/a.rs", find: "fn ", replace: "" }]), /more than once/);
+  assert.throws(() => applyEdits(files, [{ path: "src/other.rs", find: "x", replace: "" }]), /was not read/);
+  assert.throws(() => applyEdits(files, [{ path: "src/a.rs", find: "", replace: "x" }]), /exists/);
+  assert.throws(() => applyEdits(files, [{ path: "../etc/passwd", find: "", replace: "x" }]), /bad path/);
+  assert.throws(() => applyEdits(files, [{ path: ".git/config", find: "", replace: "x" }]), /bad path/);
+});

@@ -99,7 +99,9 @@ class Workspace {
   }
 
   /// Text files for the model: regular files only, one link only, inside the tree, bounded.
-  read({ maxBytes = 300000, maxFile = 60000 } = {}) {
+  // `only`: read just these paths (the files the AI chose from the tree); the tree is always complete
+  read({ maxBytes = 300000, maxFile = 60000, only = null, maxTree = 2000 } = {}) {
+    const want = only ? new Set(only) : null;
     this.killSandbox();
     const tree = [];
     const files = [];
@@ -111,7 +113,7 @@ class Workspace {
         if (e.isDirectory()) { if (!/^(build|out|\.cache|node_modules)$/.test(e.name)) walk(path.join(dir, e.name), r); continue; }
         if (!e.isFile()) continue;
         tree.push(r);
-        if (!TEXT.test(r)) continue;
+        if (!TEXT.test(r) || (want && !want.has(r))) continue;
         const f = this._safe(r);
         if (!f) continue;
         const st = fs.lstatSync(f);
@@ -126,7 +128,7 @@ class Workspace {
       }
     };
     walk(this.tree, "");
-    return { tree: tree.slice(0, 2000), files };
+    return { tree: tree.slice(0, maxTree), files };
   }
 
   /// Apply the model's files: a NEW file written by root, then renamed over the entry. Pinned files refused.
