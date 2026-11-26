@@ -1,6 +1,7 @@
 // One model layer for the sealed AI: exam answers, translations and reviews, whatever the provider.
 //   anthropic — Claude via the official SDK (api.anthropic.com)
 //   openai    — OpenAI chat completions at a FIXED url
+//   deepseek  — DeepSeek chat completions at a FIXED url (JSON mode: the schema goes in the request)
 //   local     — an open-weights model served inside the box (llama.cpp, OpenAI-compatible, 127.0.0.1)
 // The registry (models.json) is baked into the image; the owner chooses only among its entries.
 const crypto = require("crypto");
@@ -92,10 +93,17 @@ function anthropicChat({ client, model }) {
     return r.content.filter((b) => b.type === "text").map((b) => b.text).join("").trim();
   };
 }
-function openaiCompatibleChat({ url, model, apiKey, fetchImpl = fetch }) {
+function openaiCompatibleChat({ url, model, apiKey, fetchImpl = fetch, jsonMode = "schema", maxTokens = null }) {
   return async ({ system, user, json }) => {
-    const body = { model, messages: [{ role: "system", content: system }, { role: "user", content: user }] };
-    if (json) body.response_format = { type: "json_schema", json_schema: { name: "review", schema: json, strict: true } };
+    // JSON mode without schemas (DeepSeek): the schema is written into the request, the answer is still parsed and
+    // checked by the caller exactly as with a schema
+    const ask = json && jsonMode === "object" ? `${user}
+
+Answer with one JSON object that follows this JSON schema exactly:
+${JSON.stringify(json)}` : user;
+    const body = { model, messages: [{ role: "system", content: system }, { role: "user", content: ask }] };
+    if (maxTokens) body.max_tokens = maxTokens;
+    if (json) body.response_format = jsonMode === "object" ? { type: "json_object" } : { type: "json_schema", json_schema: { name: "review", schema: json, strict: true } };
     const r = await fetchImpl(url, { method: "POST", headers: { "content-type": "application/json", ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {}) }, body: JSON.stringify(body) });
     if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
     const msg = (await r.json()).choices?.[0]?.message;
@@ -114,6 +122,7 @@ function chatFor({ provider = "anthropic", apiKey, client, fetchImpl }) {
     }
     return anthropicChat({ client, model: id.model });
   }
+  if (provider === "deepseek") return openaiCompatibleChat({ url: e.url, model: id.model, apiKey, fetchImpl, jsonMode: "object", maxTokens: 32000 });
   return openaiCompatibleChat({ url: e.url, model: id.model, apiKey: provider === "openai" ? apiKey : null, fetchImpl });
 }
 

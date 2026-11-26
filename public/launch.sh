@@ -3,6 +3,7 @@
 #
 #   bash launch.sh --project my-proj --owner agt1YourAddress --key-file ./anthropic-key.txt [--trade 1|101]
 #                  [--zone asia-southeast1-b] [--name "My AI"] [--peers http://10.0.0.3:8080,...] [--escrow <url>]
+#                  [--provider anthropic|deepseek] [--github-token-file <file>]
 #                  [--keep] [--trade 6 --embedded-image <ref@sha256:…> [--every <seconds between work steps>]]
 #
 # What it does: enables the needed APIs, creates a service account that can only read ONE secret
@@ -13,14 +14,14 @@ set -euo pipefail
 
 IMAGE="asia-southeast1-docker.pkg.dev/agt-sealed-box-1120/agt/box@sha256:175af5ee6b10bb290949c816d21593fea5f52d7604380c648bfa98a2b1a70ff8"
 EXAM_URL="https://agt-exam.agtcoin.workers.dev"
-ZONE="asia-southeast1-b"; TRADE=1; NAME="AGT AI"; PEERS=""; ESCROW=""; KEEP=0; PROJECT=""; OWNER=""; KEYFILE=""
+PROVIDER=anthropic; ZONE="asia-southeast1-b"; TRADE=1; NAME="AGT AI"; PEERS=""; ESCROW=""; KEEP=0; PROJECT=""; OWNER=""; KEYFILE=""
 # Embedded trade (trade 6): the approved embedded box image (it works on agt-2).
 AGT1_RPC="https://agt1-relay.agtcoin.workers.dev/rpc"  # AGT's own chain agt-1 (a public door; any agt-1 node works)
 EMBEDDED_IMAGE="asia-southeast1-docker.pkg.dev/agt-sealed-box-1120/agt/box-embedded@sha256:81e45c307087ad34a3845edb05e2758d7301fb1efe62f8c6349b7fdb62d90b44"; EVERY=600
 while [ $# -gt 0 ]; do
   case "$1" in
     --project) PROJECT=$2; shift ;; --owner) OWNER=$2; shift ;; --key-file) KEYFILE=$2; shift ;;
-    --trade) TRADE=$2; shift ;; --github-token-file) GHFILE=$2; shift ;; --zone) ZONE=$2; shift ;; --name) NAME=$2; shift ;;
+    --trade) TRADE=$2; shift ;; --github-token-file) GHFILE=$2; shift ;; --provider) PROVIDER=$2; shift ;; --zone) ZONE=$2; shift ;; --name) NAME=$2; shift ;;
     --peers) PEERS=$2; shift ;; --escrow) ESCROW=$2; shift ;; --keep) KEEP=1 ;;
     --embedded-image) EMBEDDED_IMAGE=$2; shift ;; --every) EVERY=$2; shift ;;
     *) echo "unknown option $1"; exit 2 ;;
@@ -30,6 +31,8 @@ done
 [ -n "$PROJECT" ] && [ -n "$OWNER" ] && [ -n "$KEYFILE" ] || { sed -n 4,6p "$0"; exit 2; }
 [[ "$OWNER" =~ ^0x[0-9a-fA-F]{40}$ || "$OWNER" =~ ^agt1[02-9ac-hj-np-z]{38}$ ]] || { echo "owner must be your AGT address (agt1…)"; exit 2; }
 SA="agt-box@$PROJECT.iam.gserviceaccount.com"
+# the model provider (tee/box/models.json): anthropic (default) or deepseek; each has its own key secret
+case "$PROVIDER" in anthropic) MODEL_SECRET=agt-model-key ;; deepseek) MODEL_SECRET=agt-model-key-deepseek ;; *) echo "unknown provider $PROVIDER"; exit 2 ;; esac
 VM="agt-box-$(date +%s)"
 OUT="agt-box-$PROJECT-$(date +%Y%m%d-%H%M%S)"; mkdir -p "$OUT"
 
@@ -39,10 +42,10 @@ gcloud iam service-accounts describe "$SA" --project "$PROJECT" >/dev/null 2>&1 
 for role in roles/confidentialcomputing.workloadUser roles/logging.logWriter; do
   gcloud projects add-iam-policy-binding "$PROJECT" --member="serviceAccount:$SA" --role="$role" --condition=None --quiet >/dev/null
 done
-if ! gcloud secrets describe agt-model-key --project "$PROJECT" >/dev/null 2>&1; then
-  tr -d '\r\n' < "$KEYFILE" | gcloud secrets create agt-model-key --data-file=- --replication-policy=automatic --project "$PROJECT" >/dev/null
+if ! gcloud secrets describe $MODEL_SECRET --project "$PROJECT" >/dev/null 2>&1; then
+  tr -d '\r\n' < "$KEYFILE" | gcloud secrets create $MODEL_SECRET --data-file=- --replication-policy=automatic --project "$PROJECT" >/dev/null
 fi
-gcloud secrets add-iam-policy-binding agt-model-key --member="serviceAccount:$SA" --role=roles/secretmanager.secretAccessor --project "$PROJECT" --quiet >/dev/null
+gcloud secrets add-iam-policy-binding $MODEL_SECRET --member="serviceAccount:$SA" --role=roles/secretmanager.secretAccessor --project "$PROJECT" --quiet >/dev/null
 # optional: the AI's own GitHub account (a classic token with public_repo + workflow only), for work it finds itself
 if [ -n "${GHFILE:-}" ]; then
   if gcloud secrets describe agt-github-token --project "$PROJECT" >/dev/null 2>&1; then
@@ -58,9 +61,9 @@ if [ "$TRADE" = 6 ]; then
   IMAGE="$EMBEDDED_IMAGE"
 fi
 echo "2/5 starting the sealed box $VM (AMD SEV, Confidential Space)"
-META="tee-image-reference=$IMAGE~tee-restart-policy=Never~tee-container-log-redirect=true~tee-env-AGT_CHAIN_ID=agt-testnet-1~tee-env-AGT_EXAM_URL=$EXAM_URL~tee-env-AGT_OWNER=$OWNER~tee-env-AGT_TRADE=$TRADE~tee-env-AGT_AI_NAME=$NAME~tee-env-AGT_MODEL_KEY_SECRET=projects/$PROJECT/secrets/agt-model-key"
+META="tee-image-reference=$IMAGE~tee-restart-policy=Never~tee-container-log-redirect=true~tee-env-AGT_CHAIN_ID=agt-testnet-1~tee-env-AGT_EXAM_URL=$EXAM_URL~tee-env-AGT_OWNER=$OWNER~tee-env-AGT_TRADE=$TRADE~tee-env-AGT_AI_NAME=$NAME~tee-env-AGT_MODEL_KEY_SECRET=projects/$PROJECT/secrets/$MODEL_SECRET"
 # Once licensed, the AI works on AGT's own chain agt-2: its transactions cost a little AGT, nothing else.
-META="$META~tee-env-AGT1_RPC=$AGT1_RPC"
+META="$META~tee-env-AGT1_RPC=$AGT1_RPC~tee-env-AGT_MODEL_PROVIDER=$PROVIDER"
 # AI-council price feeds (Art. 11/13) are not deployed for the current contracts yet (testnet v5): no price signing.
 [ "$TRADE" = 6 ] && META="$META~tee-env-AGT_WORK_EVERY_SEC=$EVERY"
 [ -n "${GHFILE:-}" ] && META="$META~tee-env-AGT_GITHUB_TOKEN_SECRET=projects/$PROJECT/secrets/agt-github-token"

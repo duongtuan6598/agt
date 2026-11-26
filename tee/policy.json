@@ -109,7 +109,8 @@
     "amdMin": {}
   },
   "models": [
-    "anthropic:claude-opus-5-5"
+    "anthropic:claude-opus-5-5",
+    "deepseek:deepseek-v4-pro"
   ],
   "builderImages": [],
   "graderImages": []
