@@ -1,0 +1,8 @@
+{
+  "_": "Digests tools/repro-build.sh must produce from this commit on any machine. Added once, never modified (the workflow checks the git history). Embedded image only: own work skips course work, the owner signs off DCO projects, 2026-11-26.",
+  "commit": "c66df319ae3359b3672d3acc0fca5915b74a2980",
+  "buildkit": "v0.34.2",
+  "images": {
+    "embedded": "sha256:83c7ff168812be44123afbd4a46b2e39617a8679b0df9cdabf5173ea4f98c867"
+  }
+}

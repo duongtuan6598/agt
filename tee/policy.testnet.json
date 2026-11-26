@@ -84,6 +84,12 @@
       "image": "embedded",
       "reference": "tee/reference/19dbc56f8ae38129241e3bf8dd788b5330110b50.json",
       "why": "the embedded trade on agt-2 (DeepSeek): own open-source work picks files and changes code as edits, 2026-11-26 (founder's own box)"
+    },
+    {
+      "digest": "sha256:83c7ff168812be44123afbd4a46b2e39617a8679b0df9cdabf5173ea4f98c867",
+      "image": "embedded",
+      "reference": "tee/reference/c66df319ae3359b3672d3acc0fca5915b74a2980.json",
+      "why": "the embedded trade on agt-2 (DeepSeek): own work skips course work, the owner signs off DCO projects, 2026-11-26 (founder's own box)"
     }
   ]
 }
