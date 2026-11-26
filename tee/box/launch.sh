@@ -21,7 +21,7 @@ EMBEDDED_IMAGE="asia-southeast1-docker.pkg.dev/agt-sealed-box-1120/agt/box-embed
 while [ $# -gt 0 ]; do
   case "$1" in
     --project) PROJECT=$2; shift ;; --owner) OWNER=$2; shift ;; --key-file) KEYFILE=$2; shift ;;
-    --trade) TRADE=$2; shift ;; --github-token-file) GHFILE=$2; shift ;; --provider) PROVIDER=$2; shift ;; --zone) ZONE=$2; shift ;; --name) NAME=$2; shift ;;
+    --trade) TRADE=$2; shift ;; --github-token-file) GHFILE=$2; shift ;; --provider) PROVIDER=$2; shift ;; --signoff) SIGNOFF=$2; shift ;; --zone) ZONE=$2; shift ;; --name) NAME=$2; shift ;;
     --peers) PEERS=$2; shift ;; --escrow) ESCROW=$2; shift ;; --keep) KEEP=1 ;;
     --embedded-image) EMBEDDED_IMAGE=$2; shift ;; --every) EVERY=$2; shift ;;
     *) echo "unknown option $1"; exit 2 ;;
@@ -66,6 +66,7 @@ META="tee-image-reference=$IMAGE~tee-restart-policy=Never~tee-container-log-redi
 META="$META~tee-env-AGT1_RPC=$AGT1_RPC~tee-env-AGT_MODEL_PROVIDER=$PROVIDER"
 # AI-council price feeds (Art. 11/13) are not deployed for the current contracts yet (testnet v5): no price signing.
 [ "$TRADE" = 6 ] && META="$META~tee-env-AGT_WORK_EVERY_SEC=$EVERY"
+[ -n "${SIGNOFF:-}" ] && META="$META~tee-env-AGT_SIGNOFF=$SIGNOFF"
 [ -n "${GHFILE:-}" ] && META="$META~tee-env-AGT_GITHUB_TOKEN_SECRET=projects/$PROJECT/secrets/agt-github-token"
 [ -n "$PEERS" ] && META="$META~tee-env-AGT_PEER_BOXES=$PEERS"
 [ -n "$ESCROW" ] && META="$META~tee-env-AGT_ESCROW_URL=$ESCROW"

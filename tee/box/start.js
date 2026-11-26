@@ -286,7 +286,10 @@ async function startWork(agentKey, modelProvider = "anthropic", keys = null) {
     const { github } = require("../embedded/github.js");
     gh = github({ token: await secretFromManager(env.AGT_GITHUB_TOKEN_SECRET, "AGT_GITHUB_TOKEN") });
     const { OssHunter } = require("../embedded/oss-hunt.js");
-    hunter = new OssHunter({ gh, a1, wallet, model: makeModel({ provider: modelProvider, apiKey, systemPrompt }), Workspace: require("../embedded/workspace.js").Workspace, owner: env.AGT_OWNER, log });
+    // AGT_SIGNOFF="Name <email>": the owner who signs off this AI's commits (DCO); public in the attestation, as it
+    // is in every commit it signs
+    const so = /^([^<>\n]{1,80}) <([^<>\s@]+@[^<>\s@]+)>$/.exec(String(env.AGT_SIGNOFF || "").trim());
+    hunter = new OssHunter({ gh, a1, wallet, model: makeModel({ provider: modelProvider, apiKey, systemPrompt }), Workspace: require("../embedded/workspace.js").Workspace, owner: env.AGT_OWNER, log, signoff: so ? { name: so[1].trim(), email: so[2] } : null });
     log("own work: open-source issues with the AI's own GitHub account");
   }
   // Per-job work (translation of open documents) and reviewing other owners' jobs of the same trade, on agt-2.

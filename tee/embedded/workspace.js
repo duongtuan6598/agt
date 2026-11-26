@@ -37,7 +37,9 @@ function checkRepoUrl(url, allowFileUrls) {
 
 class Workspace {
   /// root: a directory only root can enter (e.g. /var/agt/ws); id: engagement key (e.g. "engagement-12")
-  constructor({ root, id, git = "git", allowFileUrls = false }) {
+  // identity: { name, email } of the commits (default: the AGT sealed AI); for work signed off by its owner (DCO)
+  constructor({ root, id, git = "git", allowFileUrls = false, identity = null }) {
+    this.identity = identity && /^[^<>\n]{1,80}$/.test(identity.name) && /^[^<>\s@]+@[^<>\s@]+$/.test(identity.email) ? identity : { name: "AGT sealed AI", email: "ai@agt.invalid" };
     this.base = path.join(root, id);
     this.tree = path.join(this.base, "tree");
     this.gitDir = path.join(this.base, "git");
@@ -48,7 +50,7 @@ class Workspace {
 
   _env(token) {
     const env = { PATH: "/usr/local/bin:/usr/bin:/bin", HOME: this.base, LANG: "C.UTF-8", GIT_TERMINAL_PROMPT: "0", GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null" };
-    const cfg = [["core.hooksPath", "/dev/null"], ["core.fsmonitor", "false"], ["core.symlinks", "true"], ["protocol.file.allow", this.allowFileUrls ? "always" : "never"], ["protocol.ext.allow", "never"], ["http.followRedirects", "false"], ["submodule.recurse", "false"], ["user.name", "AGT sealed AI"], ["user.email", "ai@agt.invalid"]];
+    const cfg = [["core.hooksPath", "/dev/null"], ["core.fsmonitor", "false"], ["core.symlinks", "true"], ["protocol.file.allow", this.allowFileUrls ? "always" : "never"], ["protocol.ext.allow", "never"], ["http.followRedirects", "false"], ["submodule.recurse", "false"], ["user.name", this.identity.name], ["user.email", this.identity.email]];
     if (token && this.url) cfg.push([`http.${this.url}.extraHeader`, "Authorization: Basic " + Buffer.from("x-access-token:" + token).toString("base64")]);
     env.GIT_CONFIG_COUNT = String(cfg.length);
     cfg.forEach(([k, v], i) => { env[`GIT_CONFIG_KEY_${i}`] = k; env[`GIT_CONFIG_VALUE_${i}`] = v; });

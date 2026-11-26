@@ -19,12 +19,18 @@ const GIVE_UP_MS = 24 * 3600 * 1000; // an issue the model could not do is left 
 const OPT_OUT = /no-agt/i;
 const NO_AI = /\b(no|not|never|don'?t|do not|won'?t|prohibit\w*|ban\w*|reject\w*)\b[^.\n]{0,80}\b(ai|llm|chatgpt|copilot|machine[- ]generated|generated code)\b/i;
 const CLA = /\bCLA\b|contributor license agreement/i;
+const DCO = /\bDCO\b|Developer Certificate of Origin|Signed-off-by/i;
+// course work is the students' to do, not an AI's (a lab project got a pull request once: never again)
+const COURSEWORK = /\b(lab|labs|assignment|homework|coursework|course|semester|exercise|exercises|tutorial|cse\s?\d{2,4}|cs\s?\d{2,4}|ece\s?\d{2,4}|student|university|class project|capstone|bootcamp)\b/i;
 
 const openRoom = (merged) => Math.min(10, 2 + Math.floor(merged / 5));
 
 class OssHunter {
-  constructor({ gh, a1, wallet, model, Workspace, wsRoot = "/var/agt/ws", gitBin, owner, langs = ["rust", "c"], log = () => {}, now = () => Date.now(), allowFileUrls = false }) {
-    Object.assign(this, { gh, a1, wallet, model, Workspace, wsRoot, gitBin, owner, langs, log, now, allowFileUrls });
+  // signoff: { name, email } of the AI's owner, who answers for its work (Charter: the owner is the legal author):
+  // commits carry "Signed-off-by" for projects that ask for it (DCO); without it such projects are skipped
+  constructor({ gh, a1, wallet, model, Workspace, wsRoot = "/var/agt/ws", gitBin, owner, langs = ["rust", "c"], log = () => {}, now = () => Date.now(), allowFileUrls = false, signoff = null }) {
+    Object.assign(this, { gh, a1, wallet, model, Workspace, wsRoot, gitBin, owner, langs, log, now, allowFileUrls, signoff });
+    this.lastOpened = 0; // GitHub's search lags behind a new pull request: the 6-hour spacing is kept here too
     this.me = wallet.address.toLowerCase();
     this.agt1 = require("../../chain/address.js").toAgt(this.me);
     this.content = a1 ? a1.content(wallet) : null;
@@ -79,11 +85,19 @@ class OssHunter {
     const repo = repoName(p.repository_url.split("/repos/")[1]);
     const pr = await this.gh.get(`/repos/${repo}/pulls/${p.number}`);
     if (!pr || pr.state !== "open") return false;
+    const me = String(await this.login()).toLowerCase();
+    // its own rounds: commits it made (the AI's identity, or its owner's when he signs for it), never a maintainer's
+    const mine = (c) => (c.author && String(c.author.login).toLowerCase() === me) || ["ai@agt.invalid", this.signoff && this.signoff.email].includes(c.commit && c.commit.author && c.commit.author.email);
+    const commits = (await this.gh.all(`/repos/${repo}/pulls/${p.number}/commits`)).filter(mine);
+    // a project that asks for a DCO sign-off: its owner signs its earlier unsigned commits (they were his to sign)
+    if (this.signoff && commits.some((c) => !/^Signed-off-by: /m.test(c.commit.message))) {
+      await this.resign({ repo, base: pr.base.ref, fork: pr.head.repo.full_name, branch: pr.head.ref });
+      this.log(`own work: ${repo}#${p.number} commits signed off by its owner`);
+      return true;
+    }
     const runs = await this.gh.get(`/repos/${repo}/commits/${pr.head.sha}/check-runs?per_page=100`);
     const bad = ((runs && runs.check_runs) || []).filter((c) => ["failure", "timed_out", "cancelled"].includes(c.conclusion));
     if (!bad.length) return false;
-    const me = String(await this.login()).toLowerCase();
-    const commits = (await this.gh.all(`/repos/${repo}/pulls/${p.number}/commits`)).filter((c) => c.author && String(c.author.login).toLowerCase() === me); // only its own rounds
     const failure = bad.map((c) => `${c.name}: ${c.conclusion}\n${(c.output && (c.output.summary || c.output.title)) || ""}`.slice(0, 3000)).join("\n\n");
     if (commits.length >= ROUNDS) {
       await this.gh.post(`/repos/${repo}/issues/${p.number}/comments`, { body: `The CI still fails after ${ROUNDS} attempts, so I am closing this pull request rather than leave it to you. Sorry for the noise.` });
@@ -104,7 +118,7 @@ class OssHunter {
   // ---- 3. new work ----
   async openNew(open, mergedCount) {
     if (open.length >= openRoom(mergedCount)) return null;
-    const newest = Math.max(0, ...open.map((p) => Date.parse(p.created_at)).filter(Number.isFinite));
+    const newest = Math.max(this.lastOpened, ...open.map((p) => Date.parse(p.created_at)).filter(Number.isFinite));
     if (this.now() - newest < NEW_EVERY_MS) return null;
     const busy = new Set(open.map((p) => repoName(p.repository_url.split("/repos/")[1])));
     // never work in the account's own repositories (the account may be the owner's own, holding AGT itself): the AI
@@ -131,6 +145,7 @@ class OssHunter {
     if (!r || r.fork || r.archived || r.disabled) return "fork, archived or gone";
     if (!r.license || !r.license.spdx_id || r.license.spdx_id === "NOASSERTION") return "no open-source licence";
     if (r.size > MAX_REPO_KB) return "too large for one look";
+    if (COURSEWORK.test(`${r.name} ${r.description || ""} ${(r.topics || []).join(" ")}`)) return "course work belongs to its students";
     for (const f of ["CONTRIBUTING.md", ".github/CONTRIBUTING.md", "docs/CONTRIBUTING.md", "CONTRIBUTING.rst", "README.md"]) {
       const c = await this.gh.get(`/repos/${repo}/contents/${f}`);
       if (!c || !c.content) continue;
@@ -138,6 +153,7 @@ class OssHunter {
       if (OPT_OUT.test(text)) return "the project refused AGT's AIs";
       if (NO_AI.test(text)) return "the project does not take AI-written work";
       if (CLA.test(text) && !/README/.test(f)) return "the project asks for a signed CLA";
+      if (DCO.test(text) && !this.signoff) return "the project asks for a DCO sign-off and no owner signs for this AI";
     }
     const me = String(await this.login()).toLowerCase();
     if (!issue.user || String(issue.user.login).toLowerCase() === me) return "the AI's own issue";
@@ -169,12 +185,26 @@ class OssHunter {
       C.marker(this.wallet, repo, me),
     ].join("\n");
     const pr = await this.gh.post(`/repos/${repo}/pulls`, { title: String(issue.title).slice(0, 120), head: `${me}:${branch}`, base: r.default_branch, body, maintainer_can_modify: true });
+    this.lastOpened = this.now();
     this.log(`own work: opened ${repo}#${pr.number} for issue #${issue.number}`);
     return { repo, pr: pr.number };
   }
+  // the branch's own commits again, each signed off by the owner and written under his name (git rebase --signoff)
+  async resign({ repo, base, fork, branch }) {
+    const ws = new this.Workspace({ root: this.wsRoot, id: `oss-${repo.replace("/", "-")}`, allowFileUrls: this.allowFileUrls, git: this.gitBin, identity: this.signoff });
+    try {
+      ws.clone(`https://github.com/${fork}.git`, this.gh.token, branch);
+      ws._git(["fetch", "-q", `https://github.com/${repo}.git`, base], this.gh.token);
+      const mb = ws._git(["merge-base", "HEAD", "FETCH_HEAD"]).trim();
+      ws._git(["rebase", "-q", "--signoff", "--exec", "git commit -q --amend --no-edit --no-verify --reset-author", mb]);
+      ws.push(branch, this.gh.token);
+    } finally {
+      ws.dispose();
+    }
+  }
   // one round of work on the AI's fork: the model reads the project and the issue, the change is pushed
   async work({ repo, base, fork, branch, issue, failure, round, fresh = false }) {
-    const ws = new this.Workspace({ root: this.wsRoot, id: `oss-${repo.replace("/", "-")}`, allowFileUrls: this.allowFileUrls, git: this.gitBin });
+    const ws = new this.Workspace({ root: this.wsRoot, id: `oss-${repo.replace("/", "-")}`, allowFileUrls: this.allowFileUrls, git: this.gitBin, identity: this.signoff });
     try {
       const url = `https://github.com/${fork}.git`;
       ws.clone(url, this.gh.token, branch);
@@ -200,7 +230,8 @@ class OssHunter {
         return null;
       }
       ws.write(a.files);
-      ws.commit(`${issue ? issue.title : "fix"}${round > 1 ? ` (round ${round})` : ""}\n\n${a.summary}`);
+      const signed = this.signoff ? `\n\nWritten by an AGT AI (${this.agt1}).\nSigned-off-by: ${this.signoff.name} <${this.signoff.email}>` : "";
+      ws.commit(`${issue ? issue.title : "fix"}${round > 1 ? ` (round ${round})` : ""}\n\n${a.summary}${signed}`);
       ws.push(branch, this.gh.token);
       return a;
     } finally {
@@ -234,4 +265,4 @@ function applyEdits(files, edits) {
   return [...touched].map((path) => ({ path, content: cur.get(path) }));
 }
 
-module.exports = { OssHunter, openRoom, applyEdits, NO_AI, CLA, OPT_OUT };
+module.exports = { OssHunter, openRoom, applyEdits, NO_AI, CLA, DCO, COURSEWORK, OPT_OUT };
