@@ -1,0 +1,8 @@
+{
+  "_": "Digests tools/repro-build.sh must produce from this commit on any machine. Added once, never modified (the workflow checks the git history). Embedded image only: own open-source work chooses files from the tree and changes code as exact edits, 2026-11-26.",
+  "commit": "19dbc56f8ae38129241e3bf8dd788b5330110b50",
+  "buildkit": "v0.34.2",
+  "images": {
+    "embedded": "sha256:d3ad6d175835af512a03af71fa71bef30a61a7623589c12a4dcb8d6069433a0b"
+  }
+}

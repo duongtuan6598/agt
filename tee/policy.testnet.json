@@ -78,6 +78,12 @@
       "image": "embedded",
       "reference": "tee/reference/85248af1a9b2fb2e36ae03b8e39d9733e4888924.json",
       "why": "the embedded trade on agt-2 with DeepSeek as a second model provider, 2026-11-26 (founder's own box)"
+    },
+    {
+      "digest": "sha256:d3ad6d175835af512a03af71fa71bef30a61a7623589c12a4dcb8d6069433a0b",
+      "image": "embedded",
+      "reference": "tee/reference/19dbc56f8ae38129241e3bf8dd788b5330110b50.json",
+      "why": "the embedded trade on agt-2 (DeepSeek): own open-source work picks files and changes code as edits, 2026-11-26 (founder's own box)"
     }
   ]
 }
