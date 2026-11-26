@@ -66,6 +66,12 @@
       "image": "embedded",
       "reference": "tee/reference/8c6b65e3502c997f32ac33fdc44ab8102bdd0da0.json",
       "why": "the embedded trade on agt-2: the AI also finds its own open-source work with its own GitHub account, 2026-11-26 (founder's own box)"
+    },
+    {
+      "digest": "sha256:81e45c307087ad34a3845edb05e2758d7301fb1efe62f8c6349b7fdb62d90b44",
+      "image": "embedded",
+      "reference": "tee/reference/1da5e8a776c80fd80e4296b33a51938edff416d6.json",
+      "why": "the embedded trade on agt-2, own open-source work on the owner's shared GitHub account, 2026-11-26 (founder's own box)"
     }
   ]
 }

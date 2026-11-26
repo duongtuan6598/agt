@@ -1,0 +1,8 @@
+{
+  "_": "Digests tools/repro-build.sh must produce from this commit on any machine. Added once, never modified (the workflow checks the git history). Embedded image only: own open-source work on an account shared with the owner (only the AI's signed pull requests, never the account's own repositories), 2026-11-26.",
+  "commit": "1da5e8a776c80fd80e4296b33a51938edff416d6",
+  "buildkit": "v0.34.2",
+  "images": {
+    "embedded": "sha256:81e45c307087ad34a3845edb05e2758d7301fb1efe62f8c6349b7fdb62d90b44"
+  }
+}
