@@ -1,0 +1,8 @@
+{
+  "_": "Digests tools/repro-build.sh must produce from this commit on any machine. Added once, never modified (the workflow checks the git history). Embedded image only: DeepSeek as a second approved model provider, own open-source work on a shared account, 2026-11-26.",
+  "commit": "85248af1a9b2fb2e36ae03b8e39d9733e4888924",
+  "buildkit": "v0.34.2",
+  "images": {
+    "embedded": "sha256:2c5f05335bdd42706f6035fdd09077b1afea7b223f6b9adc853b3cf705b8eb6c"
+  }
+}
