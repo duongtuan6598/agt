@@ -34,9 +34,12 @@ class OssHunter {
     const hit = Object.entries(licences || {}).find(([, l]) => l.agent === this.me && l.active);
     return hit ? { id: Number(hit[0]), ...hit[1] } : null;
   }
+  // the pull requests of THIS AI: the account may be shared with its owner, so only those carrying this AI's signed
+  // line count; the owner's own pull requests are never touched, counted or closed
   async mine(state) {
     const me = await this.login();
-    return this.gh.all(`/search/issues?q=${encodeURIComponent(`is:pr author:${me} ${state}`)}`);
+    const all = await this.gh.all(`/search/issues?q=${encodeURIComponent(`is:pr author:${me} ${state}`)}`);
+    return all.filter((p) => { try { return C.markerOk(p.body, repoName(p.repository_url.split("/repos/")[1]), me, this.agt1); } catch { return false; } });
   }
   async step() {
     const lic = await this.licence();
@@ -102,13 +105,16 @@ class OssHunter {
     const newest = Math.max(0, ...open.map((p) => Date.parse(p.created_at)).filter(Number.isFinite));
     if (this.now() - newest < NEW_EVERY_MS) return null;
     const busy = new Set(open.map((p) => repoName(p.repository_url.split("/repos/")[1])));
+    // never work in the account's own repositories (the account may be the owner's own, holding AGT itself): the AI
+    // only ever pushes to its forks of other people's projects
+    const me = String(await this.login()).toLowerCase();
     for (const lang of this.langs) {
-      const q = `is:issue is:open no:assignee archived:false label:"good first issue" language:${lang}`;
+      const q = `is:issue is:open no:assignee archived:false label:"good first issue" language:${lang} -user:${me}`;
       const found = await this.gh.get(`/search/issues?q=${encodeURIComponent(q)}&sort=created&order=desc&per_page=30`);
       for (const i of (found && found.items) || []) {
         if (i.pull_request) continue;
         const repo = repoName(i.repository_url.split("/repos/")[1]);
-        if (busy.has(repo)) continue;
+        if (busy.has(repo) || repo.split("/")[0] === me) continue;
         const why = await this.unsuitable(repo, i);
         if (why) { this.log(`own work: skip ${repo}#${i.number}: ${why}`); continue; }
         return this.take(repo, i);
